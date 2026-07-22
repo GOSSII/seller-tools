@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#2f5af0">
+<title>Seller Tools — Amazon India Profit &amp; Fee Calculators</title>
+<meta name="description" content="Free calculators for Amazon India sellers. Work out true profit per SKU, FBA fees, storage cost, break-even ACOS and PPC ROI. Updated for 2026 fee cards.">
+<meta property="og:title" content="Seller Tools — Amazon India Seller Calculators">
+<meta property="og:description" content="Nine free calculators for Amazon India sellers. Profit, FBA fees, ACOS and ad ROI.">
+<meta property="og:type" content="website">
+<style>
+  :root{
+    --ink:#0f1a2b; --muted:#5b6b82; --faint:#8b98ab;
+    --line:#e6eaf1; --bg:#f5f7fb; --card:#fff;
+    --blue:#2f5af0; --blue-soft:#eef2ff; --blue-line:#d5defc;
+    --green:#16a34a; --green-soft:#ecfdf3; --green-line:#bbe8cc;
+    --red:#e5484d; --red-soft:#fef2f2; --red-line:#fbd5d5;
+    --orange:#f5872b; --orange-soft:#fff3e9; --orange-line:#f7d9be;
+  }
+  /* ============================================================
+     MOBILE-FIRST. Base rules target the 320 px viewport; every
+     media query is min-width and adds capability as room appears.
+     Target widths: 320 / 360 / 390 / 768 / 1024 / 1440.
+     ============================================================ */
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;line-height:1.5;
+    /* Long category names, fee labels and banner copy must never push the
+       page sideways — wrap them instead. */
+    overflow-wrap:break-word;
+  }
+  a{color:inherit;text-decoration:none}
+  img,svg{max-width:100%}
+  .wrap{width:100%;max-width:1180px;margin:0 auto;padding:0 16px}
+  @media(min-width:600px){.wrap{padding:0 20px}}
+
+  /* Keyboard focus stays visible everywhere. Pointer focus does not draw a
+     ring, so the premium look is unchanged for mouse and touch users. */
+  :focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:10px}
+
+  /* Masthead */
+  header{background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20}
+  .mast{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:56px}
+  @media(min-width:600px){.mast{min-height:62px}}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:800;font-size:16px;
+         letter-spacing:-.02em;min-width:0;min-height:44px;padding:0 2px 0 0}
+  @media(min-width:600px){.brand{font-size:17px;gap:10px}}
+  .brand span.txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .logo{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#3a66f5,#1e3a5f);
+        display:grid;place-items:center;color:#fff;font-weight:800;font-size:15px;flex:none}
+  /* A real link, not a click-handled span: reachable by Tab, works with
+     middle-click, and carries a 44 px tap target. */
+  .back{display:inline-flex;align-items:center;font-size:14px;color:var(--blue);font-weight:600;
+        cursor:pointer;flex:none;min-height:44px;padding:0 2px 0 10px;white-space:nowrap}
+
+  /* Home */
+  .hero{padding:26px 0 6px}
+  @media(min-width:600px){.hero{padding:34px 0 8px}}
+  .hero h1{font-size:clamp(24px,6.4vw,30px);letter-spacing:-.03em;margin-bottom:8px}
+  .hero p{color:var(--muted);font-size:15px;max-width:640px}
+  .grid{display:grid;grid-template-columns:1fr;gap:14px;padding:20px 0 48px}
+  @media(min-width:600px){.grid{grid-template-columns:repeat(2,1fr);gap:16px;padding:22px 0 60px}}
+  @media(min-width:900px){.grid{grid-template-columns:repeat(3,1fr)}}
+  .tile{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px;
+        cursor:pointer;transition:border-color .15s,transform .15s,box-shadow .15s;position:relative;display:block}
+  @media(min-width:600px){.tile{padding:20px}}
+  /* Hover lift is a pointer affordance; on touch it just causes jitter. */
+  @media(hover:hover){
+    .tile:hover{border-color:var(--blue);transform:translateY(-2px);box-shadow:0 6px 20px rgba(15,26,43,.07)}
+  }
+  .tile .ico{width:44px;height:44px;border-radius:12px;background:var(--blue-soft);
+             display:grid;place-items:center;margin-bottom:13px;font-size:20px}
+  /* Reserve the badge's lane so a long name never runs under it. */
+  .tile h3{font-size:16.5px;letter-spacing:-.01em;margin-bottom:6px;padding-right:76px}
+  .tile p{font-size:13.5px;color:var(--muted);line-height:1.45}
+  .pill{position:absolute;top:16px;right:16px;background:var(--orange);color:#fff;
+        font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px;white-space:nowrap}
+
+  /* Calculator page */
+  .page{padding:20px 0 48px}
+  @media(min-width:600px){.page{padding:24px 0 64px}}
+  .page h2{font-size:clamp(20px,5.2vw,24px);letter-spacing:-.02em;margin-bottom:5px}
+  .page .lede{color:var(--muted);font-size:14px;margin-bottom:18px}
+  /* Single column until there is genuinely room for a 400 px form beside the
+     results. minmax() lets the form give way rather than force a scrollbar. */
+  .cols{display:grid;grid-template-columns:1fr;gap:16px;align-items:start}
+  @media(min-width:900px){.cols{grid-template-columns:minmax(320px,400px) 1fr;gap:20px}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+  @media(min-width:600px){.card{padding:20px}}
+
+  /* One field per row on phones — two-up at 320 px leaves ~110 px per control,
+     which is too tight to tap or read. Pairs return at 560 px. */
+  .fields{display:grid;grid-template-columns:1fr;gap:14px}
+  @media(min-width:560px){
+    .fields{grid-template-columns:1fr 1fr}
+    /* A three-option segmented control in a half-width column leaves ~57 px
+       per option, which ellipsises "Standard"/"Oversize". Give it the whole
+       row instead. Falls back to the ellipsis below if :has() is missing. */
+    .fields>*:has(.seg button:nth-child(3)){grid-column:1/-1}
+  }
+  .fields>*{min-width:0}
+  .f-full{grid-column:1/-1}
+  label{display:block;font-size:13px;font-weight:600;margin-bottom:6px}
+  /* 16 px is the threshold below which iOS Safari zooms the page on focus.
+     Height is 44 px to meet the minimum comfortable touch target. */
+  input,select{width:100%;min-height:44px;padding:0 12px;font-size:16px;color:var(--ink);
+    background:#fff;border:1px solid #d6dce6;border-radius:10px;outline:none;appearance:none;-webkit-appearance:none;font-family:inherit}
+  @media(min-width:900px){input,select{font-size:15px}}
+  select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%235b6b82' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+          background-repeat:no-repeat;background-position:right 12px center;padding-right:34px;
+          text-overflow:ellipsis}
+  input:focus,select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(47,90,240,.12)}
+  /* Equal columns via grid, so three options share the width exactly and a
+     long label ellipses instead of spilling out of the control. */
+  /* 54 px outer so each option is itself a 44 px target, not just the group.
+     Trimmed back once a mouse is the likely input device. */
+  .seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;
+       background:#f1f4f9;border:1px solid var(--line);border-radius:10px;padding:4px;min-height:54px}
+  /* Gated on pointer:fine, not width alone — a 1024 px iPad in landscape is a
+     touch device and must keep the full-size targets. */
+  @media(min-width:900px) and (pointer:fine){.seg{padding:3px;min-height:44px}}
+  .seg button{min-width:0;min-height:44px;border:0;background:transparent;border-radius:8px;font-size:13.5px;font-weight:600;
+              color:var(--muted);cursor:pointer;font-family:inherit;transition:background .12s,color .12s;
+              padding:0 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  @media(min-width:900px) and (pointer:fine){.seg button{min-height:36px}}
+  .seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(15,26,43,.12)}
+  .seg button:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
+
+  /* Two-up on phones, four-up only where each tile can hold a full ₹ amount:
+     the tablet band (results run full width) and wide desktop. */
+  .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px}
+  @media(min-width:700px){.stats{gap:12px;margin-bottom:16px}}
+  @media(min-width:700px) and (max-width:899px){.stats{grid-template-columns:repeat(4,1fr)}}
+  @media(min-width:1150px){.stats{grid-template-columns:repeat(4,1fr)}}
+  .stat{border:1px solid var(--line);border-radius:12px;padding:12px 13px;background:#fff;min-width:0}
+  @media(min-width:600px){.stat{padding:14px 15px}}
+  .stat .k{font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--faint);text-transform:uppercase;margin-bottom:5px}
+  /* Scales with the viewport, and breaks rather than overflows in the worst
+     case (a seven-figure amount in a 320 px column). */
+  .stat .v{font-size:clamp(17px,4.8vw,21px);font-weight:700;letter-spacing:-.02em;overflow-wrap:anywhere}
+  .stat.blue{background:var(--blue-soft);border-color:var(--blue-line)} .stat.blue .v{color:var(--blue)}
+  .stat.green{background:var(--green-soft);border-color:var(--green-line)} .stat.green .v{color:var(--green)}
+  .stat.red{background:var(--red-soft);border-color:var(--red-line)} .stat.red .v{color:var(--red)}
+
+  /* The breakdown "table". Rows stay label-left / amount-right, but the amount
+     drops to its own line rather than being clipped when space runs out. */
+  .rows{border:1px solid var(--line);border-radius:12px;background:#fff;overflow:hidden}
+  .r{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;
+     padding:12px 14px;border-bottom:1px solid var(--line);font-size:14px;gap:4px 12px}
+  @media(min-width:600px){.r{padding:13px 17px}}
+  .r:last-child{border-bottom:0}
+  .r .rl{min-width:0;flex:1 1 auto}
+  .r .rv{font-weight:700;white-space:nowrap;flex:0 0 auto;margin-left:auto}
+  .r.mut .rl{color:var(--muted)}
+  .r .rv.neg{color:var(--red)}
+  .r.hl{background:var(--blue-soft)} .r.hl .rv{color:var(--blue)} .r.hl .rl{font-weight:700}
+  /* The bottom line is the reason the page exists — keep it prominent at
+     every width rather than letting it shrink with the viewport. */
+  .r.fin{background:var(--green-soft);padding-top:14px;padding-bottom:14px}
+  .r.fin .rl{font-weight:700} .r.fin .rv{color:var(--green);font-size:17px}
+  .r.fin.loss{background:var(--red-soft)} .r.fin.loss .rv{color:var(--red)}
+
+  .banner{border:1px solid;border-radius:12px;padding:12px 14px;font-size:13.5px;line-height:1.5;margin-bottom:14px}
+  @media(min-width:600px){.banner{padding:13px 15px;margin-bottom:16px}}
+  .banner.warn{background:var(--orange-soft);border-color:var(--orange-line);color:#9a4b12}
+  .banner.info{background:var(--blue-soft);border-color:var(--blue-line);color:#1e3a5f}
+  .banner.good{background:var(--green-soft);border-color:var(--green-line);color:#166534}
+
+  .panel{margin-top:14px}
+  @media(min-width:600px){.panel{margin-top:16px}}
+  .panel h4{font-size:15.5px;margin-bottom:14px;letter-spacing:-.01em}
+  .bar{display:flex;height:14px;border-radius:999px;overflow:hidden;margin-bottom:16px;background:#eef1f6}
+  .bar span{height:100%;min-width:0}
+  .leg{list-style:none}
+  .leg li{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 9px;padding:7px 0;font-size:13.5px;color:var(--muted)}
+  .leg .dot{width:8px;height:8px;border-radius:50%;flex:none;align-self:center}
+  /* Long segment names ("FBA pick&pack + storage") wrap; the amount and
+     percentage keep their own columns on the right. */
+  .leg .nm{flex:1 1 auto;min-width:0}
+  .leg .amt{font-weight:700;color:var(--ink);white-space:nowrap;margin-left:auto}
+  .leg .pc{width:52px;text-align:right;color:var(--faint);font-size:12.5px;flex:none}
+
+  .track{position:relative;height:6px;border-radius:999px;
+         background:linear-gradient(90deg,#fbd5d5,#e9f7ee 55%,#c8ecd4);margin:14px 7px 8px}
+  .track .md{position:absolute;top:-4px;width:2px;height:14px;background:var(--ink);border-radius:2px}
+  .track .yo{position:absolute;top:-4px;width:14px;height:14px;border-radius:50%;background:var(--blue);
+             border:2.5px solid #fff;box-shadow:0 1px 4px rgba(15,26,43,.3);transform:translateX(-50%)}
+  .scale{display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 10px;font-size:12.5px;color:var(--faint)}
+  .scale .me{font-weight:700;color:var(--ink)}
+  .bench-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:4px 10px;margin-bottom:6px}
+
+  footer{border-top:1px solid var(--line);background:#fff;padding:22px 0;font-size:12.5px;color:var(--faint);line-height:1.6}
+  @media(min-width:600px){footer{padding:26px 0}}
+
+  @media(prefers-reduced-motion:reduce){
+    *{transition-duration:.01ms !important;animation-duration:.01ms !important;scroll-behavior:auto !important}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap mast">
+    <a class="brand" href="#/"><span class="logo" aria-hidden="true">₹</span><span class="txt">Seller Tools</span></a>
+    <a class="back" id="back" href="#/" hidden>← All calculators</a>
+  </div>
+</header>
+
+<main id="app"></main>
+
+<footer>
+  <div class="wrap">
+    Fee rates reflect published 2026 marketplace rate cards and are estimates — always confirm against your own Seller Central rate card before pricing.
+    Seller Tools is an independent tool, not affiliated with, endorsed by, or sponsored by Amazon.com, Inc.
+  </div>
+</footer>
+
+<script>
+/* ============================================================
+   SHARED FEE DATA — single source of truth
+   ============================================================ */
+const GST = 0.18;
+
+const CATS = [
+  ["electronics","Electronics",[.045,.06,.07,.09],[4,9,16],8],
+  ["mobile-phones","Mobile Phones & Tablets",[.04,.04,.045,.05],[2,5,9],5],
+  ["computers","Computers & Laptops",[.04,.05,.055,.06],[3,7,12],6],
+  ["clothing","Clothing & Apparel",[.05,.05,.14,.17],[6,14,24],12],
+  ["footwear","Footwear",[.05,.05,.11,.14],[6,13,22],12],
+  ["watches","Watches",[.06,.075,.115,.135],[8,17,28],14],
+  ["beauty","Beauty & Cosmetics",[.04,.075,.13,.17],[10,20,32],15],
+  ["personal-care","Personal Care Appliances",[.045,.065,.08,.10],[6,13,22],12],
+  ["grocery","Grocery & Gourmet",[.035,.045,.05,.055],[3,7,12],6],
+  ["home-kitchen","Home & Kitchen",[.045,.09,.10,.15],[6,14,24],11],
+  ["furniture","Furniture",[.06,.09,.115,.145],[5,12,20],10],
+  ["toys","Toys & Games",[.045,.06,.075,.095],[7,15,25],12],
+  ["sports","Sports & Fitness",[.045,.06,.075,.09],[7,14,23],11],
+  ["books","Books",[.04,.04,.04,.04],[4,9,16],7],
+  ["jewellery","Fashion Jewellery",[.115,.165,.195,.225],[8,18,30],16],
+  ["baby-products","Baby Products",[.04,.05,.055,.06],[7,14,23],11],
+  ["automotive","Automotive",[.06,.085,.095,.11],[6,12,20],9],
+  ["pet-supplies","Pet Supplies",[.04,.05,.05,.065],[8,16,25],12],
+  ["health","Health & Nutrition",[.05,.065,.075,.09],[9,18,28],13],
+  ["large-appliances","Large Appliances",[.04,.045,.05,.055],[3,7,12],6],
+  ["small-appliances","Small Appliances",[.04,.045,.05,.055],[4,9,15],7],
+  ["headphones","Headphones & Earphones",[.075,.115,.145,.18],[4,9,16],10],
+  ["other","Other",[.06,.09,.12,.15],[5,12,20],10],
+].map(([key,name,referral,b,tacos])=>({key,name,referral,bench:{low:b[0],median:b[1],high:b[2]},tacos}));
+
+const CATMAP = Object.fromEntries(CATS.map(c=>[c.key,c]));
+const CLOSING = {low:5,mid:9,high:30,vhigh:56};
+const SLABS = [
+  {max:.5,esL:43,esN:65,fbL:35,fbN:55},{max:1,esL:55,esN:82,fbL:45,fbN:70},
+  {max:2,esL:75,esN:110,fbL:60,fbN:90},{max:3,esL:95,esN:140,fbL:80,fbN:115},
+  {max:5,esL:130,esN:195,fbL:110,fbN:160},{max:10,esL:200,esN:300,fbL:170,fbN:250},
+  {max:20,esL:350,esN:500,fbL:300,fbN:420},{max:999,esL:500,esN:750,fbL:450,fbN:650},
+];
+const STORAGE_TIER = {standard:5,large:12,oversize:25};
+const STORAGE_CUFT = {std:45,peak:48,aged:300};
+const CM3_CUFT = 28316.8466;
+
+const refRate=(cat,p)=>{const t=(CATMAP[cat]||CATMAP.other).referral;
+  return p<=300?t[0]:p<=500?t[1]:p<=1000?t[2]:t[3];};
+function closingFee(p,ful){
+  let c = p<=250?CLOSING.low : p<=500?CLOSING.mid : p<=1000?CLOSING.high : CLOSING.vhigh;
+  if(p<=250 && ful==='easyship') c=Math.max(0,c-5);
+  return c;
+}
+function shipFee(p,ful,zone,kg){
+  if(ful==='self') return 0;
+  const s = SLABS.find(x=>kg<=x.max) || SLABS[SLABS.length-1];
+  let f;
+  if(ful==='easyship'){ f = zone==='national'?s.esN:s.esL; if(p<300) f=Math.max(0,f-10); }
+  else { f = zone==='national'?s.fbN:s.fbL; }
+  return f;
+}
+const pickPack = kg => kg<=.5?14 : kg<=1?20 : kg<=3?26 : kg<=5?38 : 50;
+
+/* ---- formatters ---- */
+const inr  = n => {n=isFinite(n)?n:0; return (n<0?"-":"")+"₹"+Math.abs(n).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});};
+const inr0 = n => {n=Math.round(isFinite(n)?n:0); return (n<0?"-":"")+"₹"+Math.abs(n).toLocaleString("en-IN");};
+const pc   = n => (isFinite(n)?n:0).toFixed(2)+"%";
+const num  = n => Math.round(isFinite(n)?n:0).toLocaleString("en-IN");
+
+/* ============================================================
+   CALCULATOR DEFINITIONS
+   Each = fields + compute(). Add one object to add a calculator.
+   ============================================================ */
+const catOptions = CATS.map(c=>({v:c.key,l:c.name}));
+
+const CALCS = [
+{
+  id:"profit", icon:"🧮", badge:"Popular",
+  name:"Amazon Profit Calculator",
+  desc:"Calculate Amazon India fees, referral, closing, FBA charges, and final profit per SKU.",
+  fields:[
+    {k:"sp",label:"Selling Price (₹)",t:"num",d:999},
+    {k:"cost",label:"Product Cost (₹)",t:"num",d:400},
+    {k:"cat",label:"Category",t:"sel",o:catOptions,d:"electronics",full:1},
+    {k:"kg",label:"Weight (kg)",t:"num",dec:1,d:0.5},
+    {k:"size",label:"Size",t:"seg",o:[{v:"standard",l:"Standard"},{v:"large",l:"Large"},{v:"oversize",l:"Oversize"}],d:"standard"},
+    {k:"ful",label:"Fulfillment",t:"seg",o:[{v:"self",l:"Self"},{v:"easyship",l:"Easy Ship"},{v:"fba",l:"FBA"}],d:"self",full:1},
+    {k:"zone",label:"Zone",t:"seg",o:[{v:"local",l:"Local"},{v:"national",l:"National"}],d:"local",full:1},
+    {k:"pack",label:"Packaging (₹)",t:"num",d:15},
+    {k:"acos",label:"ACOS (%)",t:"num",dec:1,d:10},
+    {k:"ret",label:"Returns (%)",t:"num",dec:1,d:3,full:1},
+  ],
+  compute(v){
+    const sp=v.sp, rate=refRate(v.cat,sp);
+    const referral=sp*rate;
+    const closing=sp>0?closingFee(sp,v.ful):0;
+    const shipping=sp>0?shipFee(sp,v.ful,v.zone,v.kg||0.5):0;
+    const pp = (v.ful==="fba"&&sp>0)?pickPack(v.kg||0.5):0;
+    const st = (v.ful==="fba"&&sp>0)?STORAGE_TIER[v.size]:0;
+    const feeSum=referral+closing+shipping+pp+st;
+    const gst=feeSum*GST, fees=feeSum+gst;
+    const settle=sp-fees;
+    const mkt=sp*v.acos/100, ret=sp*v.ret/100, landed=v.cost+v.pack;
+    const net=settle-landed-mkt-ret;
+    const margin=sp>0?net/sp*100:0;
+    const inv=landed+mkt+ret;
+    const roi=inv>0?net/inv*100:0;
+    const loss=net<0;
+    const cat=CATMAP[v.cat];
+
+    const seg=[
+      ["cost","Your product cost","#64748b",v.cost],
+      ["pack","Packaging","#94a3b8",v.pack],
+      ["ref",`Amazon referral (${(rate*100).toFixed(1)}%)`,"#ef4444",referral],
+      ["cl","Closing fee","#f59e0b",closing],
+      ["sh","Shipping","#eab308",shipping],
+      ["fba","FBA pick&pack + storage","#0ea5e9",pp+st],
+      ["gst","GST on Amazon fees","#8b5cf6",gst],
+      ["mkt","Marketing / ads","#6366f1",mkt],
+      ["rt","Return loss","#a855f7",ret],
+      ["np",loss?"Net loss":"Net profit kept","#22c55e",Math.max(0,net)],
+    ].filter(s=>s[3]>0||s[0]==="np");
+
+    return {
+      stats:[
+        {k:"Settlement",v:inr(settle),t:"blue"},
+        {k:"Net Profit",v:inr(net),t:loss?"red":"green"},
+        {k:"Net Margin",v:pc(margin)},
+        {k:"ROI",v:pc(roi)},
+      ],
+      banner: (sp>0 && margin<15) ? {t:"warn",
+        x:`Low margin (${margin.toFixed(1)}%). A sustainable range is usually 15–25%. Consider raising price, cutting cost, or trimming ad spend.`} : null,
+      rows:[
+        {l:"Selling Price",v:inr0(sp)},
+        {l:`Amazon Fees (${sp>0?(fees/sp*100).toFixed(2):"0.00"}% of SP)`,v:"-"+inr(fees),neg:1,mut:1},
+        {l:"Settlement from Amazon",v:inr(settle),hl:1},
+        {l:"Product + Packaging",v:"-"+inr0(landed),neg:1,mut:1},
+        {l:`Marketing (${v.acos}%) + Returns (${v.ret}%)`,v:"-"+inr(mkt+ret),neg:1,mut:1},
+        {l:`Net ${loss?"Loss":"Profit"} per Unit`,v:inr(net),fin:1,loss:loss},
+      ],
+      split:{title:`Where every ${inr0(sp)} goes`,total:sp||1,
+        items:seg.map(s=>({key:s[0],nm:s[1],color:s[2],val:(s[0]==="np"&&loss)?net:s[3]}))},
+      bench:{title:`Your margin vs. ${cat.name} benchmark`,you:margin,...cat.bench},
+    };
+  }
+},
+{
+  id:"fba-fee", icon:"📦",
+  name:"Amazon FBA Fee Calculator",
+  desc:"Estimate FBA fees, fulfilment costs, and net settlement before scaling SKUs.",
+  fields:[
+    {k:"sp",label:"Selling Price (₹)",t:"num",d:999,full:1},
+    {k:"cat",label:"Category",t:"sel",o:catOptions,d:"electronics",full:1},
+    {k:"kg",label:"Weight (kg)",t:"num",dec:1,d:0.5},
+    {k:"size",label:"Size",t:"seg",o:[{v:"standard",l:"Standard"},{v:"large",l:"Large"},{v:"oversize",l:"Oversize"}],d:"standard"},
+    {k:"zone",label:"Zone",t:"seg",o:[{v:"local",l:"Local"},{v:"national",l:"National"}],d:"national",full:1},
+  ],
+  compute(v){
+    const sp=v.sp, rate=refRate(v.cat,sp);
+    const referral=sp*rate;
+    const closing=sp>0?closingFee(sp,"fba"):0;
+    const wh=sp>0?shipFee(sp,"fba",v.zone,v.kg||0.5):0;
+    const pp=sp>0?pickPack(v.kg||0.5):0;
+    const st=sp>0?STORAGE_TIER[v.size]:0;
+    const feeSum=referral+closing+wh+pp+st;
+    const gst=feeSum*GST, fees=feeSum+gst, settle=sp-fees;
+    const fpc=sp>0?fees/sp*100:0;
+    return {
+      stats:[
+        {k:"Total FBA Fees",v:inr(fees),t:"red"},
+        {k:"Fees % of SP",v:pc(fpc)},
+        {k:"Net Settlement",v:inr(settle),t:"blue"},
+        {k:"Referral Rate",v:pc(rate*100)},
+      ],
+      banner:{t:fpc>25?"warn":"info",
+        x:`Amazon keeps ${pc(fpc)} of this sale; you receive ${pc(100-fpc)}. Fee share falls as price rises because referral is percentage-based while fulfilment fees are broadly flat.`},
+      rows:[
+        {l:"Selling Price",v:inr0(sp)},
+        {l:`Referral fee (${(rate*100).toFixed(1)}%)`,v:"-"+inr(referral),neg:1,mut:1},
+        {l:"Closing fee",v:"-"+inr0(closing),neg:1,mut:1},
+        {l:"Weight handling",v:"-"+inr0(wh),neg:1,mut:1},
+        {l:"FBA pick & pack",v:"-"+inr0(pp),neg:1,mut:1},
+        {l:"FBA storage",v:"-"+inr0(st),neg:1,mut:1},
+        {l:"GST on fees (18%)",v:"-"+inr(gst),neg:1,mut:1},
+        {l:"Net Settlement",v:inr(settle),fin:1,loss:settle<0},
+      ],
+      split:{title:"Fee composition",total:sp||1,items:[
+        {key:"ref",nm:"Referral",color:"#ef4444",val:referral},
+        {key:"cl",nm:"Closing",color:"#f59e0b",val:closing},
+        {key:"wh",nm:"Weight handling",color:"#eab308",val:wh},
+        {key:"pp",nm:"Pick & pack",color:"#0ea5e9",val:pp},
+        {key:"st",nm:"Storage",color:"#14b8a6",val:st},
+        {key:"gst",nm:"GST on fees",color:"#8b5cf6",val:gst},
+        {key:"keep",nm:"You receive",color:"#22c55e",val:Math.max(0,settle)},
+      ]},
+    };
+  }
+},
+{
+  id:"fba-storage", icon:"🏬",
+  name:"Amazon FBA Storage Fee Calculator",
+  desc:"Model FBA storage exposure, months of cover, and aged inventory risk.",
+  fields:[
+    {k:"L",label:"Length (cm)",t:"num",dec:1,d:30},
+    {k:"W",label:"Width (cm)",t:"num",dec:1,d:20},
+    {k:"H",label:"Height (cm)",t:"num",dec:1,d:10},
+    {k:"units",label:"Units in stock",t:"num",d:500},
+    {k:"sales",label:"Units sold / month",t:"num",d:150},
+    {k:"age",label:"Days in stock",t:"num",d:60},
+    {k:"peak",label:"Season",t:"seg",o:[{v:"std",l:"Jan–Sep"},{v:"peak",l:"Oct–Dec"}],d:"std",full:1},
+  ],
+  compute(v){
+    const unitCuft=(v.L*v.W*v.H)/CM3_CUFT;
+    const totalCuft=unitCuft*v.units;
+    const rate=v.peak==="peak"?STORAGE_CUFT.peak:STORAGE_CUFT.std;
+    const monthly=totalCuft*rate;
+    const cover=v.sales>0?v.units/v.sales:Infinity;
+    const aged=v.age>365;
+    const surcharge=aged?totalCuft*STORAGE_CUFT.aged:0;
+    const exposure=monthly+surcharge;
+    const perUnit=v.units>0?exposure/v.units:0;
+    return {
+      stats:[
+        {k:"Monthly Storage",v:inr(monthly),t:"blue"},
+        {k:"Months of Cover",v:isFinite(cover)?cover.toFixed(1)+" mo":"—",t:cover>6?"red":"green"},
+        {k:"Total Volume",v:totalCuft.toFixed(2)+" ft³"},
+        {k:"Cost / Unit / Mo",v:inr(perUnit),t:aged?"red":undefined},
+      ],
+      banner: aged ? {t:"warn",
+        x:`This inventory is over 365 days old, so an aged-storage surcharge of ${inr(surcharge)}/month applies on top of standard storage. Consider a removal order or a clearance promotion.`}
+        : (isFinite(cover)&&cover>6) ? {t:"warn",
+        x:`You are holding ${cover.toFixed(1)} months of cover. Beyond roughly 6 months you tie up cash and edge toward long-term storage fees.`}
+        : {t:"good",x:`Healthy cover at ${isFinite(cover)?cover.toFixed(1):"—"} months. Storage is a small, predictable cost at this turn rate.`},
+      rows:[
+        {l:"Unit volume",v:unitCuft.toFixed(4)+" ft³",mut:1},
+        {l:"Total volume",v:totalCuft.toFixed(2)+" ft³",mut:1},
+        {l:`Rate (${v.peak==="peak"?"Oct–Dec peak":"standard"})`,v:inr(rate)+" / ft³",mut:1},
+        {l:"Standard storage",v:inr(monthly),hl:1},
+        ...(aged?[{l:"Aged inventory surcharge",v:"-"+inr(surcharge),neg:1,mut:1}]:[]),
+        {l:"Total monthly exposure",v:inr(exposure),fin:1},
+      ],
+    };
+  }
+},
+{
+  id:"acos", icon:"🎯",
+  name:"Amazon ACOS Calculator",
+  desc:"Calculate ACOS, TACoS, and ad efficiency benchmarks for Amazon PPC.",
+  fields:[
+    {k:"spend",label:"Ad Spend (₹)",t:"num",d:5000},
+    {k:"adSales",label:"Ad Sales (₹)",t:"num",d:20000},
+    {k:"total",label:"Total Sales (₹)",t:"num",d:50000,full:1},
+  ],
+  compute(v){
+    const acos=v.adSales>0?v.spend/v.adSales*100:0;
+    const roas=v.spend>0?v.adSales/v.spend:0;
+    const tacos=v.total>0?v.spend/v.total*100:0;
+    const org=Math.max(0,v.total-v.adSales);
+    const orgPc=v.total>0?org/v.total*100:0;
+    const adPc=v.total>0?v.adSales/v.total*100:0;
+    return {
+      stats:[
+        {k:"ACOS",v:pc(acos),t:acos>30?"red":"green"},
+        {k:"ROAS",v:roas.toFixed(2)+"x",t:"blue"},
+        {k:"TACoS",v:pc(tacos)},
+        {k:"Organic Share",v:pc(orgPc)},
+      ],
+      banner:{t:tacos<10?"good":tacos<20?"info":"warn",
+        x:tacos<10?"Healthy TACoS — ads are a small share of total revenue, which means real organic pull."
+         :tacos<20?"Moderate TACoS. Watch that organic sales grow as you scale spend, not just paid."
+         :"High TACoS — revenue is leaning heavily on ads. Work on organic rank and listing conversion."},
+      rows:[
+        {l:"Ad sales",v:inr(v.adSales)+"  ("+pc(adPc)+")",mut:1},
+        {l:"Organic sales",v:inr(org)+"  ("+pc(orgPc)+")",mut:1},
+        {l:"Total sales",v:inr(v.total),hl:1},
+        {l:"ACOS — spend ÷ ad sales",v:pc(acos),mut:1},
+        {l:"TACoS — spend ÷ total sales",v:pc(tacos),mut:1},
+        {l:"ROAS — ad sales ÷ spend",v:roas.toFixed(2)+"x",fin:1},
+      ],
+      split:{title:"Paid vs organic revenue",total:v.total||1,items:[
+        {key:"ad",nm:"Ad-driven sales",color:"#6366f1",val:v.adSales},
+        {key:"org",nm:"Organic sales",color:"#22c55e",val:org},
+      ]},
+    };
+  }
+},
+{
+  id:"break-even-acos", icon:"⚖️",
+  name:"Amazon Break-Even ACOS Calculator",
+  desc:"Find break-even ACOS, target ACOS, and max CPC from margin and conversion.",
+  fields:[
+    {k:"price",label:"Selling Price (₹)",t:"num",d:999},
+    {k:"cost",label:"Product Cost (₹)",t:"num",d:400},
+    {k:"fees",label:"Amazon Fees (₹/unit)",t:"num",dec:1,d:169},
+    {k:"cvr",label:"Conversion Rate (%)",t:"num",dec:1,d:10},
+    {k:"target",label:"Target Profit (% of price)",t:"num",dec:1,d:15,full:1},
+  ],
+  compute(v){
+    const profit=v.price-v.cost-v.fees;
+    const cvr=v.cvr/100;
+    const beAcos=v.price>0?profit/v.price*100:0;
+    const beCpc=profit*cvr;
+    const targetProfit=v.price*v.target/100;
+    const maxSpend=Math.max(0,profit-targetProfit);
+    const tAcos=v.price>0?maxSpend/v.price*100:0;
+    const tCpc=maxSpend*cvr;
+    return {
+      stats:[
+        {k:"Break-Even ACOS",v:pc(beAcos),t:"blue"},
+        {k:"Break-Even CPC",v:inr(beCpc)},
+        {k:"Target ACOS",v:pc(tAcos),t:"green"},
+        {k:"Target Max CPC",v:inr(tCpc)},
+      ],
+      banner:{t:profit<=0?"warn":"info",
+        x:profit<=0
+          ? "This SKU loses money before a single ad rupee is spent. Fix price, cost or fees before advertising it."
+          : `Above ${beAcos.toFixed(1)}% ACOS you lose money on ad-driven sales. Keep CPC under ${inr(beCpc)} to break even, or under ${inr(tCpc)} to protect your ${v.target}% target profit.`},
+      rows:[
+        {l:"Selling price",v:inr0(v.price),mut:1},
+        {l:"Less product cost + Amazon fees",v:"-"+inr(v.cost+v.fees),neg:1,mut:1},
+        {l:"Profit before ads (per unit)",v:inr(profit),hl:1},
+        {l:"Break-even ACOS",v:pc(beAcos),mut:1},
+        {l:"Break-even CPC",v:inr(beCpc),mut:1},
+        {l:"Max ad spend per order (target)",v:inr(maxSpend),mut:1},
+        {l:"Target CPC",v:inr(tCpc),fin:1,loss:profit<=0},
+      ],
+    };
+  }
+},
+{
+  id:"advertising-roi", icon:"📈", badge:"Updated",
+  name:"Amazon Advertising ROI Calculator",
+  desc:"Project clicks, orders, sales, and ROAS from PPC budget, CPC, and CVR inputs.",
+  fields:[
+    {k:"budget",label:"PPC Budget (₹)",t:"num",d:10000},
+    {k:"cpc",label:"Avg CPC (₹)",t:"num",dec:1,d:12},
+    {k:"cvr",label:"Conversion Rate (%)",t:"num",dec:1,d:8},
+    {k:"aov",label:"Avg Order Value (₹)",t:"num",d:999},
+  ],
+  compute(v){
+    const clicks=v.cpc>0?v.budget/v.cpc:0;
+    const orders=clicks*v.cvr/100;
+    const sales=orders*v.aov;
+    const roas=v.budget>0?sales/v.budget:0;
+    const acos=sales>0?v.budget/sales*100:0;
+    const cpo=orders>0?v.budget/orders:0;
+    return {
+      stats:[
+        {k:"Est. Clicks",v:num(clicks)},
+        {k:"Est. Orders",v:num(orders),t:"blue"},
+        {k:"Projected Sales",v:inr(sales),t:"green"},
+        {k:"ROAS",v:roas.toFixed(2)+"x",t:roas>=3?"green":"red"},
+      ],
+      banner:{t:roas>=4?"good":roas>=2.5?"info":"warn",
+        x:`${inr0(v.budget)} buys about ${num(clicks)} clicks, converting to roughly ${num(orders)} orders and ${inr(sales)} in sales — an ACOS of ${pc(acos)}.`},
+      rows:[
+        {l:"Clicks",v:num(clicks),mut:1},
+        {l:"Orders",v:num(orders),mut:1},
+        {l:"Cost per order",v:inr(cpo),mut:1},
+        {l:"Projected sales",v:inr(sales),hl:1},
+        {l:"ACOS",v:pc(acos),mut:1},
+        {l:"ROAS",v:roas.toFixed(2)+"x",fin:1,loss:roas<1},
+      ],
+    };
+  }
+},
+{
+  id:"marketing-budget", icon:"📊",
+  name:"Amazon Marketing Budget Planner",
+  desc:"Plan monthly Amazon ad spend by category benchmarks and revenue targets.",
+  fields:[
+    {k:"revenue",label:"Monthly Revenue Target (₹)",t:"num",d:500000,full:1},
+    {k:"cat",label:"Category",t:"sel",o:catOptions,d:"electronics",full:1},
+    {k:"custom",label:"Custom TACoS % (optional)",t:"num",dec:1,d:0,full:1},
+  ],
+  compute(v){
+    const tacos = v.custom>0 ? v.custom : (CATMAP[v.cat]||CATMAP.other).tacos;
+    const monthly=v.revenue*tacos/100;
+    return {
+      stats:[
+        {k:"Monthly Ad Budget",v:inr(monthly),t:"blue"},
+        {k:"Daily Budget",v:inr(monthly/30),t:"green"},
+        {k:"Weekly Budget",v:inr(monthly/4.345)},
+        {k:"TACoS Used",v:tacos+"%"},
+      ],
+      banner:{t:"info",
+        x:`Using a ${tacos}% TACoS benchmark for this category, plan about ${inr(monthly/30)} per day to support a ${inr0(v.revenue)} monthly revenue target. Enter a custom TACoS to match your own history.`},
+      rows:[
+        {l:"Revenue target",v:inr0(v.revenue),hl:1},
+        {l:"TACoS benchmark",v:tacos+"%",mut:1},
+        {l:"Monthly budget",v:inr(monthly),mut:1},
+        {l:"Weekly budget",v:inr(monthly/4.345),mut:1},
+        {l:"Daily budget",v:inr(monthly/30),fin:1},
+      ],
+      split:{title:"Revenue split",total:v.revenue||1,items:[
+        {key:"ad",nm:"Ad spend",color:"#6366f1",val:monthly},
+        {key:"rest",nm:"Remaining revenue",color:"#22c55e",val:Math.max(0,v.revenue-monthly)},
+      ]},
+    };
+  }
+},
+{
+  id:"launch-budget", icon:"🚀",
+  name:"Amazon Product Launch Budget Calculator",
+  desc:"Plan PPC, coupons, creative, and launch investment for Amazon SKU launches.",
+  fields:[
+    {k:"days",label:"Launch Days",t:"num",d:30},
+    {k:"ppc",label:"Daily PPC (₹)",t:"num",d:1000},
+    {k:"coupon",label:"Coupon Budget (₹)",t:"num",d:15000},
+    {k:"creative",label:"Creative (₹)",t:"num",d:8000},
+    {k:"samples",label:"Samples & Reviews (₹)",t:"num",d:5000,full:1},
+  ],
+  compute(v){
+    const ppcTotal=v.days*v.ppc;
+    const items=[
+      {key:"ppc",nm:"PPC / ads",color:"#6366f1",val:ppcTotal},
+      {key:"cp",nm:"Coupons & promos",color:"#f59e0b",val:v.coupon},
+      {key:"cr",nm:"Creative & photography",color:"#0ea5e9",val:v.creative},
+      {key:"sm",nm:"Samples & reviews",color:"#22c55e",val:v.samples},
+    ];
+    const total=items.reduce((s,x)=>s+x.val,0);
+    return {
+      stats:[
+        {k:"Total Launch Budget",v:inr(total),t:"blue"},
+        {k:"Avg Spend / Day",v:inr(v.days>0?total/v.days:0)},
+        {k:"PPC Total",v:inr(ppcTotal)},
+        {k:"Launch Window",v:num(v.days)+" days"},
+      ],
+      banner:{t:"info",
+        x:`Ads are ${total>0?(ppcTotal/total*100).toFixed(0):0}% of this launch budget. A typical launch leans heaviest on PPC early, then shifts toward coupons once reviews start landing.`},
+      rows:[
+        ...items.map(i=>({l:i.nm,v:inr(i.val)+"   "+(total>0?(i.val/total*100).toFixed(0):0)+"%",mut:1})),
+        {l:"Total launch investment",v:inr(total),fin:1},
+      ],
+      split:{title:"Budget allocation",total:total||1,items},
+    };
+  }
+},
+{
+  id:"coupon-roi", icon:"🏷️",
+  name:"Amazon Coupon ROI Calculator",
+  desc:"Estimate coupon-funded discount cost, incremental orders, and net contribution.",
+  fields:[
+    {k:"price",label:"Regular Price (₹)",t:"num",d:999},
+    {k:"disc",label:"Discount (%)",t:"num",dec:1,d:15},
+    {k:"fee",label:"Coupon Fee (₹)",t:"num",dec:1,d:6},
+    {k:"uplift",label:"Sales Uplift (%)",t:"num",dec:1,d:40},
+    {k:"base",label:"Baseline Orders",t:"num",d:100},
+    {k:"cost",label:"Unit Cost (₹)",t:"num",d:400},
+    {k:"fees",label:"Amazon Fees (₹)",t:"num",dec:1,d:169,full:1},
+  ],
+  compute(v){
+    const dp=v.price*(1-v.disc/100);
+    const orders=v.base*(1+v.uplift/100);
+    const incr=orders-v.base;
+    const discCost=orders*(v.price-dp);
+    const cFees=orders*v.fee;
+    const mpu=dp-v.cost-v.fees;
+    const contrib=orders*mpu-cFees;
+    const baseContrib=v.base*(v.price-v.cost-v.fees);
+    const net=contrib-baseContrib;
+    const worth=net>0;
+    // break-even uplift: uplift where contrib == baseContrib
+    const denom=(mpu-v.fee);
+    const beUplift = denom>0 ? ((baseContrib/denom)/v.base-1)*100 : Infinity;
+    return {
+      stats:[
+        {k:"Discounted Price",v:inr(dp)},
+        {k:"Incremental Orders",v:"+"+num(incr),t:"blue"},
+        {k:"Net vs Baseline",v:inr(net),t:worth?"green":"red"},
+        {k:"Coupon Fees",v:inr(cFees)},
+      ],
+      banner:{t:worth?"good":"warn",
+        x:worth
+          ? `Worth running: the coupon adds ${inr(net)} of contribution over baseline, driven by about ${num(incr)} extra orders.`
+          : `Not worth it at these numbers — contribution falls ${inr(Math.abs(net))} below baseline.${isFinite(beUplift)&&beUplift>0?` You would need roughly ${beUplift.toFixed(0)}% uplift to break even at this discount.`:" The discounted margin is too thin to recover at any volume."}`},
+      rows:[
+        {l:"Regular price",v:inr0(v.price),mut:1},
+        {l:`Discounted price (−${v.disc}%)`,v:inr(dp),hl:1},
+        {l:"Discount cost (all orders)",v:"-"+inr(discCost),neg:1,mut:1},
+        {l:"Coupon redemption fees",v:"-"+inr(cFees),neg:1,mut:1},
+        {l:"Margin per unit (discounted)",v:inr(mpu),mut:1},
+        {l:"Contribution with coupon",v:inr(contrib),mut:1},
+        {l:"Baseline contribution",v:inr(baseContrib),mut:1},
+        {l:"Net vs baseline",v:inr(net),fin:1,loss:!worth},
+      ],
+    };
+  }
+},
+];
+
+const CALCMAP=Object.fromEntries(CALCS.map(c=>[c.id,c]));
+
+/* ============================================================
+   RENDERER + ROUTER
+   ============================================================ */
+const app=document.getElementById("app");
+const backBtn=document.getElementById("back");
+let state={};
+
+function esc(s){return String(s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));}
+
+function renderHome(){
+  document.title="Seller Tools — Amazon India Profit & Fee Calculators";
+  backBtn.hidden=true;
+  app.innerHTML=`
+    <div class="wrap">
+      <section class="hero">
+        <h1>Seller Tools</h1>
+        <p>Free calculators for Amazon India sellers. Work out true profit per SKU, FBA fees, storage exposure, break-even ACOS and ad ROI — instantly, in your browser.</p>
+      </section>
+      <div class="grid">
+        ${CALCS.map(c=>`
+          <a class="tile" href="#/${c.id}">
+            ${c.badge?`<span class="pill">${c.badge}</span>`:""}
+            <div class="ico">${c.icon}</div>
+            <h3>${esc(c.name)}</h3>
+            <p>${esc(c.desc)}</p>
+          </a>`).join("")}
+      </div>
+    </div>`;
+}
+
+/* Every control is explicitly labelled: `for`/`id` on the native inputs, and
+   `aria-labelledby` + `aria-pressed` on the segmented button groups, which are
+   otherwise just unlabelled buttons to a screen reader. */
+function fieldHtml(f,val){
+  const id="f-"+f.k, lid=id+"-l";
+  if(f.t==="sel"){
+    return `<label id="${lid}" for="${id}">${esc(f.label)}</label>
+      <select id="${id}" data-k="${f.k}">${f.o.map(o=>
+        `<option value="${o.v}"${o.v===val?" selected":""}>${esc(o.l)}</option>`).join("")}</select>`;
+  }
+  if(f.t==="seg"){
+    return `<label id="${lid}">${esc(f.label)}</label>
+      <div class="seg" data-k="${f.k}" role="group" aria-labelledby="${lid}">${f.o.map(o=>
+        `<button type="button" data-v="${o.v}" class="${o.v===val?"on":""}" aria-pressed="${o.v===val}" title="${esc(o.l)}">${esc(o.l)}</button>`).join("")}</div>`;
+  }
+  return `<label id="${lid}" for="${id}">${esc(f.label)}</label>
+    <input id="${id}" data-k="${f.k}" data-dec="${f.dec?1:0}" inputmode="${f.dec?"decimal":"numeric"}" value="${val}">`;
+}
+
+function renderCalc(id){
+  const c=CALCMAP[id];
+  if(!c){location.hash="#/";return;}
+  document.title=c.name+" — Seller Tools";
+  const md=document.querySelector('meta[name="description"]');
+  if(md) md.setAttribute("content",c.desc);
+  backBtn.hidden=false;
+
+  if(state.id!==id){
+    state={id};
+    c.fields.forEach(f=>state[f.k]=f.d);
+  }
+
+  app.innerHTML=`
+    <div class="wrap page">
+      <h2>${esc(c.name)}</h2>
+      <p class="lede">${esc(c.desc)}</p>
+      <div class="cols">
+        <div class="card">
+          <div class="fields">
+            ${c.fields.map(f=>`<div class="${f.full?"f-full":""}">${fieldHtml(f,state[f.k])}</div>`).join("")}
+          </div>
+        </div>
+        <div id="out"></div>
+      </div>
+    </div>`;
+
+  // wire inputs
+  app.querySelectorAll("input[data-k]").forEach(el=>{
+    el.addEventListener("keydown",e=>{
+      const ctrl=e.ctrlKey||e.metaKey;
+      const nav=["Backspace","Delete","Tab","Enter","ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Home","End"];
+      if(ctrl||nav.includes(e.key))return;
+      if(e.key==="."&&el.dataset.dec==="1"&&!el.value.includes("."))return;
+      if(/^[0-9]$/.test(e.key))return;
+      e.preventDefault();
+    });
+    el.addEventListener("input",()=>{
+      let v=el.value.replace(el.dataset.dec==="1"?/[^0-9.]/g:/[^0-9]/g,"");
+      if(el.dataset.dec==="1"){
+        const i=v.indexOf(".");
+        if(i!==-1) v=v.slice(0,i+1)+v.slice(i+1).replace(/\./g,"");
+      }
+      if(v!==el.value) el.value=v;
+      state[el.dataset.k]=+v||0;
+      paint(c);
+    });
+  });
+  app.querySelectorAll("select[data-k]").forEach(el=>{
+    el.addEventListener("change",()=>{state[el.dataset.k]=el.value;paint(c);});
+  });
+  app.querySelectorAll(".seg[data-k]").forEach(seg=>{
+    seg.querySelectorAll("button").forEach(b=>{
+      b.addEventListener("click",()=>{
+        seg.querySelectorAll("button").forEach(x=>{
+          x.classList.remove("on");
+          x.setAttribute("aria-pressed","false");
+        });
+        b.classList.add("on");
+        b.setAttribute("aria-pressed","true");
+        state[seg.dataset.k]=b.dataset.v;
+        paint(c);
+      });
+    });
+  });
+
+  paint(c);
+}
+
+function paint(c){
+  const r=c.compute(state);
+  let h="";
+
+  h+=`<div class="stats">${r.stats.map(s=>
+    `<div class="stat ${s.t||""}"><div class="k">${esc(s.k)}</div><div class="v">${s.v}</div></div>`).join("")}</div>`;
+
+  if(r.banner) h+=`<div class="banner ${r.banner.t}">${esc(r.banner.x)}</div>`;
+
+  h+=`<div class="rows">${r.rows.map(x=>
+    `<div class="r ${x.mut?"mut":""} ${x.hl?"hl":""} ${x.fin?"fin":""} ${x.loss?"loss":""}">
+       <span class="rl">${esc(x.l)}</span>
+       <span class="rv ${x.neg?"neg":""}">${x.v}</span>
+     </div>`).join("")}</div>`;
+
+  if(r.split){
+    const t=r.split.total||1;
+    h+=`<div class="card panel"><h4>${esc(r.split.title)}</h4>
+      <div class="bar">${r.split.items.filter(i=>i.val>0).map(i=>
+        `<span style="width:${i.val/t*100}%;background:${i.color}"></span>`).join("")}</div>
+      <ul class="leg">${r.split.items.map(i=>
+        `<li><span class="dot" style="background:${i.color}"></span>
+             <span class="nm">${esc(i.nm)}</span>
+             <span class="amt">${inr(i.val)}</span>
+             <span class="pc">${(i.val/t*100).toFixed(1)}%</span></li>`).join("")}</ul></div>`;
+  }
+
+  if(r.bench){
+    const b=r.bench, span=(b.high-b.low)||1;
+    const cl=v=>Math.max(0,Math.min(100,(v-b.low)/span*100));
+    const above=b.you>=b.median;
+    h+=`<div class="card panel"><h4>${esc(b.title)}</h4>
+      <div class="bench-head">
+        <span style="font-size:14px;font-weight:700">Net margin %</span>
+        <span style="font-size:12.5px;font-weight:600;color:${above?"var(--green)":"var(--red)"}">
+          ${above?"↗ Above":"↘ Below"} category median</span>
+      </div>
+      <div class="track"><div class="md" style="left:${cl(b.median)}%"></div>
+        <div class="yo" style="left:${cl(b.you)}%"></div></div>
+      <div class="scale"><span>Low ${b.low}%</span>
+        <span class="me">You ${b.you.toFixed(1)}%</span>
+        <span>High ${b.high}%</span></div>
+      <div style="font-size:12.5px;color:var(--muted);margin-top:10px">Category median: ${b.median}%</div>
+    </div>`;
+  }
+
+  document.getElementById("out").innerHTML=h;
+}
+
+function route(){
+  const h=location.hash.replace(/^#\/?/,"");
+  if(!h){renderHome();window.scrollTo(0,0);return;}
+  renderCalc(h);
+  window.scrollTo(0,0);
+}
+window.addEventListener("hashchange",route);
+route();
+</script>
+</body>
+</html>
