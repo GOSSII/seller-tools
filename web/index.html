@@ -765,6 +765,136 @@ const CALCS = [
     };
   }
 },
+{
+  id:"price-bands", icon:"🪜", badge:"New",
+  name:"Amazon Price Band Optimizer",
+  desc:"Amazon India fees jump at ₹250, ₹300, ₹500 and ₹1,000. Find the price near yours that nets the most per unit.",
+  fields:[
+    {k:"sp",label:"Planned Price (₹)",t:"num",d:999},
+    {k:"cost",label:"Product Cost (₹)",t:"num",d:400},
+    {k:"cat",label:"Category",t:"sel",o:catOptions,d:"electronics",full:1},
+    {k:"kg",label:"Weight (kg)",t:"num",dec:1,d:0.5},
+    {k:"size",label:"Size",t:"seg",o:[{v:"standard",l:"Standard"},{v:"large",l:"Large"},{v:"oversize",l:"Oversize"}],d:"standard"},
+    {k:"ful",label:"Fulfillment",t:"seg",o:[{v:"self",l:"Self"},{v:"easyship",l:"Easy Ship"},{v:"fba",l:"FBA"}],d:"self",full:1},
+    {k:"zone",label:"Zone",t:"seg",o:[{v:"local",l:"Local"},{v:"national",l:"National"}],d:"local",full:1},
+    {k:"pack",label:"Packaging (₹)",t:"num",d:15},
+    {k:"acos",label:"ACOS (%)",t:"num",dec:1,d:10},
+    {k:"ret",label:"Returns (%)",t:"num",dec:1,d:3},
+  ],
+  compute(v){
+    // Net profit at price p — identical maths to the profit calculator.
+    const netAt=p=>{
+      if(p<=0) return -(v.cost+v.pack);
+      const rate=refRate(v.cat,p);
+      const referral=p*rate;
+      const closing=closingFee(p,v.ful);
+      const shipping=shipFee(p,v.ful,v.zone,v.kg||0.5);
+      const pp=v.ful==="fba"?pickPack(v.kg||0.5):0;
+      const st=v.ful==="fba"?STORAGE_TIER[v.size]:0;
+      const fees=(referral+closing+shipping+pp+st)*(1+GST);
+      return p-fees-(v.cost+v.pack)-p*(v.acos+v.ret)/100;
+    };
+    const sp=Math.max(1,Math.round(v.sp||1));
+    const lo=Math.max(1,Math.round(sp*0.7)),hi=Math.round(sp*1.3);
+    // Only consider prices at or below the planned price: a higher price
+    // almost always nets more per unit on paper, but whether the market
+    // bears it is the seller's call, not this tool's. The real insight is
+    // when charging LESS nets MORE because of a fee-band jump.
+    let best=lo,bestNet=-Infinity;
+    for(let p=lo;p<=sp;p++){const n=netAt(p);if(n>bestNet){bestNet=n;best=p;}}
+    const plannedNet=netAt(sp);
+    const uplift=bestNet-plannedNet;
+    const rows=[{l:`Your planned price — ₹${sp.toLocaleString("en-IN")}`,v:inr(plannedNet),hl:best===sp}];
+    for(const e of [250,300,500,1000]){
+      if(e-1>=lo&&e+1<=hi){
+        const below=netAt(e-1),above=netAt(e+1),d=below-above;
+        rows.push({l:`₹${e-1} — just under the ₹${e} band`,v:inr(below),hl:best===e-1,mut:best!==e-1});
+        rows.push({l:`₹${e+1} — just over (band jump costs ${inr(Math.abs(d))})`,v:inr(above),neg:d>0,mut:1});
+      }
+    }
+    if(best!==sp) rows.push({l:`Best price in range — ₹${best.toLocaleString("en-IN")}`,v:inr(bestNet),fin:1,loss:bestNet<0});
+    return {
+      stats:[
+        {k:"Best Price (≤ planned)",v:"₹"+best.toLocaleString("en-IN"),t:"blue"},
+        {k:"Net at Best",v:inr(bestNet),t:bestNet<0?"red":"green"},
+        {k:"Net at Planned",v:inr(plannedNet)},
+        {k:"Uplift vs Planned",v:inr(uplift)},
+      ],
+      banner: uplift>1
+        ? {t:"warn",x:`Dropping to ₹${best.toLocaleString("en-IN")} would earn ${inr(uplift)} MORE per unit than ₹${sp.toLocaleString("en-IN")} — your planned price sits just above a fee band. Amazon India's closing-fee and referral bands step up above ₹250, ₹300, ₹500 and ₹1,000, and crossing one can cost more than the extra price collects.`}
+        : {t:"good",x:`Your planned price is efficient — no lower price beats it. The rows below show what each nearby fee-band jump would cost or save.`},
+      rows,
+      note:"Fee bands: closing fee steps at ₹250 / ₹500 / ₹1,000; referral rate steps at ₹300 / ₹500 / ₹1,000; Easy Ship shipping relief applies below ₹300. Same verified fee maths as the profit calculator.",
+    };
+  }
+},
+{
+  id:"target-price", icon:"🎯", badge:"New",
+  name:"Amazon Target Price Calculator",
+  desc:"Work backwards: tell it the margin or profit you want, and it finds the lowest price that gets you there.",
+  fields:[
+    {k:"goal",label:"Target Type",t:"seg",o:[{v:"margin",l:"Margin %"},{v:"profit",l:"Profit ₹"}],d:"margin"},
+    {k:"target",label:"Target Value",t:"num",dec:1,d:20},
+    {k:"cost",label:"Product Cost (₹)",t:"num",d:400},
+    {k:"cat",label:"Category",t:"sel",o:catOptions,d:"electronics",full:1},
+    {k:"kg",label:"Weight (kg)",t:"num",dec:1,d:0.5},
+    {k:"size",label:"Size",t:"seg",o:[{v:"standard",l:"Standard"},{v:"large",l:"Large"},{v:"oversize",l:"Oversize"}],d:"standard"},
+    {k:"ful",label:"Fulfillment",t:"seg",o:[{v:"self",l:"Self"},{v:"easyship",l:"Easy Ship"},{v:"fba",l:"FBA"}],d:"self",full:1},
+    {k:"zone",label:"Zone",t:"seg",o:[{v:"local",l:"Local"},{v:"national",l:"National"}],d:"local",full:1},
+    {k:"pack",label:"Packaging (₹)",t:"num",d:15},
+    {k:"acos",label:"ACOS (%)",t:"num",dec:1,d:10},
+    {k:"ret",label:"Returns (%)",t:"num",dec:1,d:3},
+  ],
+  compute(v){
+    const feesAt=p=>{
+      const rate=refRate(v.cat,p);
+      const referral=p*rate;
+      const closing=closingFee(p,v.ful);
+      const shipping=shipFee(p,v.ful,v.zone,v.kg||0.5);
+      const pp=v.ful==="fba"?pickPack(v.kg||0.5):0;
+      const st=v.ful==="fba"?STORAGE_TIER[v.size]:0;
+      const feeSum=referral+closing+shipping+pp+st;
+      return {referral,closing,shipping,pp,st,gst:feeSum*GST,total:feeSum*(1+GST),rate};
+    };
+    const netAt=p=>p-feesAt(p).total-(v.cost+v.pack)-p*(v.acos+v.ret)/100;
+    const MAX=49999;
+    let price=0;
+    for(let p=1;p<=MAX;p++){
+      const n=netAt(p);
+      const hit=v.goal==="profit"?n>=v.target:(n/p*100)>=v.target;
+      if(hit){price=p;break;}
+    }
+    if(!price){
+      return {
+        stats:[{k:"Required Price",v:"—",t:"red"},{k:"Target",v:(v.goal==="profit"?inr(v.target):v.target+"%")},{k:"Best possible",v:v.goal==="profit"?inr(netAt(MAX)):((netAt(MAX)/MAX*100).toFixed(2)+"%")},{k:"Checked up to",v:"₹49,999"}],
+        banner:{t:"warn",x:`No price up to ₹49,999 reaches this target with these costs. Referral fees scale with price, so raising price alone cannot get there — reduce cost, ad spend, or the target.`},
+        rows:[],
+      };
+    }
+    const f=feesAt(price),net=netAt(price),margin=net/price*100;
+    const mkt=price*v.acos/100,ret=price*v.ret/100;
+    return {
+      stats:[
+        {k:"Required Price",v:"₹"+price.toLocaleString("en-IN"),t:"blue"},
+        {k:"Net Profit There",v:inr(net),t:"green"},
+        {k:"Margin There",v:margin.toFixed(2)+"%"},
+        {k:"Amazon Fees There",v:inr(f.total)},
+      ],
+      banner:{t:"info",x:`₹${price.toLocaleString("en-IN")} is the lowest whole-rupee price meeting your target. Prices are scanned ₹1 at a time through every fee band, so band jumps are accounted for.`},
+      rows:[
+        {l:"Selling price",v:inr0(price)},
+        {l:`Referral fee (${(f.rate*100).toFixed(1)}%)`,v:"-"+inr(f.referral),neg:1,mut:1},
+        {l:"Closing fee",v:"-"+inr0(f.closing),neg:1,mut:1},
+        {l:"Shipping / weight handling",v:"-"+inr0(f.shipping),neg:1,mut:1},
+        ...(f.pp+f.st>0?[{l:"FBA pick & pack + storage",v:"-"+inr0(f.pp+f.st),neg:1,mut:1}]:[]),
+        {l:"GST on fees (18%)",v:"-"+inr(f.gst),neg:1,mut:1},
+        {l:"Product + packaging",v:"-"+inr0(v.cost+v.pack),neg:1,mut:1},
+        {l:`Marketing (${v.acos}%) + Returns (${v.ret}%)`,v:"-"+inr(mkt+ret),neg:1,mut:1},
+        {l:"Net profit per unit",v:inr(net),fin:1},
+      ],
+    };
+  }
+},
 ];
 
 const CALCMAP=Object.fromEntries(CALCS.map(c=>[c.id,c]));
@@ -806,6 +936,12 @@ function renderHome(){
           <div class="ico">🧾</div>
           <h3>GST &amp; TCS Report</h3>
           <p>Turn a settlement report into your filing numbers: TCS, TDS 194-O, and the GST on fees you can claim as ITC.</p>
+        </a>
+        <a class="tile" href="#/sku-report">
+          <span class="pill">New</span>
+          <div class="ico">📊</div>
+          <h3>SKU Profitability Report</h3>
+          <p>See which products actually make money after fees, taxes and refunds — per SKU and per unit, from your settlement report.</p>
         </a>
       </div>
     </div>`;
@@ -1342,11 +1478,129 @@ function gstRenderResults(){
   out.innerHTML=h;
 }
 
+/* ============================================================
+   SKU PROFITABILITY REPORT
+   Same settlement file, per-SKU view: which products actually
+   make money after fees, taxes and refunds. Pure aggregation of
+   the parsed records — nothing estimated.
+   ============================================================ */
+let skuSort="net";
+
+function skuCompute(r){
+  const bySku={};
+  for(const rec of r.records){
+    const key=rec.sku||"(no SKU)";
+    const s=bySku[key]||(bySku[key]={sku:key,units:0,orders:0,refunds:0,sales:0,refundValue:0,fees:0,taxes:0,other:0,net:0});
+    const isOrder=rec.transactionType==="Order";
+    const isRefund=/refund/i.test(rec.transactionType);
+    if(isOrder){s.orders++;s.units+=rec.quantity||0;}
+    if(isRefund)s.refunds++;
+    for(const l of rec.amounts){
+      s.net+=l.amount;
+      if(/^principal$/i.test(l.amountDescription)){
+        if(isOrder)s.sales+=l.amount;
+        else if(isRefund)s.refundValue+=l.amount;
+        else s.other+=l.amount;
+      }else{
+        const label=l.amountDescription||l.amountType||"";
+        if(saIsTax(label))s.taxes+=l.amount; else s.fees+=l.amount;
+      }
+    }
+  }
+  return Object.values(bySku);
+}
+
+function renderSkuReport(){
+  document.title="SKU Profitability Report — Seller Tools";
+  const md=document.querySelector('meta[name="description"]');
+  if(md) md.setAttribute("content","Upload your Amazon settlement report and see which SKUs actually make money after fees, taxes and refunds — computed locally in your browser.");
+  backBtn.hidden=false;
+  if(!saUnlocked()){ renderGate("SKU Profitability Report",renderSkuReport); return; }
+
+  app.innerHTML=`
+    <div class="wrap page">
+      <h2>SKU Profitability Report</h2>
+      <p class="lede">Drop a settlement report and see your business per product: units sold, gross sales, what Amazon took, what refunds cost, and the net that actually reached your bank — per SKU and per unit.</p>
+      <label class="sa-drop" id="sku-drop">
+        <div class="ico">📊</div>
+        <h3>Drop your settlement file here</h3>
+        <p>or click to choose — .csv or .txt</p>
+        <input type="file" id="sku-file" accept=".csv,.txt,text/plain,text/csv">
+      </label>
+      <div class="sa-priv">🔒 Private by design — your file never leaves your device. All numbers are computed locally on this page.</div>
+      <div id="sku-out"></div>
+    </div>`;
+  const drop=document.getElementById("sku-drop"),file=document.getElementById("sku-file");
+  ["dragenter","dragover"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add("over");}));
+  ["dragleave","drop"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove("over");}));
+  drop.addEventListener("drop",ev=>{const f=ev.dataTransfer.files[0];if(f)skuRead(f);});
+  file.addEventListener("change",()=>{const f=file.files[0];if(f)skuRead(f);});
+  if(saParsed) skuRenderResults();
+}
+
+function skuRead(file){
+  const rd=new FileReader();
+  rd.onload=()=>{saParsed=parseSettlement(String(rd.result));saParsed._name=file.name;skuSort="net";skuRenderResults();};
+  rd.onerror=()=>{const o=document.getElementById("sku-out");if(o)o.innerHTML='<div class="banner warn">Could not read that file.</div>';};
+  rd.readAsText(file);
+}
+
+function skuRenderResults(){
+  const r=saParsed,out=document.getElementById("sku-out"); if(!out)return;
+  const skus=skuCompute(r);
+  const sv=n=>`<span class="${n<0?'amt-neg':(n>0?'amt-pos':'')}">${inr(n)}</span>`;
+  const totals=skus.reduce((t,s)=>({sales:t.sales+s.sales,fees:t.fees+s.fees,refund:t.refund+s.refundValue,net:t.net+s.net,units:t.units+s.units}),{sales:0,fees:0,refund:0,net:0,units:0});
+  const sorted=[...skus].sort((a,b)=>{
+    if(skuSort==="sales")return b.sales-a.sales;
+    if(skuSort==="refund")return (b.sales?Math.abs(b.refundValue)/b.sales:0)-(a.sales?Math.abs(a.refundValue)/a.sales:0);
+    return b.net-a.net;
+  });
+  const best=sorted.reduce((m,s)=>s.net>m.net?s:m,sorted[0]||{net:0,sku:"—"});
+  const worst=sorted.reduce((m,s)=>s.net<m.net?s:m,sorted[0]||{net:0,sku:"—"});
+  const feePct=totals.sales?Math.abs(totals.fees)/totals.sales*100:0;
+  const refundPct=totals.sales?Math.abs(totals.refund)/totals.sales*100:0;
+
+  let h=`<div class="stats">
+    <div class="stat blue"><div class="k">SKUs · Units</div><div class="v">${skus.length} · ${totals.units}</div></div>
+    <div class="stat green"><div class="k">Net across all SKUs</div><div class="v">${inr(totals.net)}</div></div>
+    <div class="stat"><div class="k">Fees as % of sales</div><div class="v">${feePct.toFixed(1)}%</div></div>
+    <div class="stat ${refundPct>10?'red':''}"><div class="k">Refunds as % of sales</div><div class="v">${refundPct.toFixed(1)}%</div></div>
+  </div>`;
+
+  if(skus.length>1)
+    h+=`<div class="banner info">Best earner: <b>${esc(best.sku)}</b> (${inr(best.net)} net). Weakest: <b>${esc(worst.sku)}</b> (${inr(worst.net)} net).${worst.net<0?" A negative net means this SKU took money out of your settlement — check its price, weight slab and return rate.":""}</div>`;
+
+  h+=`<div class="panel"><h4>Per-SKU breakdown <span class="sa-sub">(${skus.length})</span></h4>
+    <div class="filterbar">
+      <button class="fbtn ${skuSort==='net'?'on':''}" data-sort="net">Sort by Net</button>
+      <button class="fbtn ${skuSort==='sales'?'on':''}" data-sort="sales">Sort by Sales</button>
+      <button class="fbtn ${skuSort==='refund'?'on':''}" data-sort="refund">Sort by Refund %</button>
+    </div>
+    <div class="tblwrap"><table class="sa">
+      <thead><tr><th>SKU</th><th class="num">Units</th><th class="num">Gross sales</th><th class="num">Refunds</th><th class="num">Fees</th><th class="num">Taxes</th><th class="num">Net</th><th class="num">Net / unit</th><th class="num">Refund %</th></tr></thead>
+      <tbody>${sorted.map(s=>{
+        const rp=s.sales?Math.abs(s.refundValue)/s.sales*100:0;
+        return `<tr>
+          <td>${esc(s.sku)}</td><td class="num">${s.units}</td>
+          <td class="num">${inr(s.sales)}</td><td class="num">${sv(s.refundValue)}</td>
+          <td class="num">${sv(s.fees)}</td><td class="num">${sv(s.taxes)}</td>
+          <td class="num"><b>${sv(s.net)}</b></td>
+          <td class="num">${s.units?inr(s.net/s.units):"—"}</td>
+          <td class="num ${rp>10?'amt-neg':''}">${rp.toFixed(1)}%</td></tr>`;}).join("")}
+      </tbody></table></div></div>`;
+
+  h+=`<div class="banner info">"Net" is the sum of every settlement line for that SKU — principal, fees, taxes and refunds — i.e. what actually reached your bank for it this settlement. Service-level charges Amazon doesn't tie to a SKU (subscription, storage billed separately) appear under "(no SKU)".</div>`;
+  if(r.errors.length) h+=`<div class="banner warn"><b>${r.errors.length} row(s) could not be parsed</b> and are excluded — open the Settlement Analyzer for details.</div>`;
+  out.innerHTML=h;
+  out.querySelectorAll(".fbtn").forEach(b=>b.addEventListener("click",()=>{skuSort=b.dataset.sort;skuRenderResults();}));
+}
+
 function route(){
   const h=location.hash.replace(/^#\/?/,"");
   if(!h){renderHome();window.scrollTo(0,0);return;}
   if(h==="settlement-analyzer"){renderSettlementAnalyzer();window.scrollTo(0,0);return;}
   if(h==="gst-report"){renderGstReport();window.scrollTo(0,0);return;}
+  if(h==="sku-report"){renderSkuReport();window.scrollTo(0,0);return;}
   renderCalc(h);
   window.scrollTo(0,0);
 }
