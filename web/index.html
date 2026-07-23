@@ -131,6 +131,7 @@
 
   /* Two-up on phones, four-up only where each tile can hold a full ₹ amount:
      the tablet band (results run full width) and wide desktop. */
+  .note{font-size:12.5px;line-height:18px;color:var(--muted);margin-bottom:14px}
   .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px}
   @media(min-width:700px){.stats{gap:12px;margin-bottom:16px}}
   @media(min-width:700px) and (max-width:899px){.stats{grid-template-columns:repeat(4,1fr)}}
@@ -307,6 +308,7 @@ const CALCS = [
     {k:"pack",label:"Packaging (₹)",t:"num",d:15},
     {k:"acos",label:"ACOS (%)",t:"num",dec:1,d:10},
     {k:"ret",label:"Returns (%)",t:"num",dec:1,d:3,full:1},
+    {k:"gstreg",label:"GST Registered (claim ITC)",t:"seg",o:[{v:"yes",l:"Yes"},{v:"no",l:"No"}],d:"yes",full:1},
   ],
   compute(v){
     const sp=v.sp, rate=refRate(v.cat,sp);
@@ -325,6 +327,9 @@ const CALCS = [
     const roi=inv>0?net/inv*100:0;
     const loss=net<0;
     const cat=CATMAP[v.cat];
+    const gstReg=v.gstreg!=="no";
+    const itc=gstReg?gst:0;         // GST on Amazon fees, recoverable as input tax credit
+    const netItc=net+itc;
 
     const seg=[
       ["cost","Your product cost","#64748b",v.cost],
@@ -345,6 +350,10 @@ const CALCS = [
         {k:"Net Profit",v:inr(net),t:loss?"red":"green"},
         {k:"Net Margin",v:pc(margin)},
         {k:"ROI",v:pc(roi)},
+        ...(gstReg?[
+          {k:"GST ITC Recoverable",v:inr(itc)},
+          {k:"Profit After ITC",v:inr(netItc),t:netItc<0?"red":"green"},
+        ]:[]),
       ],
       banner: (sp>0 && margin<15) ? {t:"warn",
         x:`Low margin (${margin.toFixed(1)}%). A sustainable range is usually 15–25%. Consider raising price, cutting cost, or trimming ad spend.`} : null,
@@ -355,7 +364,14 @@ const CALCS = [
         {l:"Product + Packaging",v:"-"+inr0(landed),neg:1,mut:1},
         {l:`Marketing (${v.acos}%) + Returns (${v.ret}%)`,v:"-"+inr(mkt+ret),neg:1,mut:1},
         {l:`Net ${loss?"Loss":"Profit"} per Unit`,v:inr(net),fin:1,loss:loss},
+        ...(gstReg?[
+          {l:"GST on fees recoverable as ITC",v:"+"+inr(itc),mut:1},
+          {l:"Net Profit after ITC",v:inr(netItc),fin:1,loss:netItc<0},
+        ]:[]),
       ],
+      note: gstReg
+        ? "The 18% GST Amazon charges on its fees is claimable back as input tax credit (ITC) in your GST return, so it isn't a true cost for registered sellers."
+        : null,
       split:{title:`Where every ${inr0(sp)} goes`,total:sp||1,
         items:seg.map(s=>({key:s[0],nm:s[1],color:s[2],val:(s[0]==="np"&&loss)?net:s[3]}))},
       bench:{title:`Your margin vs. ${cat.name} benchmark`,you:margin,...cat.bench},
@@ -835,6 +851,8 @@ function paint(c){
     `<div class="stat ${s.t||""}"><div class="k">${esc(s.k)}</div><div class="v">${s.v}</div></div>`).join("")}</div>`;
 
   if(r.banner) h+=`<div class="banner ${r.banner.t}">${esc(r.banner.x)}</div>`;
+
+  if(r.note) h+=`<div class="note">${esc(r.note)}</div>`;
 
   h+=`<div class="rows">${r.rows.map(x=>
     `<div class="r ${x.mut?"mut":""} ${x.hl?"hl":""} ${x.fin?"fin":""} ${x.loss?"loss":""}">
