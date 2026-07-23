@@ -1,0 +1,5 @@
+settlement-id	settlement-start-date	settlement-end-date	deposit-date	total-amount	currency	transaction-type	order-id	merchant-order-id	adjustment-id	shipment-id	marketplace-name	amount-type	amount-description	amount	fulfillment-id	posted-date	posted-date-time	order-item-code	merchant-order-item-id	merchant-adjustment-item-id	sku	quantity-purchased	promotion-id
+12345678901	2026-06-01	2026-06-15	2026-06-17	830.34	INR																		
+12345678901						Order	403-4444444-4444444				Amazon.in	ItemPrice	Principal	599.00	MFN	2026-06-09		OIC-4			CAP-RED	1	
+12345678901	Order	403-4444444-4444444	oops-too-few-columns
+12345678901						Order	403-5555555-5555555				Amazon.in	ItemFees	Commission	N/A	MFN	2026-06-09		OIC-5			CAP-BLU	1	

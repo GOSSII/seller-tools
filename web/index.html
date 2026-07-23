@@ -131,6 +131,7 @@
 
   /* Two-up on phones, four-up only where each tile can hold a full ₹ amount:
      the tablet band (results run full width) and wide desktop. */
+  .note{font-size:12.5px;line-height:18px;color:var(--muted);margin-bottom:14px}
   .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px}
   @media(min-width:700px){.stats{gap:12px;margin-bottom:16px}}
   @media(min-width:700px) and (max-width:899px){.stats{grid-template-columns:repeat(4,1fr)}}
@@ -191,6 +192,50 @@
   .scale{display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 10px;font-size:12.5px;color:var(--faint)}
   .scale .me{font-weight:700;color:var(--ink)}
   .bench-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:4px 10px;margin-bottom:6px}
+
+  /* ---- Settlement analyzer ---- */
+  .sa-drop{position:relative;background:#fff;border:2px dashed #c7d2e2;border-radius:16px;
+    padding:32px 18px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s}
+  .sa-drop:hover,.sa-drop.over{border-color:var(--blue);background:var(--blue-soft)}
+  .sa-drop .ico{font-size:34px;line-height:1}
+  .sa-drop h3{font-size:16.5px;margin:8px 0 3px}
+  .sa-drop p{color:var(--muted);font-size:13.5px}
+  .sa-drop input{position:absolute;inset:0;opacity:0;cursor:pointer}
+  .sa-priv{font-size:12.5px;color:#166534;background:var(--green-soft);border:1px solid var(--green-line);
+    border-radius:10px;padding:9px 12px;margin:14px 0 4px}
+  .sa-recon{display:flex;flex-wrap:wrap;gap:2px 10px;align-items:baseline;font-size:13.5px;
+    padding:11px 14px;border-radius:12px;margin-top:14px}
+  .sa-recon.ok{background:var(--green-soft);border:1px solid var(--green-line);color:#166534}
+  .sa-recon.bad{background:var(--orange-soft);border:1px solid var(--orange-line);color:#9a4b12}
+  .sa-sub{color:var(--muted);font-weight:400}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{font-size:12.5px;background:#f1f4f9;border:1px solid var(--line);border-radius:999px;
+    padding:4px 11px;font-weight:600;color:var(--ink)}
+  .chip.tax{background:var(--orange-soft);border-color:var(--orange-line);color:#9a4b12}
+  .filterbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+  .fbtn{font-size:12.5px;border:1px solid var(--line);background:#fff;border-radius:999px;
+    padding:7px 13px;font-weight:600;color:var(--muted);cursor:pointer;font-family:inherit;min-height:36px}
+  .fbtn.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .tblwrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:#fff}
+  table.sa{border-collapse:collapse;width:100%;font-size:13px;min-width:660px}
+  table.sa th,table.sa td{padding:9px 12px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+  table.sa th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);background:#fbfcfe}
+  table.sa td.num,table.sa th.num{text-align:right;font-variant-numeric:tabular-nums}
+  table.sa tbody tr:last-child td{border-bottom:0}
+  .amt-neg{color:var(--red)} .amt-pos{color:var(--green)}
+  tr.exp{cursor:pointer} tr.exp:hover td{background:#fbfcfe}
+  tr.exp.nodetail{cursor:default} tr.exp.nodetail:hover td{background:transparent}
+  tr.exp .caret{display:inline-block;transition:transform .15s;color:var(--faint);font-size:10px}
+  tr.exp.open .caret{transform:rotate(90deg)}
+  tr.detail td{padding:0}
+  tr.detail .grid2{display:grid;grid-template-columns:1fr;gap:0 20px;padding:8px 14px;font-size:12.5px}
+  @media(min-width:640px){tr.detail .grid2{grid-template-columns:1fr 1fr}}
+  tr.detail .fl{display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:1px dashed var(--line)}
+  tr.detail .fl .l{color:var(--muted);min-width:0;overflow-wrap:anywhere}
+  tr.detail .fl .v{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:600}
+  .showmore{display:block;width:100%;margin-top:12px;padding:12px;border:1px solid var(--line);
+    background:#fff;border-radius:10px;font-weight:600;color:var(--blue);cursor:pointer;font-family:inherit;font-size:13.5px}
+  .showmore:hover{background:var(--blue-soft)}
 
   footer{border-top:1px solid var(--line);background:#fff;padding:22px 0;font-size:12.5px;color:var(--faint);line-height:1.6}
   @media(min-width:600px){footer{padding:26px 0}}
@@ -307,6 +352,7 @@ const CALCS = [
     {k:"pack",label:"Packaging (₹)",t:"num",d:15},
     {k:"acos",label:"ACOS (%)",t:"num",dec:1,d:10},
     {k:"ret",label:"Returns (%)",t:"num",dec:1,d:3,full:1},
+    {k:"gstreg",label:"GST Registered (claim ITC)",t:"seg",o:[{v:"yes",l:"Yes"},{v:"no",l:"No"}],d:"yes",full:1},
   ],
   compute(v){
     const sp=v.sp, rate=refRate(v.cat,sp);
@@ -325,6 +371,9 @@ const CALCS = [
     const roi=inv>0?net/inv*100:0;
     const loss=net<0;
     const cat=CATMAP[v.cat];
+    const gstReg=v.gstreg!=="no";
+    const itc=gstReg?gst:0;         // GST on Amazon fees, recoverable as input tax credit
+    const netItc=net+itc;
 
     const seg=[
       ["cost","Your product cost","#64748b",v.cost],
@@ -345,6 +394,10 @@ const CALCS = [
         {k:"Net Profit",v:inr(net),t:loss?"red":"green"},
         {k:"Net Margin",v:pc(margin)},
         {k:"ROI",v:pc(roi)},
+        ...(gstReg?[
+          {k:"GST ITC Recoverable",v:inr(itc)},
+          {k:"Profit After ITC",v:inr(netItc),t:netItc<0?"red":"green"},
+        ]:[]),
       ],
       banner: (sp>0 && margin<15) ? {t:"warn",
         x:`Low margin (${margin.toFixed(1)}%). A sustainable range is usually 15–25%. Consider raising price, cutting cost, or trimming ad spend.`} : null,
@@ -355,7 +408,14 @@ const CALCS = [
         {l:"Product + Packaging",v:"-"+inr0(landed),neg:1,mut:1},
         {l:`Marketing (${v.acos}%) + Returns (${v.ret}%)`,v:"-"+inr(mkt+ret),neg:1,mut:1},
         {l:`Net ${loss?"Loss":"Profit"} per Unit`,v:inr(net),fin:1,loss:loss},
+        ...(gstReg?[
+          {l:"GST on fees recoverable as ITC",v:"+"+inr(itc),mut:1},
+          {l:"Net Profit after ITC",v:inr(netItc),fin:1,loss:netItc<0},
+        ]:[]),
       ],
+      note: gstReg
+        ? "The 18% GST Amazon charges on its fees is claimable back as input tax credit (ITC) in your GST return, so it isn't a true cost for registered sellers."
+        : null,
       split:{title:`Where every ${inr0(sp)} goes`,total:sp||1,
         items:seg.map(s=>({key:s[0],nm:s[1],color:s[2],val:(s[0]==="np"&&loss)?net:s[3]}))},
       bench:{title:`Your margin vs. ${cat.name} benchmark`,you:margin,...cat.bench},
@@ -735,6 +795,12 @@ function renderHome(){
             <h3>${esc(c.name)}</h3>
             <p>${esc(c.desc)}</p>
           </a>`).join("")}
+        <a class="tile" href="#/settlement-analyzer">
+          <span class="pill">New</span>
+          <div class="ico">🧾</div>
+          <h3>Amazon Settlement Analyzer</h3>
+          <p>Upload your settlement report and see every fee, tax and deduction itemised — parsed locally in your browser.</p>
+        </a>
       </div>
     </div>`;
 }
@@ -836,6 +902,8 @@ function paint(c){
 
   if(r.banner) h+=`<div class="banner ${r.banner.t}">${esc(r.banner.x)}</div>`;
 
+  if(r.note) h+=`<div class="note">${esc(r.note)}</div>`;
+
   h+=`<div class="rows">${r.rows.map(x=>
     `<div class="r ${x.mut?"mut":""} ${x.hl?"hl":""} ${x.fin?"fin":""} ${x.loss?"loss":""}">
        <span class="rl">${esc(x.l)}</span>
@@ -876,9 +944,280 @@ function paint(c){
   document.getElementById("out").innerHTML=h;
 }
 
+/* ============================================================
+   SETTLEMENT ANALYZER
+   Parser is a plain-JS mirror of app/src/settlement/parser.ts,
+   verified to produce identical output to the TypeScript parser.
+   Helpers are sa-prefixed so they can't collide with calculator code.
+   ============================================================ */
+const SA_ALIASES={
+  settlementId:["settlement-id"], settlementStartDate:["settlement-start-date"],
+  settlementEndDate:["settlement-end-date"], depositDate:["deposit-date"],
+  totalAmount:["total-amount"], currency:["currency"],
+  transactionType:["transaction-type"], orderId:["order-id"],
+  merchantOrderId:["merchant-order-id"], adjustmentId:["adjustment-id"],
+  shipmentId:["shipment-id"], marketplaceName:["marketplace-name"],
+  amountType:["amount-type"], amountDescription:["amount-description"],
+  amount:["amount"], fulfillmentId:["fulfillment-id"], postedDate:["posted-date"],
+  postedDateTime:["posted-date-time"], orderItemCode:["order-item-code"],
+  merchantOrderItemId:["merchant-order-item-id"],
+  merchantAdjustmentItemId:["merchant-adjustment-item-id"], sku:["sku"],
+  quantityPurchased:["quantity-purchased"], promotionId:["promotion-id"],
+};
+const SA_REQUIRED=["settlementId","transactionType","amountType","amountDescription","amount"];
+const saNormHeader=n=>n.trim().toLowerCase().replace(/[\s_]+/g,"-");
+function saMapCols(header){
+  const a2k=new Map();
+  for(const [k,al] of Object.entries(SA_ALIASES)) for(const a of al) a2k.set(a,k);
+  const index={},unmapped=[];
+  header.forEach((raw,i)=>{const k=a2k.get(saNormHeader(raw));
+    if(k&&!(k in index))index[k]=i; else if(!k)unmapped.push(raw);});
+  return {index,unmapped};
+}
+function saSplit(line,delim){
+  const out=[];let f="",q=false;
+  for(let i=0;i<line.length;i++){const c=line[i];
+    if(q){if(c==='"'){if(line[i+1]==='"'){f+='"';i++;}else q=false;}else f+=c;}
+    else if(c==='"')q=true; else if(c===delim){out.push(f);f="";} else f+=c;}
+  out.push(f);return out;
+}
+function saParseAmount(raw,decimal="dot"){
+  const s=(raw??"").trim(); if(s==="")return 0;
+  let c=s.replace(/[^\d.,-]/g,"");
+  if(decimal==="comma")c=c.replace(/\./g,"").replace(",","."); else c=c.replace(/,/g,"");
+  if(c===""||c==="-"||c===".")return NaN;
+  const n=Number(c);return Number.isFinite(n)?n:NaN;
+}
+const saCell=(fields,index,key)=>{const i=index[key];return i===undefined?"":(fields[i]??"").trim();};
+function saGroupKey(fields,index){
+  return [saCell(fields,index,"settlementId"),saCell(fields,index,"transactionType"),
+    saCell(fields,index,"orderId"),saCell(fields,index,"orderItemCode")||saCell(fields,index,"sku"),
+    saCell(fields,index,"shipmentId"),saCell(fields,index,"adjustmentId")].join("");
+}
+function parseSettlement(text,opts={}){
+  const errors=[],rawLines=text.split(/\r\n|\r|\n/);
+  let hln=-1; for(let i=0;i<rawLines.length;i++){if(rawLines[i].trim()!==""){hln=i;break;}}
+  if(hln===-1)return {summary:null,records:[],errors:[],header:[],unmappedColumns:[],missingColumns:Object.keys(SA_ALIASES)};
+  const headerLine=rawLines[hln];
+  const delim=opts.delimiter??(headerLine.includes("\t")?"\t":",");
+  const decimal=opts.decimal??"dot";
+  const header=saSplit(headerLine,delim).map(h=>h.trim());
+  const {index,unmapped}=saMapCols(header);
+  const missingColumns=SA_REQUIRED.filter(k=>!(k in index)).map(k=>SA_ALIASES[k][0]);
+  let summary=null; const order=[],groups=new Map(),gAmt=new Map();
+  const missingReq=missingColumns.length>0;
+  for(let i=hln+1;i<rawLines.length;i++){
+    const lineNo=i+1,raw=rawLines[i]; if(raw.trim()==="")continue;
+    const fields=saSplit(raw,delim);
+    if(fields.length!==header.length){errors.push({line:lineNo,reason:`Expected ${header.length} columns, got ${fields.length}`,raw});continue;}
+    const tt=saCell(fields,index,"transactionType"),orderId=saCell(fields,index,"orderId"),totalRaw=saCell(fields,index,"totalAmount");
+    if(tt===""&&orderId===""&&totalRaw!==""){
+      if(!summary){const total=saParseAmount(totalRaw,decimal);
+        if(Number.isNaN(total)){errors.push({line:lineNo,reason:`Unparseable total-amount "${totalRaw}"`,raw});continue;}
+        summary={settlementId:saCell(fields,index,"settlementId"),settlementStartDate:saCell(fields,index,"settlementStartDate"),
+          settlementEndDate:saCell(fields,index,"settlementEndDate"),depositDate:saCell(fields,index,"depositDate"),
+          totalAmount:total,currency:saCell(fields,index,"currency")};}
+      continue;
+    }
+    if(missingReq){errors.push({line:lineNo,reason:`Cannot parse row: missing required column(s) ${missingColumns.join(", ")}`,raw});continue;}
+    if(tt===""){errors.push({line:lineNo,reason:"Row has no transaction-type",raw});continue;}
+    const amount=saParseAmount(saCell(fields,index,"amount"),decimal);
+    if(Number.isNaN(amount)){errors.push({line:lineNo,reason:`Unparseable amount "${saCell(fields,index,"amount")}"`,raw});continue;}
+    const key=saGroupKey(fields,index); let rec=groups.get(key);
+    if(!rec){
+      const qr=saCell(fields,index,"quantityPurchased"),qty=qr===""?0:Number(qr.replace(/,/g,""));
+      rec={settlementId:saCell(fields,index,"settlementId"),transactionType:tt,orderId,
+        sku:saCell(fields,index,"sku"),quantity:Number.isFinite(qty)?qty:0,
+        marketplaceName:saCell(fields,index,"marketplaceName"),fulfillmentId:saCell(fields,index,"fulfillmentId"),
+        postedDate:saCell(fields,index,"postedDate")||saCell(fields,index,"postedDateTime"),
+        orderItemCode:saCell(fields,index,"orderItemCode"),shipmentId:saCell(fields,index,"shipmentId"),
+        adjustmentId:saCell(fields,index,"adjustmentId"),promotionId:saCell(fields,index,"promotionId"),
+        principal:0,amounts:[],fees:[],feeMap:{}};
+      groups.set(key,rec);gAmt.set(key,[]);order.push(key);
+    }
+    const desc=saCell(fields,index,"amountDescription");
+    if(rec.sku==="")rec.sku=saCell(fields,index,"sku");
+    if(rec.quantity===0){const qr=saCell(fields,index,"quantityPurchased"),qty=qr===""?0:Number(qr.replace(/,/g,""));if(Number.isFinite(qty))rec.quantity=qty;}
+    gAmt.get(key).push({amountType:saCell(fields,index,"amountType"),amountDescription:desc,amount});
+  }
+  const records=order.map(key=>{
+    const rec=groups.get(key),lines=gAmt.get(key);rec.amounts=lines;
+    for(const l of lines){
+      if(/^principal$/i.test(l.amountDescription))rec.principal+=l.amount;
+      else{rec.fees.push(l);const d=l.amountDescription||l.amountType||"(unlabelled)";rec.feeMap[d]=(rec.feeMap[d]??0)+l.amount;}
+    }
+    return rec;
+  });
+  return {summary,records,errors,header,unmappedColumns:unmapped,missingColumns};
+}
+window.parseSettlement=parseSettlement; // exposed for verification/debugging
+
+/* ---- analyzer UI ---- */
+const SA_PASSWORD="2023";
+let saParsed=null, saFilter="all", saLimit=100;
+const saUnlocked=()=>{try{return sessionStorage.getItem("sa_unlocked")==="1";}catch(e){return false;}};
+const saIsTax=l=>/(^|[^a-z])(cgst|sgst|igst|tcs|tds)([^a-z]|$)|tax|194/i.test(l||"");
+
+function renderSettlementAnalyzer(){
+  document.title="Amazon Settlement Analyzer — Seller Tools";
+  const md=document.querySelector('meta[name="description"]');
+  if(md) md.setAttribute("content","Upload your Amazon settlement report and see every fee, tax and deduction itemised. Runs fully in your browser.");
+  backBtn.hidden=false;
+
+  if(!saUnlocked()){ renderSaGate(); return; }
+
+  app.innerHTML=`
+    <div class="wrap page">
+      <h2>Amazon Settlement Analyzer</h2>
+      <p class="lede">Drop the settlement report you exported from Seller Central (Payments → All Statements → download the flat-file V2). It's parsed right here in your browser and broken down into every fee, tax and deduction.</p>
+      <label class="sa-drop" id="sa-drop">
+        <div class="ico">🧾</div>
+        <h3>Drop your settlement file here</h3>
+        <p>or click to choose — .csv or .txt</p>
+        <input type="file" id="sa-file" accept=".csv,.txt,text/plain,text/csv">
+      </label>
+      <div class="sa-priv">🔒 Private by design — your file never leaves your device. All parsing happens locally on this page.</div>
+      <div id="sa-out"></div>
+    </div>`;
+  const drop=document.getElementById("sa-drop"),file=document.getElementById("sa-file");
+  ["dragenter","dragover"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add("over");}));
+  ["dragleave","drop"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove("over");}));
+  drop.addEventListener("drop",ev=>{const f=ev.dataTransfer.files[0];if(f)saRead(f);});
+  file.addEventListener("change",()=>{const f=file.files[0];if(f)saRead(f);});
+  if(saParsed) saRenderResults();
+}
+
+function renderSaGate(msg){
+  app.innerHTML=`
+    <div class="wrap page">
+      <h2>Amazon Settlement Analyzer</h2>
+      <p class="lede">This tool is in private preview. Enter the access password to continue.</p>
+      <div class="card" style="max-width:420px">
+        <label for="sa-pw">Access password</label>
+        <input id="sa-pw" type="password" inputmode="numeric" autocomplete="off" placeholder="••••">
+        ${msg?`<div class="banner warn" style="margin-top:12px;margin-bottom:0">${esc(msg)}</div>`:""}
+        <button class="showmore" id="sa-unlock" style="color:#fff;background:var(--blue);border-color:var(--blue);margin-top:14px">Unlock</button>
+      </div>
+    </div>`;
+  const pw=document.getElementById("sa-pw"),btn=document.getElementById("sa-unlock");
+  const tryUnlock=()=>{
+    if(pw.value===SA_PASSWORD){try{sessionStorage.setItem("sa_unlocked","1");}catch(e){}renderSettlementAnalyzer();}
+    else renderSaGate("Incorrect password. Please try again.");
+  };
+  btn.addEventListener("click",tryUnlock);
+  pw.addEventListener("keydown",e=>{if(e.key==="Enter")tryUnlock();});
+  pw.focus();
+}
+
+function saRead(file){
+  const rd=new FileReader();
+  rd.onload=()=>{saParsed=parseSettlement(String(rd.result));saParsed._name=file.name;saFilter="all";saLimit=100;saRenderResults();};
+  rd.onerror=()=>{const o=document.getElementById("sa-out");if(o)o.innerHTML='<div class="banner warn">Could not read that file.</div>';};
+  rd.readAsText(file);
+}
+
+function saAggregate(r){
+  let sales=0,fees=0,tax=0,credits=0,allSum=0; const feeAgg={};
+  for(const rec of r.records) for(const l of rec.amounts){
+    allSum+=l.amount;
+    if(/^principal$/i.test(l.amountDescription)){sales+=l.amount;continue;}
+    const label=l.amountDescription||l.amountType||"(unlabelled)",t=saIsTax(label);
+    if(t)tax+=l.amount; else if(l.amount<0)fees+=l.amount; else credits+=l.amount;
+    const a=feeAgg[label]||(feeAgg[label]={count:0,total:0,isTax:t});
+    a.count++;a.total+=l.amount;
+  }
+  return {sales,fees,tax,credits,allSum,feeAgg};
+}
+
+function saRenderResults(){
+  const r=saParsed,out=document.getElementById("sa-out"); if(!out)return;
+  const agg=saAggregate(r);
+  const total=r.summary?r.summary.totalAmount:agg.allSum;
+  const byType={}; for(const rec of r.records) byType[rec.transactionType]=(byType[rec.transactionType]||0)+1;
+  const sv=n=>`<span class="${n<0?'amt-neg':(n>0?'amt-pos':'')}">${inr(n)}</span>`;
+
+  let h=`<div class="stats">
+    <div class="stat blue"><div class="k">Deposit total</div><div class="v">${inr(total)}</div></div>
+    <div class="stat green"><div class="k">Net product sales</div><div class="v">${inr(agg.sales)}</div></div>
+    <div class="stat red"><div class="k">Amazon fees</div><div class="v">${inr(agg.fees)}</div></div>
+    <div class="stat"><div class="k">Taxes, GST &amp; withholding</div><div class="v">${inr(agg.tax)}</div></div>
+  </div>`;
+
+  const diff=Math.abs(agg.allSum-total),okRecon=diff<=1;
+  h+=`<div class="sa-recon ${okRecon?'ok':'bad'}">
+    <span>${okRecon?'✅':'⚠️'} Sum of all ${r.records.length} line items = <b>${inr(agg.allSum)}</b> —</span>
+    <span>${okRecon?'matches the deposit total to the paisa.':`differs from the deposit total by ${inr(diff)}; check the file is complete.`}</span>
+  </div>`;
+
+  if(r.summary)
+    h+=`<div class="panel"><div class="sa-sub" style="font-size:13px">Settlement <b>${esc(r.summary.settlementId)}</b> · ${esc(r.summary.settlementStartDate)} → ${esc(r.summary.settlementEndDate)} · deposited ${esc(r.summary.depositDate)}${agg.credits?` · credits &amp; reimbursements ${inr(agg.credits)}`:""}</div></div>`;
+  if(r.missingColumns.length)
+    h+=`<div class="banner warn">Missing expected columns: ${r.missingColumns.map(esc).join(", ")}.</div>`;
+
+  h+=`<div class="panel"><h4>Transactions by type</h4><div class="chips">${
+    Object.entries(byType).sort((a,b)=>b[1]-a[1]).map(([t,n])=>`<span class="chip">${esc(t)} · ${n}</span>`).join("")||'<span class="sa-sub">none</span>'
+  }</div></div>`;
+
+  const feeRows=Object.entries(agg.feeAgg).sort((a,b)=>Math.abs(b[1].total)-Math.abs(a[1].total));
+  h+=`<div class="panel"><h4>Fee &amp; deduction breakdown <span class="sa-sub">— by label, across the whole settlement</span></h4>
+    <div class="tblwrap"><table class="sa">
+      <thead><tr><th>Label</th><th>Category</th><th class="num">Lines</th><th class="num">Total</th></tr></thead>
+      <tbody>${feeRows.map(([label,a])=>`<tr>
+        <td>${esc(label)}</td>
+        <td>${a.isTax?'<span class="chip tax">Tax / GST</span>':'<span class="chip">Fee</span>'}</td>
+        <td class="num">${a.count}</td><td class="num">${sv(a.total)}</td></tr>`).join("")}</tbody>
+    </table></div></div>`;
+
+  const types=["all",...Object.keys(byType)];
+  h+=`<div class="panel"><h4>Transactions <span class="sa-sub">(${r.records.length})</span></h4>
+    <div class="filterbar">${types.map(t=>`<button class="fbtn ${t===saFilter?'on':''}" data-type="${esc(t)}">${t==='all'?'All':esc(t)}</button>`).join("")}</div>`;
+  const filtered=r.records.filter(rec=>saFilter==='all'||rec.transactionType===saFilter);
+  const shown=filtered.slice(0,saLimit);
+  h+=`<div class="tblwrap"><table class="sa">
+    <thead><tr><th></th><th>Type</th><th>Order</th><th>SKU</th><th class="num">Qty</th><th>Fulfil</th><th class="num">Principal</th><th class="num">Fees</th></tr></thead><tbody>`;
+  shown.forEach((rec,i)=>{
+    const feeTotal=Object.values(rec.feeMap).reduce((s,x)=>s+x,0);
+    const hasDetail=Object.keys(rec.feeMap).length>0;
+    h+=`<tr class="exp ${hasDetail?'':'nodetail'}" data-i="${i}">
+      <td>${hasDetail?'<span class="caret">▶</span>':''}</td>
+      <td>${esc(rec.transactionType)}</td><td>${esc(rec.orderId||'—')}</td>
+      <td>${esc(rec.sku||'—')}</td><td class="num">${rec.quantity||''}</td>
+      <td>${esc(rec.fulfillmentId||'—')}</td>
+      <td class="num">${sv(rec.principal)}</td><td class="num">${sv(feeTotal)}</td></tr>`;
+    if(hasDetail)
+      h+=`<tr class="detail" id="sa-d-${i}" style="display:none"><td colspan="8"><div class="grid2">${
+        Object.entries(rec.feeMap).map(([d,a])=>`<div class="fl"><span class="l">${esc(d)}</span><span class="v ${a<0?'amt-neg':'amt-pos'}">${inr(a)}</span></div>`).join("")
+      }</div></td></tr>`;
+  });
+  h+=`</tbody></table></div>`;
+  if(filtered.length>saLimit)
+    h+=`<button class="showmore" id="sa-more">Show more — ${saLimit} of ${filtered.length} shown</button>`;
+  h+=`</div>`;
+
+  if(r.errors.length)
+    h+=`<div class="banner warn"><b>${r.errors.length} malformed row(s)</b> — reported, not dropped:<br>${
+      r.errors.slice(0,20).map(e=>`line ${e.line}: ${esc(e.reason)}`).join("<br>")
+    }${r.errors.length>20?`<br>… and ${r.errors.length-20} more`:""}</div>`;
+  else
+    h+=`<div class="banner good">✅ Every one of the ${r.records.length} records parsed cleanly — no malformed rows.</div>`;
+
+  out.innerHTML=h;
+  out.querySelectorAll(".fbtn").forEach(b=>b.addEventListener("click",()=>{saFilter=b.dataset.type;saLimit=100;saRenderResults();}));
+  out.querySelectorAll("tr.exp").forEach(row=>{
+    if(row.classList.contains("nodetail"))return;
+    row.addEventListener("click",()=>{
+      const d=document.getElementById("sa-d-"+row.dataset.i); if(!d)return;
+      const open=d.style.display!=="none"; d.style.display=open?"none":""; row.classList.toggle("open",!open);
+    });
+  });
+  const more=document.getElementById("sa-more");
+  if(more) more.addEventListener("click",()=>{saLimit+=200;saRenderResults();});
+}
+
 function route(){
   const h=location.hash.replace(/^#\/?/,"");
   if(!h){renderHome();window.scrollTo(0,0);return;}
+  if(h==="settlement-analyzer"){renderSettlementAnalyzer();window.scrollTo(0,0);return;}
   renderCalc(h);
   window.scrollTo(0,0);
 }
