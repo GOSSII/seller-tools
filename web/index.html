@@ -237,6 +237,26 @@
     background:#fff;border-radius:10px;font-weight:600;color:var(--blue);cursor:pointer;font-family:inherit;font-size:13.5px}
   .showmore:hover{background:var(--blue-soft)}
 
+  /* ---- Link builder / keyword combiner ---- */
+  .urlcard{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-top:12px}
+  .urlcard .uh{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:6px 12px;margin-bottom:8px}
+  .urlcard h5{font-size:14px}
+  .urlcard .uexp{font-size:12.5px;color:var(--muted);margin-bottom:8px}
+  .urlbox{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.5;
+    background:#f7f9fc;border:1px solid var(--line);border-radius:8px;padding:10px 12px;
+    overflow-wrap:anywhere;word-break:break-all;color:var(--ink)}
+  .copybtn{font-size:12.5px;font-weight:600;border:1px solid var(--blue-line);background:var(--blue-soft);
+    color:var(--blue);border-radius:8px;padding:6px 14px;cursor:pointer;font-family:inherit;min-height:32px}
+  .copybtn:hover{background:#dfe7ff}
+  .copybtn.copied{background:var(--green-soft);border-color:var(--green-line);color:var(--green)}
+  textarea.kwta{width:100%;min-height:110px;padding:10px 12px;font-size:14px;font-family:inherit;color:var(--ink);
+    background:#fff;border:1px solid #d6dce6;border-radius:10px;outline:none;resize:vertical;line-height:1.5}
+  textarea.kwta:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(47,90,240,.12)}
+  textarea.kwout{background:#f7f9fc;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;min-height:160px}
+  .kwgrid{display:grid;grid-template-columns:1fr;gap:12px}
+  @media(min-width:800px){.kwgrid{grid-template-columns:1fr 1fr 1fr}}
+  .optrow{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+
   footer{border-top:1px solid var(--line);background:#fff;padding:22px 0;font-size:12.5px;color:var(--faint);line-height:1.6}
   @media(min-width:600px){footer{padding:26px 0}}
 
@@ -895,6 +915,55 @@ const CALCS = [
     };
   }
 },
+{
+  id:"restock-planner", icon:"📦", badge:"New",
+  name:"Amazon Restock Planner",
+  desc:"When to reorder and how much, so you never stock out — from your sales rate, lead time and safety buffer.",
+  fields:[
+    {k:"stock",label:"Current Stock (units)",t:"num",d:90},
+    {k:"daily",label:"Avg Daily Sales (units)",t:"num",dec:1,d:3},
+    {k:"lead",label:"Supplier Lead Time (days)",t:"num",d:10},
+    {k:"safety",label:"Safety Buffer (days)",t:"num",d:5},
+    {k:"cover",label:"Days of Stock to Order",t:"num",d:30,full:1},
+  ],
+  compute(v){
+    const daily=Math.max(0,v.daily);
+    const fmt=d=>d.toLocaleString("en-IN",{day:"numeric",month:"short",year:"numeric"});
+    const addDays=n=>{const d=new Date();d.setDate(d.getDate()+Math.floor(n));return d;};
+    if(!daily){
+      return {stats:[{k:"Days of Cover",v:"∞"},{k:"Stockout Date",v:"—"},{k:"Order By",v:"—"},{k:"Suggested Qty",v:"0"}],
+        banner:{t:"info",x:"Enter your average daily sales to plan the reorder. You can read it off the SKU Profitability Report: units sold ÷ days in the settlement period."},rows:[]};
+    }
+    const coverDays=v.stock/daily;
+    const stockout=addDays(coverDays);
+    const orderByDays=coverDays-(v.lead+v.safety);
+    const orderBy=addDays(orderByDays);
+    const qty=Math.ceil(daily*v.cover);
+    const reorderPoint=Math.ceil(daily*(v.lead+v.safety));
+    const late=orderByDays<0, soon=!late&&orderByDays<=7;
+    return {
+      stats:[
+        {k:"Days of Cover",v:Math.floor(coverDays)+" days",t:late?"red":(soon?"blue":"green")},
+        {k:"Stockout Date",v:fmt(stockout)},
+        {k:"Order By",v:late?"OVERDUE":fmt(orderBy),t:late?"red":(soon?"blue":undefined)},
+        {k:"Suggested Order Qty",v:qty.toLocaleString("en-IN")+" units",t:"blue"},
+      ],
+      banner: late
+        ? {t:"warn",x:`You are past the safe reorder date. At ${v.daily} units/day, stock runs out around ${fmt(stockout)}, and a new order needs ${v.lead+v.safety} days (lead + buffer) to land. Order ${qty.toLocaleString("en-IN")} units now.`}
+        : soon
+          ? {t:"info",x:`Order within ${Math.floor(orderByDays)} day(s). Place the PO by ${fmt(orderBy)} so the new stock lands before the buffer is eaten.`}
+          : {t:"good",x:`You're covered. Next PO by ${fmt(orderBy)} — that leaves ${v.lead} days for the supplier plus a ${v.safety}-day buffer before the projected stockout on ${fmt(stockout)}.`},
+      rows:[
+        {l:"Current stock",v:v.stock.toLocaleString("en-IN")+" units"},
+        {l:"Daily sales rate",v:v.daily+" units/day",mut:1},
+        {l:"Reorder point (order when stock hits this)",v:reorderPoint.toLocaleString("en-IN")+" units",hl:1},
+        {l:"Lead time + safety buffer",v:(v.lead+v.safety)+" days",mut:1},
+        {l:`Suggested order (${v.cover} days of cover)`,v:qty.toLocaleString("en-IN")+" units",fin:1},
+      ],
+      note:"Tip: get your real daily sales rate from the SKU Profitability Report — units sold ÷ days in the settlement period. FBA sellers should add Amazon inbound/check-in time to the supplier lead time.",
+    };
+  }
+},
 ];
 
 const CALCMAP=Object.fromEntries(CALCS.map(c=>[c.id,c]));
@@ -942,6 +1011,18 @@ function renderHome(){
           <div class="ico">📊</div>
           <h3>SKU Profitability Report</h3>
           <p>See which products actually make money after fees, taxes and refunds — per SKU and per unit, from your settlement report.</p>
+        </a>
+        <a class="tile" href="#/link-builder">
+          <span class="pill">New</span>
+          <div class="ico">🔗</div>
+          <h3>Amazon Link Builder</h3>
+          <p>Generate 2-step, canonical and add-to-cart URLs from an ASIN and keyword — for ranking campaigns and external traffic.</p>
+        </a>
+        <a class="tile" href="#/keyword-combiner">
+          <span class="pill">New</span>
+          <div class="ico">🔤</div>
+          <h3>Amazon Keyword Combiner</h3>
+          <p>Turn word lists into every long-tail keyword permutation for PPC — broad, phrase and exact match, ready to paste.</p>
         </a>
       </div>
     </div>`;
@@ -1595,12 +1676,154 @@ function skuRenderResults(){
   out.querySelectorAll(".fbtn").forEach(b=>b.addEventListener("click",()=>{skuSort=b.dataset.sort;skuRenderResults();}));
 }
 
+/* ============================================================
+   AMAZON LINK BUILDER
+   Pure string-building from ASIN + keyword — no scraping, no
+   network. The URL formats sellers use for ranking campaigns,
+   ads and cart links.
+   ============================================================ */
+function wireCopyButtons(root){
+  root.querySelectorAll(".copybtn[data-copy]").forEach(b=>{
+    b.addEventListener("click",async()=>{
+      const src=document.getElementById(b.dataset.copy);
+      const text=src.tagName==="TEXTAREA"?src.value:src.textContent;
+      let ok=false;
+      try{await navigator.clipboard.writeText(text);ok=true;}
+      catch(e){
+        try{
+          const ta=document.createElement("textarea");
+          ta.value=text;document.body.appendChild(ta);ta.select();
+          ok=document.execCommand("copy");ta.remove();
+        }catch(e2){}
+      }
+      const old=b.textContent;
+      b.textContent=ok?"Copied ✓":"Select & copy manually";
+      b.classList.toggle("copied",ok);
+      setTimeout(()=>{b.textContent=old;b.classList.remove("copied");},1600);
+    });
+  });
+}
+
+function renderLinkBuilder(){
+  document.title="Amazon Link Builder — Seller Tools";
+  const md=document.querySelector('meta[name="description"]');
+  if(md) md.setAttribute("content","Generate Amazon India 2-step URLs, canonical URLs and add-to-cart links from an ASIN and keyword — free, in your browser.");
+  backBtn.hidden=false;
+  app.innerHTML=`
+    <div class="wrap page">
+      <h2>Amazon Link Builder</h2>
+      <p class="lede">Enter your ASIN and target keyword to generate the link formats sellers use for external traffic, ranking campaigns and ads — built entirely in your browser.</p>
+      <div class="card">
+        <div class="fields">
+          <div><label for="lb-asin">ASIN</label><input id="lb-asin" autocomplete="off" spellcheck="false" placeholder="B0XXXXXXXX" maxlength="10"></div>
+          <div><label for="lb-qty">Cart Quantity</label><input id="lb-qty" inputmode="numeric" value="1"></div>
+          <div class="f-full"><label for="lb-kw">Target Keyword</label><input id="lb-kw" autocomplete="off" placeholder="steel water bottle 1 litre"></div>
+        </div>
+        <div class="note" style="margin:12px 0 0" id="lb-warn"></div>
+      </div>
+      <div id="lb-out"></div>
+    </div>`;
+  const asinEl=document.getElementById("lb-asin"),kwEl=document.getElementById("lb-kw"),qtyEl=document.getElementById("lb-qty");
+  const update=()=>{
+    const asin=asinEl.value.trim().toUpperCase();
+    const kw=kwEl.value.trim().replace(/\s+/g," ");
+    const qty=Math.max(1,parseInt(qtyEl.value,10)||1);
+    const warn=document.getElementById("lb-warn");
+    warn.textContent=asin&&!/^[A-Z0-9]{10}$/.test(asin)?"⚠️ An ASIN is exactly 10 letters/digits (find it in the product URL after /dp/).":"";
+    const out=document.getElementById("lb-out");
+    if(!asin||!kw){out.innerHTML=`<div class="banner info" style="margin-top:16px">Enter an ASIN and a keyword to generate the links.</div>`;return;}
+    const enc=encodeURIComponent(kw);
+    const slug=kw.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"");
+    const links=[
+      {id:"lb-u1",name:"Search URL",exp:"Plain search-results link for your keyword — share it to show customers the journey, or check your organic rank.",url:`https://www.amazon.in/s?k=${enc}`},
+      {id:"lb-u2",name:"2-Step URL (search + ASIN filter)",exp:"Opens the search results filtered to your product. Used in external-traffic ranking campaigns because the visit is attributed to the keyword.",url:`https://www.amazon.in/s?k=${enc}&field-asin=${asin}`},
+      {id:"lb-u3",name:"Canonical URL",exp:"Product link with the keyword baked into the slug — the clean format for ads, influencers and link-in-bio.",url:`https://www.amazon.in/${slug}/dp/${asin}`},
+      {id:"lb-u4",name:"Add-to-Cart URL",exp:`One click puts ${qty} unit(s) straight into the customer's cart.`,url:`https://www.amazon.in/gp/aws/cart/add.html?ASIN.1=${asin}&Quantity.1=${qty}`},
+    ];
+    out.innerHTML=links.map(l=>`
+      <div class="urlcard">
+        <div class="uh"><h5>${esc(l.name)}</h5><button class="copybtn" data-copy="${l.id}">Copy</button></div>
+        <div class="uexp">${esc(l.exp)}</div>
+        <div class="urlbox" id="${l.id}">${esc(l.url)}</div>
+      </div>`).join("")+
+      `<div class="banner info" style="margin-top:16px">Use these with your own listings. Amazon periodically changes how search parameters behave — test a link before putting spend behind it.</div>`;
+    wireCopyButtons(out);
+  };
+  [asinEl,kwEl,qtyEl].forEach(el=>el.addEventListener("input",update));
+  update();
+}
+
+/* ============================================================
+   KEYWORD COMBINER
+   Cartesian combinations of 2–3 word lists for long-tail PPC
+   terms, with match-type wrapping. Pure text, no network.
+   ============================================================ */
+function renderKeywordCombiner(){
+  document.title="Amazon Keyword Combiner — Seller Tools";
+  const md=document.querySelector('meta[name="description"]');
+  if(md) md.setAttribute("content","Combine word lists into every long-tail keyword permutation for Amazon PPC campaigns — broad, phrase and exact match, free in your browser.");
+  backBtn.hidden=false;
+  app.innerHTML=`
+    <div class="wrap page">
+      <h2>Amazon Keyword Combiner</h2>
+      <p class="lede">Paste up to three word lists (one term per line). Every combination is generated in order — A × B × C — ready to paste into a PPC campaign. List C is optional.</p>
+      <div class="card">
+        <div class="kwgrid">
+          <div><label for="kw-a">List A</label><textarea id="kw-a" class="kwta" spellcheck="false">steel
+copper</textarea></div>
+          <div><label for="kw-b">List B</label><textarea id="kw-b" class="kwta" spellcheck="false">water bottle
+flask</textarea></div>
+          <div><label for="kw-c">List C (optional)</label><textarea id="kw-c" class="kwta" spellcheck="false">1 litre</textarea></div>
+        </div>
+        <div class="optrow">
+          <button class="fbtn on" data-wrap="plain">Broad (plain)</button>
+          <button class="fbtn" data-wrap="phrase">"Phrase"</button>
+          <button class="fbtn" data-wrap="exact">[Exact]</button>
+          <button class="fbtn" id="kw-rev">+ reversed A↔B</button>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="uh" style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:8px">
+          <h4 style="margin:0">Combinations <span class="sa-sub" id="kw-count"></span></h4>
+          <button class="copybtn" data-copy="kw-out">Copy all</button>
+        </div>
+        <textarea id="kw-out" class="kwta kwout" readonly spellcheck="false"></textarea>
+        <div class="note" style="margin-top:10px">Deduplicated and lowercased. Order preserved: List A first, then B, then C. "+ reversed" also adds B-before-A variants for word-order coverage.</div>
+      </div>
+    </div>`;
+  let wrap="plain",rev=false;
+  const parse=id=>document.getElementById(id).value.split(/\r?\n/).map(s=>s.trim().replace(/\s+/g," ").toLowerCase()).filter(Boolean);
+  const update=()=>{
+    const A=parse("kw-a"),B=parse("kw-b"),C=parse("kw-c");
+    const combos=new Set();
+    const join=(...parts)=>parts.filter(Boolean).join(" ");
+    const emit=(a,b)=>{ if(C.length) C.forEach(c=>combos.add(join(a,b,c))); else combos.add(join(a,b)); };
+    if(A.length&&B.length){ A.forEach(a=>B.forEach(b=>{ emit(a,b); if(rev) emit(b,a); })); }
+    else (A.length?A:B).forEach(t=>emit(t,""));
+    const wrapFn=wrap==="phrase"?(s=>`"${s}"`):wrap==="exact"?(s=>`[${s}]`):(s=>s);
+    const list=[...combos].filter(Boolean).map(wrapFn);
+    document.getElementById("kw-out").value=list.join("\n");
+    document.getElementById("kw-count").textContent=`(${list.length})`;
+  };
+  ["kw-a","kw-b","kw-c"].forEach(id=>document.getElementById(id).addEventListener("input",update));
+  app.querySelectorAll(".fbtn[data-wrap]").forEach(b=>b.addEventListener("click",()=>{
+    wrap=b.dataset.wrap;
+    app.querySelectorAll(".fbtn[data-wrap]").forEach(x=>x.classList.toggle("on",x===b));
+    update();
+  }));
+  document.getElementById("kw-rev").addEventListener("click",e=>{rev=!rev;e.target.classList.toggle("on",rev);update();});
+  wireCopyButtons(app);
+  update();
+}
+
 function route(){
   const h=location.hash.replace(/^#\/?/,"");
   if(!h){renderHome();window.scrollTo(0,0);return;}
   if(h==="settlement-analyzer"){renderSettlementAnalyzer();window.scrollTo(0,0);return;}
   if(h==="gst-report"){renderGstReport();window.scrollTo(0,0);return;}
   if(h==="sku-report"){renderSkuReport();window.scrollTo(0,0);return;}
+  if(h==="link-builder"){renderLinkBuilder();window.scrollTo(0,0);return;}
+  if(h==="keyword-combiner"){renderKeywordCombiner();window.scrollTo(0,0);return;}
   renderCalc(h);
   window.scrollTo(0,0);
 }
