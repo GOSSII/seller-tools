@@ -1,0 +1,5 @@
+settlement-id	settlement-start-date	settlement-end-date	deposit-date	total-amount	currency	transaction-type	order-id	merchant-order-id	adjustment-id	shipment-id	marketplace-name	amount-type	amount-description	amount	fulfillment-id	posted-date	posted-date-time	order-item-code	merchant-order-item-id	merchant-adjustment-item-id	sku	quantity-purchased	promotion-id
+12345678901	2026-06-01	2026-06-15	2026-06-17	830.34	INR																		
+12345678901						Refund	403-3333333-3333333				Amazon.in	ItemPrice	Principal	-999.00	MFN	2026-06-08		OIC-3			TEE-BLK-M	1	
+12345678901						Refund	403-3333333-3333333				Amazon.in	ItemFees	RefundCommission	-13.49	MFN	2026-06-08		OIC-3			TEE-BLK-M	1	
+12345678901						Refund	403-3333333-3333333				Amazon.in	ItemFees	Commission	89.91	MFN	2026-06-08		OIC-3			TEE-BLK-M	1	

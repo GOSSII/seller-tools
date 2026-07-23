@@ -1,0 +1,7 @@
+settlement-id	settlement-start-date	settlement-end-date	deposit-date	total-amount	currency	transaction-type	order-id	merchant-order-id	adjustment-id	shipment-id	marketplace-name	amount-type	amount-description	amount	fulfillment-id	posted-date	posted-date-time	order-item-code	merchant-order-item-id	merchant-adjustment-item-id	sku	quantity-purchased	promotion-id
+12345678901	2026-06-01	2026-06-15	2026-06-17	830.34	INR																		
+12345678901						Order	403-2222222-2222222				Amazon.in	ItemPrice	Principal	1499.00	AFN	2026-06-06		OIC-2			SHOE-BRN-9	1	
+12345678901						Order	403-2222222-2222222				Amazon.in	ItemFees	Commission	-209.86	AFN	2026-06-06		OIC-2			SHOE-BRN-9	1	
+12345678901						Order	403-2222222-2222222				Amazon.in	ItemFees	FBAPerUnitFulfillmentFee	-70.00	AFN	2026-06-06		OIC-2			SHOE-BRN-9	1	
+12345678901						Order	403-2222222-2222222				Amazon.in	ItemFees	FixedClosingFee	-56.00	AFN	2026-06-06		OIC-2			SHOE-BRN-9	1	
+12345678901						Order	403-2222222-2222222				Amazon.in	ItemWithheldTax	TotalTaxWithheld	-60.45	AFN	2026-06-06		OIC-2			SHOE-BRN-9	1	
