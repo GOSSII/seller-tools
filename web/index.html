@@ -801,6 +801,12 @@ function renderHome(){
           <h3>Amazon Settlement Analyzer</h3>
           <p>Upload your settlement report and see every fee, tax and deduction itemised — parsed locally in your browser.</p>
         </a>
+        <a class="tile" href="#/gst-report">
+          <span class="pill">New</span>
+          <div class="ico">🧾</div>
+          <h3>GST &amp; TCS Report</h3>
+          <p>Turn a settlement report into your filing numbers: TCS, TDS 194-O, and the GST on fees you can claim as ITC.</p>
+        </a>
       </div>
     </div>`;
 }
@@ -1056,7 +1062,7 @@ window.parseSettlement=parseSettlement; // exposed for verification/debugging
 const SA_PASSWORD="2023";
 let saParsed=null, saFilter="all", saLimit=100;
 const saUnlocked=()=>{try{return sessionStorage.getItem("sa_unlocked")==="1";}catch(e){return false;}};
-const saIsTax=l=>/(^|[^a-z])(cgst|sgst|igst|tcs|tds)([^a-z]|$)|tax|194/i.test(l||"");
+const saIsTax=l=>/(^|[^a-z])(cgst|sgst|igst|tcs|tds)([^a-z]|$)|(cgst|sgst|igst)$|tax|194/i.test(l||"");
 
 function renderSettlementAnalyzer(){
   document.title="Amazon Settlement Analyzer — Seller Tools";
@@ -1087,10 +1093,12 @@ function renderSettlementAnalyzer(){
   if(saParsed) saRenderResults();
 }
 
-function renderSaGate(msg){
+/* One gate for all private-preview tools: unlocking once (per browser
+   session) opens every gated tool. */
+function renderGate(title,next,msg){
   app.innerHTML=`
     <div class="wrap page">
-      <h2>Amazon Settlement Analyzer</h2>
+      <h2>${esc(title)}</h2>
       <p class="lede">This tool is in private preview. Enter the access password to continue.</p>
       <div class="card" style="max-width:420px">
         <label for="sa-pw">Access password</label>
@@ -1101,13 +1109,14 @@ function renderSaGate(msg){
     </div>`;
   const pw=document.getElementById("sa-pw"),btn=document.getElementById("sa-unlock");
   const tryUnlock=()=>{
-    if(pw.value===SA_PASSWORD){try{sessionStorage.setItem("sa_unlocked","1");}catch(e){}renderSettlementAnalyzer();}
-    else renderSaGate("Incorrect password. Please try again.");
+    if(pw.value===SA_PASSWORD){try{sessionStorage.setItem("sa_unlocked","1");}catch(e){}next();}
+    else renderGate(title,next,"Incorrect password. Please try again.");
   };
   btn.addEventListener("click",tryUnlock);
   pw.addEventListener("keydown",e=>{if(e.key==="Enter")tryUnlock();});
   pw.focus();
 }
+function renderSaGate(msg){renderGate("Amazon Settlement Analyzer",renderSettlementAnalyzer,msg);}
 
 function saRead(file){
   const rd=new FileReader();
@@ -1214,10 +1223,130 @@ function saRenderResults(){
   if(more) more.addEventListener("click",()=>{saLimit+=200;saRenderResults();});
 }
 
+/* ============================================================
+   GST & TCS FILING REPORT
+   Same settlement file, tax view: everything an Indian seller
+   needs off one statement at GST-filing time. Pure summation of
+   labelled lines from the parser — no rate guessing.
+   ============================================================ */
+const gstIsTcs=l=>/^tcs[\s-]/i.test(l);
+const gstIsTds=l=>/tds|194/i.test(l);
+/* Tail match too: real labels include e.g. "MFNPostagePurchaseCompleteIGST"
+   with no separator before the GST head. */
+const gstIsGstOnFees=l=>(/(^|[^a-z])(cgst|sgst|igst)([^a-z]|$)/i.test(l)||/(cgst|sgst|igst)$/i.test(l))&&!gstIsTcs(l);
+const gstIsOutputTax=l=>/^(product tax|shipping tax)/i.test(l);
+
+function gstCompute(r){
+  const heads={tcs:{CGST:0,SGST:0,IGST:0,total:0,lines:0},tds:{total:0,lines:0},
+    itc:{CGST:0,SGST:0,IGST:0,total:0,lines:0},output:{total:0,lines:0}};
+  const byLabel={};
+  let sales=0;
+  for(const rec of r.records) for(const l of rec.amounts){
+    if(/^principal$/i.test(l.amountDescription)){sales+=l.amount;continue;}
+    const label=l.amountDescription||l.amountType||"(unlabelled)";
+    let head=null;
+    if(gstIsTcs(label))head="tcs";
+    else if(gstIsTds(label))head="tds";
+    else if(gstIsGstOnFees(label))head="itc";
+    else if(gstIsOutputTax(label))head="output";
+    if(!head)continue;
+    const a=byLabel[label]||(byLabel[label]={head,count:0,total:0});
+    a.count++;a.total+=l.amount;
+    heads[head].total+=l.amount;heads[head].lines++;
+    const m=label.match(/(cgst|sgst|igst)/i);
+    if(m&&(head==="tcs"||head==="itc"))heads[head][m[1].toUpperCase()]+=l.amount;
+  }
+  return {heads,byLabel,sales};
+}
+
+function renderGstReport(){
+  document.title="GST & TCS Report — Seller Tools";
+  const md=document.querySelector('meta[name="description"]');
+  if(md) md.setAttribute("content","Upload your Amazon settlement report and get the GST, TCS and TDS numbers you need for monthly filing — computed locally in your browser.");
+  backBtn.hidden=false;
+  if(!saUnlocked()){ renderGate("GST & TCS Report",renderGstReport); return; }
+
+  app.innerHTML=`
+    <div class="wrap page">
+      <h2>GST &amp; TCS Report</h2>
+      <p class="lede">Drop a settlement report and get the tax numbers you need at filing time: TCS withheld by Amazon (to claim in GSTR-2A/8A), TDS under Section 194-O (visible in Form 26AS), GST charged on Amazon's fees (claimable as input tax credit), and the output GST Amazon collected on your sales.</p>
+      <label class="sa-drop" id="gst-drop">
+        <div class="ico">🧾</div>
+        <h3>Drop your settlement file here</h3>
+        <p>or click to choose — .csv or .txt</p>
+        <input type="file" id="gst-file" accept=".csv,.txt,text/plain,text/csv">
+      </label>
+      <div class="sa-priv">🔒 Private by design — your file never leaves your device. All numbers are computed locally on this page.</div>
+      <div id="gst-out"></div>
+    </div>`;
+  const drop=document.getElementById("gst-drop"),file=document.getElementById("gst-file");
+  ["dragenter","dragover"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add("over");}));
+  ["dragleave","drop"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove("over");}));
+  drop.addEventListener("drop",ev=>{const f=ev.dataTransfer.files[0];if(f)gstRead(f);});
+  file.addEventListener("change",()=>{const f=file.files[0];if(f)gstRead(f);});
+  if(saParsed) gstRenderResults();
+}
+
+function gstRead(file){
+  const rd=new FileReader();
+  rd.onload=()=>{saParsed=parseSettlement(String(rd.result));saParsed._name=file.name;gstRenderResults();};
+  rd.onerror=()=>{const o=document.getElementById("gst-out");if(o)o.innerHTML='<div class="banner warn">Could not read that file.</div>';};
+  rd.readAsText(file);
+}
+
+function gstRenderResults(){
+  const r=saParsed,out=document.getElementById("gst-out"); if(!out)return;
+  const g=gstCompute(r);
+  const sv=n=>`<span class="${n<0?'amt-neg':(n>0?'amt-pos':'')}">${inr(n)}</span>`;
+  const abs=n=>inr(Math.abs(n));
+  const HEAD_NAMES={tcs:"TCS withheld",tds:"TDS (Section 194-O)",itc:"GST on Amazon fees (ITC)",output:"Output GST collected"};
+
+  let h=`<div class="stats">
+    <div class="stat"><div class="k">TCS withheld</div><div class="v">${abs(g.heads.tcs.total)}</div></div>
+    <div class="stat"><div class="k">TDS (194-O)</div><div class="v">${abs(g.heads.tds.total)}</div></div>
+    <div class="stat green"><div class="k">GST on fees — claim as ITC</div><div class="v">${abs(g.heads.itc.total)}</div></div>
+    <div class="stat blue"><div class="k">Output GST collected</div><div class="v">${abs(g.heads.output.total)}</div></div>
+  </div>`;
+
+  if(r.summary)
+    h+=`<div class="panel"><div class="sa-sub" style="font-size:13px">Settlement <b>${esc(r.summary.settlementId)}</b> · ${esc(r.summary.settlementStartDate)} → ${esc(r.summary.settlementEndDate)} · net product sales ${inr(g.sales)}</div></div>`;
+
+  h+=`<div class="panel"><h4>TCS split <span class="sa-sub">— match against GSTR-2A / GSTR-8A</span></h4>
+    <div class="tblwrap"><table class="sa"><thead><tr><th>Head</th><th class="num">Amount</th></tr></thead><tbody>
+      <tr><td>TCS — CGST</td><td class="num">${sv(g.heads.tcs.CGST)}</td></tr>
+      <tr><td>TCS — SGST</td><td class="num">${sv(g.heads.tcs.SGST)}</td></tr>
+      <tr><td>TCS — IGST</td><td class="num">${sv(g.heads.tcs.IGST)}</td></tr>
+      <tr><td><b>Total TCS</b></td><td class="num"><b>${sv(g.heads.tcs.total)}</b></td></tr>
+    </tbody></table></div></div>`;
+
+  h+=`<div class="panel"><h4>Input tax credit on Amazon fees <span class="sa-sub">— claim in GSTR-3B</span></h4>
+    <div class="tblwrap"><table class="sa"><thead><tr><th>Head</th><th class="num">Amount</th></tr></thead><tbody>
+      <tr><td>ITC — CGST</td><td class="num">${sv(g.heads.itc.CGST)}</td></tr>
+      <tr><td>ITC — SGST</td><td class="num">${sv(g.heads.itc.SGST)}</td></tr>
+      <tr><td>ITC — IGST</td><td class="num">${sv(g.heads.itc.IGST)}</td></tr>
+      <tr><td><b>Total GST paid on fees</b></td><td class="num"><b>${sv(g.heads.itc.total)}</b></td></tr>
+    </tbody></table></div>
+    <div class="note" style="margin-top:10px">Negative amounts are GST Amazon charged you on its fees (recoverable); positive amounts are GST credited back on fee reversals. The net is what you can claim.</div></div>`;
+
+  const labelRows=Object.entries(g.byLabel).sort((a,b)=>Math.abs(b[1].total)-Math.abs(a[1].total));
+  h+=`<div class="panel"><h4>Every tax line in this settlement <span class="sa-sub">(${labelRows.length} labels)</span></h4>
+    <div class="tblwrap"><table class="sa">
+      <thead><tr><th>Label</th><th>Head</th><th class="num">Lines</th><th class="num">Total</th></tr></thead>
+      <tbody>${labelRows.map(([label,a])=>`<tr>
+        <td>${esc(label)}</td><td><span class="chip ${a.head==='itc'?'':'tax'}">${HEAD_NAMES[a.head]}</span></td>
+        <td class="num">${a.count}</td><td class="num">${sv(a.total)}</td></tr>`).join("")}</tbody>
+    </table></div></div>`;
+
+  h+=`<div class="banner info">These figures are read directly from the settlement file's own tax lines — nothing is estimated. Cross-check TCS against GSTR-2A and TDS against Form 26AS before filing; this report is an aid, not tax advice.</div>`;
+  if(r.errors.length) h+=`<div class="banner warn"><b>${r.errors.length} row(s) could not be parsed</b> and are excluded from these totals — open the Settlement Analyzer for details.</div>`;
+  out.innerHTML=h;
+}
+
 function route(){
   const h=location.hash.replace(/^#\/?/,"");
   if(!h){renderHome();window.scrollTo(0,0);return;}
   if(h==="settlement-analyzer"){renderSettlementAnalyzer();window.scrollTo(0,0);return;}
+  if(h==="gst-report"){renderGstReport();window.scrollTo(0,0);return;}
   renderCalc(h);
   window.scrollTo(0,0);
 }
