@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Settlement Analyzer (preview) — Seller Tools</title>
+<style>
+  :root{
+    --bg:#f6f8fb; --card:#fff; --line:#e6ebf2; --ink:#0f1a2b; --muted:#5b6b82;
+    --faint:#8b98ab; --blue:#2f5cff; --blue-soft:#eef2ff; --green:#129a5b;
+    --green-soft:#e9f7ef; --red:#d4342c; --red-soft:#fdeceb; --amber:#9a6212;
+    --amber-soft:#fdf3e5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.45}
+  .wrap{max-width:1040px;margin:0 auto;padding:24px 16px 64px}
+  header{background:var(--card);border-bottom:1px solid var(--line)}
+  header .wrap{padding:14px 16px;display:flex;align-items:center;gap:10px}
+  .logo{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:8px;
+    background:var(--blue);color:#fff;font-weight:800}
+  .brand{font-weight:800;font-size:16px}
+  .tag{margin-left:8px;font-size:11px;font-weight:700;letter-spacing:.4px;
+    color:var(--amber);background:var(--amber-soft);border:1px solid #f3e2c4;
+    padding:2px 8px;border-radius:999px;text-transform:uppercase}
+  h1{font-size:24px;margin:8px 0 4px}
+  .lede{color:var(--muted);font-size:15px;margin:0 0 20px;max-width:640px}
+  .priv{font-size:12.5px;color:var(--muted);background:var(--green-soft);
+    border:1px solid #c9ecd8;border-radius:10px;padding:10px 12px;margin-bottom:20px}
+  .drop{background:var(--card);border:2px dashed #c7d2e2;border-radius:16px;
+    padding:40px 20px;text-align:center;cursor:pointer;transition:.15s;position:relative}
+  .drop:hover,.drop.over{border-color:var(--blue);background:var(--blue-soft)}
+  .drop .ico{font-size:36px}
+  .drop h3{margin:10px 0 4px;font-size:17px}
+  .drop p{margin:0;color:var(--muted);font-size:13.5px}
+  .drop input{position:absolute;inset:0;opacity:0;cursor:pointer}
+  .hint{font-size:12.5px;color:var(--faint);margin-top:10px;text-align:center}
+
+  .cards{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:22px 0}
+  @media(min-width:720px){.cards{grid-template-columns:repeat(4,1fr)}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .card .k{font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--faint);
+    text-transform:uppercase;margin-bottom:6px}
+  .card .v{font-size:20px;font-weight:800}
+  .card.blue{background:var(--blue-soft);border-color:#d5defc}
+  .card.green{background:var(--green-soft);border-color:#c9ecd8}
+  .card.amber{background:var(--amber-soft);border-color:#f3e2c4}
+
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    padding:18px;margin-top:18px}
+  .panel h4{margin:0 0 12px;font-size:15px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{font-size:12.5px;background:#f1f5fb;border:1px solid var(--line);
+    border-radius:999px;padding:4px 11px;font-weight:600}
+  .tblwrap{overflow-x:auto}
+  table{border-collapse:collapse;width:100%;font-size:13px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--faint)}
+  td.num{text-align:right;font-variant-numeric:tabular-nums}
+  .neg{color:var(--red)} .pos{color:var(--green)}
+  .fees{font-size:12px;color:var(--muted)}
+  .fees b{color:var(--ink);font-weight:600}
+  .err{background:var(--red-soft);border:1px solid #f6cfcc;border-radius:12px;
+    padding:14px 16px;margin-top:18px}
+  .err h4{margin:0 0 8px;color:var(--red)}
+  .err .row{font-size:12.5px;font-family:ui-monospace,Menlo,Consolas,monospace;
+    color:#7a2621;margin:2px 0}
+  .ok{color:var(--green);font-weight:700}
+  .muted{color:var(--muted)}
+  .warn-cols{font-size:12.5px;color:var(--amber);background:var(--amber-soft);
+    border:1px solid #f3e2c4;border-radius:10px;padding:8px 12px;margin-top:12px}
+  footer{color:var(--faint);font-size:12px;text-align:center;padding:24px 16px}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <span class="logo">₹</span><span class="brand">Seller Tools</span>
+  <span class="tag">Settlement Analyzer · Preview</span>
+</div></header>
+
+<main class="wrap">
+  <h1>Settlement Analyzer <span class="muted" style="font-size:15px;font-weight:600">— parser preview</span></h1>
+  <p class="lede">Drop the settlement report you exported from Seller Central
+    (Payments → Reports Repository → Settlement, flat file V2). This preview
+    shows what the parser reads from it — the summary, every fee label, each
+    transaction, and any rows it couldn't understand.</p>
+  <div class="priv">🔒 Runs fully in your browser. Your file is never uploaded
+    anywhere — parsing happens locally on this page.</div>
+
+  <label class="drop" id="drop">
+    <div class="ico">📄</div>
+    <h3>Drop your settlement file here</h3>
+    <p>or click to choose — .csv or .txt</p>
+    <input type="file" id="file" accept=".csv,.txt,text/plain,text/csv">
+  </label>
+  <div class="hint">No file handy? This preview also accepts the tab-delimited V2 export as-is.</div>
+
+  <div id="out"></div>
+</main>
+
+<footer>Preview tool — not linked from the main site. Seller Tools is an
+  independent tool, not affiliated with Amazon.</footer>
+
+<script>
+/* ============================================================
+   SETTLEMENT FLAT-FILE V2 PARSER
+   Plain-JS mirror of app/src/settlement/parser.ts — kept in sync
+   by hand, the same way the calculators mirror their engines.
+   Verified against the TypeScript parser's output on the fixtures.
+   ============================================================ */
+const COLUMN_ALIASES = {
+  settlementId:["settlement-id"], settlementStartDate:["settlement-start-date"],
+  settlementEndDate:["settlement-end-date"], depositDate:["deposit-date"],
+  totalAmount:["total-amount"], currency:["currency"],
+  transactionType:["transaction-type"], orderId:["order-id"],
+  merchantOrderId:["merchant-order-id"], adjustmentId:["adjustment-id"],
+  shipmentId:["shipment-id"], marketplaceName:["marketplace-name"],
+  amountType:["amount-type"], amountDescription:["amount-description"],
+  amount:["amount"], fulfillmentId:["fulfillment-id"], postedDate:["posted-date"],
+  postedDateTime:["posted-date-time"], orderItemCode:["order-item-code"],
+  merchantOrderItemId:["merchant-order-item-id"],
+  merchantAdjustmentItemId:["merchant-adjustment-item-id"], sku:["sku"],
+  quantityPurchased:["quantity-purchased"], promotionId:["promotion-id"],
+};
+const REQUIRED_KEYS = ["settlementId","transactionType","amountType","amountDescription","amount"];
+
+const normaliseHeader = n => n.trim().toLowerCase().replace(/[\s_]+/g,"-");
+
+function mapColumns(header){
+  const aliasToKey = new Map();
+  for(const [key,aliases] of Object.entries(COLUMN_ALIASES)) for(const a of aliases) aliasToKey.set(a,key);
+  const index={}, unmapped=[];
+  header.forEach((raw,i)=>{
+    const key=aliasToKey.get(normaliseHeader(raw));
+    if(key && !(key in index)) index[key]=i;
+    else if(!key) unmapped.push(raw);
+  });
+  return {index,unmapped};
+}
+
+function splitLine(line,delim){
+  const out=[]; let field="", inQuotes=false;
+  for(let i=0;i<line.length;i++){
+    const c=line[i];
+    if(inQuotes){
+      if(c==='"'){ if(line[i+1]==='"'){ field+='"'; i++; } else inQuotes=false; }
+      else field+=c;
+    } else if(c==='"'){ inQuotes=true; }
+    else if(c===delim){ out.push(field); field=""; }
+    else field+=c;
+  }
+  out.push(field); return out;
+}
+
+function parseAmount(raw,decimal="dot"){
+  const s=(raw??"").trim();
+  if(s==="") return 0;
+  let cleaned=s.replace(/[^\d.,-]/g,"");
+  if(decimal==="comma") cleaned=cleaned.replace(/\./g,"").replace(",",".");
+  else cleaned=cleaned.replace(/,/g,"");
+  if(cleaned===""||cleaned==="-"||cleaned===".") return NaN;
+  const n=Number(cleaned);
+  return Number.isFinite(n)?n:NaN;
+}
+
+const cell=(fields,index,key)=>{ const i=index[key]; return i===undefined?"":(fields[i]??"").trim(); };
+
+function groupKey(fields,index){
+  return [
+    cell(fields,index,"settlementId"), cell(fields,index,"transactionType"),
+    cell(fields,index,"orderId"),
+    cell(fields,index,"orderItemCode")||cell(fields,index,"sku"),
+    cell(fields,index,"shipmentId"), cell(fields,index,"adjustmentId"),
+  ].join("");
+}
+
+function parseSettlement(text,opts={}){
+  const errors=[];
+  const rawLines=text.split(/\r\n|\r|\n/);
+  let headerLineNo=-1;
+  for(let i=0;i<rawLines.length;i++){ if(rawLines[i].trim()!==""){ headerLineNo=i; break; } }
+  if(headerLineNo===-1) return {summary:null,records:[],errors:[],header:[],unmappedColumns:[],missingColumns:Object.keys(COLUMN_ALIASES)};
+
+  const headerLine=rawLines[headerLineNo];
+  const delim=opts.delimiter ?? (headerLine.includes("\t")?"\t":",");
+  const decimal=opts.decimal ?? "dot";
+  const header=splitLine(headerLine,delim).map(h=>h.trim());
+  const {index,unmapped}=mapColumns(header);
+  const missingColumns=REQUIRED_KEYS.filter(k=>!(k in index)).map(k=>COLUMN_ALIASES[k][0]);
+
+  let summary=null;
+  const order=[], groups=new Map(), groupAmounts=new Map();
+  const missingRequired=missingColumns.length>0;
+
+  for(let i=headerLineNo+1;i<rawLines.length;i++){
+    const lineNo=i+1, raw=rawLines[i];
+    if(raw.trim()==="") continue;
+    const fields=splitLine(raw,delim);
+    if(fields.length!==header.length){
+      errors.push({line:lineNo,reason:`Expected ${header.length} columns, got ${fields.length}`,raw});
+      continue;
+    }
+    const transactionType=cell(fields,index,"transactionType");
+    const orderId=cell(fields,index,"orderId");
+    const totalRaw=cell(fields,index,"totalAmount");
+
+    if(transactionType==="" && orderId==="" && totalRaw!==""){
+      if(!summary){
+        const total=parseAmount(totalRaw,decimal);
+        if(Number.isNaN(total)){ errors.push({line:lineNo,reason:`Unparseable total-amount "${totalRaw}"`,raw}); continue; }
+        summary={
+          settlementId:cell(fields,index,"settlementId"),
+          settlementStartDate:cell(fields,index,"settlementStartDate"),
+          settlementEndDate:cell(fields,index,"settlementEndDate"),
+          depositDate:cell(fields,index,"depositDate"),
+          totalAmount:total, currency:cell(fields,index,"currency"),
+        };
+      }
+      continue;
+    }
+
+    if(missingRequired){
+      errors.push({line:lineNo,reason:`Cannot parse row: missing required column(s) ${missingColumns.join(", ")}`,raw});
+      continue;
+    }
+    if(transactionType===""){ errors.push({line:lineNo,reason:"Row has no transaction-type",raw}); continue; }
+
+    const amountRaw=cell(fields,index,"amount");
+    const amount=parseAmount(amountRaw,decimal);
+    if(Number.isNaN(amount)){ errors.push({line:lineNo,reason:`Unparseable amount "${amountRaw}"`,raw}); continue; }
+
+    const key=groupKey(fields,index);
+    let rec=groups.get(key);
+    if(!rec){
+      const qtyRaw=cell(fields,index,"quantityPurchased");
+      const qty=qtyRaw===""?0:Number(qtyRaw.replace(/,/g,""));
+      rec={
+        settlementId:cell(fields,index,"settlementId"), transactionType, orderId,
+        sku:cell(fields,index,"sku"), quantity:Number.isFinite(qty)?qty:0,
+        marketplaceName:cell(fields,index,"marketplaceName"),
+        fulfillmentId:cell(fields,index,"fulfillmentId"),
+        postedDate:cell(fields,index,"postedDate")||cell(fields,index,"postedDateTime"),
+        orderItemCode:cell(fields,index,"orderItemCode"),
+        shipmentId:cell(fields,index,"shipmentId"),
+        adjustmentId:cell(fields,index,"adjustmentId"),
+        promotionId:cell(fields,index,"promotionId"),
+        principal:0, amounts:[], fees:[], feeMap:{},
+      };
+      groups.set(key,rec); groupAmounts.set(key,[]); order.push(key);
+    }
+
+    const amountDescription=cell(fields,index,"amountDescription");
+    if(rec.sku==="") rec.sku=cell(fields,index,"sku");
+    if(rec.quantity===0){
+      const qtyRaw=cell(fields,index,"quantityPurchased");
+      const qty=qtyRaw===""?0:Number(qtyRaw.replace(/,/g,""));
+      if(Number.isFinite(qty)) rec.quantity=qty;
+    }
+    groupAmounts.get(key).push({amountType:cell(fields,index,"amountType"),amountDescription,amount});
+  }
+
+  const records=order.map(key=>{
+    const rec=groups.get(key), lines=groupAmounts.get(key);
+    rec.amounts=lines;
+    for(const l of lines){
+      if(/^principal$/i.test(l.amountDescription)) rec.principal+=l.amount;
+      else{
+        rec.fees.push(l);
+        const d=l.amountDescription||l.amountType||"(unlabelled)";
+        rec.feeMap[d]=(rec.feeMap[d]??0)+l.amount;
+      }
+    }
+    return rec;
+  });
+
+  return {summary,records,errors,header,unmappedColumns:unmapped,missingColumns};
+}
+window.parseSettlement = parseSettlement; // exposed for verification/debugging
+
+/* ============================================================
+   UI
+   ============================================================ */
+const inr = n => (n<0?"-":"")+"₹"+Math.abs(n).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
+const esc = s => String(s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
+
+const drop=document.getElementById("drop"), fileInput=document.getElementById("file"), out=document.getElementById("out");
+
+["dragenter","dragover"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add("over");}));
+["dragleave","drop"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove("over");}));
+drop.addEventListener("drop",ev=>{ const f=ev.dataTransfer.files[0]; if(f) read(f); });
+fileInput.addEventListener("change",()=>{ const f=fileInput.files[0]; if(f) read(f); });
+
+function read(file){
+  const reader=new FileReader();
+  reader.onload=()=>render(parseSettlement(String(reader.result)),file.name);
+  reader.onerror=()=>{ out.innerHTML=`<div class="err"><h4>Could not read file</h4></div>`; };
+  reader.readAsText(file);
+}
+
+function render(r,name){
+  const byType={};
+  for(const rec of r.records) byType[rec.transactionType]=(byType[rec.transactionType]||0)+1;
+  const feeLabels=new Set();
+  for(const rec of r.records) for(const f of rec.fees) feeLabels.add(f.amountDescription||f.amountType);
+
+  let h=`<div class="cards">
+    <div class="card blue"><div class="k">File</div><div class="v" style="font-size:14px;word-break:break-all">${esc(name)}</div></div>
+    <div class="card"><div class="k">Records</div><div class="v">${r.records.length}</div></div>
+    <div class="card ${r.errors.length?"amber":"green"}"><div class="k">Malformed rows</div><div class="v">${r.errors.length}</div></div>
+    <div class="card"><div class="k">Settlement total</div><div class="v" style="font-size:16px">${r.summary?inr(r.summary.totalAmount)+" "+esc(r.summary.currency):"—"}</div></div>
+  </div>`;
+
+  if(r.summary){
+    h+=`<div class="panel"><h4>Settlement summary</h4>
+      <table><tbody>
+        <tr><th>Settlement ID</th><td>${esc(r.summary.settlementId)}</td></tr>
+        <tr><th>Period</th><td>${esc(r.summary.settlementStartDate)} → ${esc(r.summary.settlementEndDate)}</td></tr>
+        <tr><th>Deposit date</th><td>${esc(r.summary.depositDate)}</td></tr>
+        <tr><th>Total</th><td>${inr(r.summary.totalAmount)} ${esc(r.summary.currency)}</td></tr>
+      </tbody></table></div>`;
+  } else {
+    h+=`<div class="warn-cols">No settlement summary row detected. That's fine for a partial export, but double-check this is a flat-file V2 settlement report.</div>`;
+  }
+
+  if(r.missingColumns.length)
+    h+=`<div class="warn-cols">⚠️ Missing expected columns: ${r.missingColumns.map(esc).join(", ")} — rows may be reported as errors below.</div>`;
+
+  h+=`<div class="panel"><h4>Transaction types</h4><div class="chips">${
+    Object.keys(byType).length ? Object.entries(byType).map(([t,n])=>`<span class="chip">${esc(t)} · ${n}</span>`).join("") : '<span class="muted">none</span>'
+  }</div></div>`;
+
+  h+=`<div class="panel"><h4>Fee labels found <span class="muted" style="font-weight:400">(what reconciliation will match on)</span></h4><div class="chips">${
+    feeLabels.size ? [...feeLabels].sort().map(l=>`<span class="chip">${esc(l)}</span>`).join("") : '<span class="muted">none</span>'
+  }</div></div>`;
+
+  if(r.records.length){
+    h+=`<div class="panel"><h4>Transactions (${r.records.length})</h4><div class="tblwrap"><table>
+      <thead><tr><th>Type</th><th>Order</th><th>SKU</th><th>Qty</th><th>Fulfil</th><th class="num">Principal</th><th>Fees</th></tr></thead><tbody>`;
+    for(const rec of r.records){
+      const feeStr=Object.entries(rec.feeMap).map(([d,a])=>`<b>${esc(d)}</b> ${inr(a)}`).join(" · ")||'<span class="muted">—</span>';
+      h+=`<tr>
+        <td>${esc(rec.transactionType)}</td>
+        <td>${esc(rec.orderId||"—")}</td>
+        <td>${esc(rec.sku||"—")}</td>
+        <td class="num">${rec.quantity}</td>
+        <td>${esc(rec.fulfillmentId||"—")}</td>
+        <td class="num ${rec.principal<0?"neg":"pos"}">${inr(rec.principal)}</td>
+        <td class="fees">${feeStr}</td>
+      </tr>`;
+    }
+    h+=`</tbody></table></div></div>`;
+  }
+
+  if(r.errors.length){
+    h+=`<div class="err"><h4>${r.errors.length} malformed row(s) — reported, not dropped</h4>${
+      r.errors.slice(0,50).map(e=>`<div class="row">line ${e.line}: ${esc(e.reason)}</div>`).join("")
+    }${r.errors.length>50?`<div class="row">… and ${r.errors.length-50} more</div>`:""}</div>`;
+  } else if(r.records.length){
+    h+=`<div class="panel"><span class="ok">✅ No malformed rows — every line was understood.</span></div>`;
+  }
+
+  out.innerHTML=h;
+  out.scrollIntoView({behavior:"smooth",block:"start"});
+}
+</script>
+</body>
+</html>
