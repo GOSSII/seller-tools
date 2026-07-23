@@ -24,6 +24,7 @@ export default function ProfitScreen() {
   const [pack, setPack] = useState("15");
   const [acos, setAcos] = useState("10");
   const [returns, setReturns] = useState("3");
+  const [gstReg, setGstReg] = useState<"yes" | "no">("yes");
 
   const r = useMemo(
     () =>
@@ -38,8 +39,9 @@ export default function ProfitScreen() {
         packaging: +pack || 0,
         acosPct: +acos || 0,
         returnsPct: +returns || 0,
+        gstRegistered: gstReg === "yes",
       }),
-    [sp, cost, category, weight, size, fulfillment, zone, pack, acos, returns]
+    [sp, cost, category, weight, size, fulfillment, zone, pack, acos, returns, gstReg]
   );
 
   const price = +sp || 0;
@@ -126,6 +128,21 @@ export default function ProfitScreen() {
           <View style={{ width: 12 }} />
           <NumericInput label="Returns (%)" value={returns} onChange={setReturns} />
         </View>
+        <View style={styles.gap} />
+        <SegmentedControl
+          label="GST Registered (claim ITC)"
+          value={gstReg}
+          onChange={setGstReg}
+          options={[
+            { value: "yes", label: "Yes" },
+            { value: "no", label: "No" },
+          ]}
+        />
+        {gstReg === "yes" ? (
+          <Text style={styles.itcNote}>
+            The 18% GST Amazon charges on its fees is claimable back as input tax credit (ITC) in your GST return, so it isn't a true cost for registered sellers.
+          </Text>
+        ) : null}
       </View>
 
       {/* STAT CARDS */}
@@ -134,6 +151,12 @@ export default function ProfitScreen() {
         <Stat k="Net Profit" v={inr(r.netProfit)} tone={r.isLoss ? "red" : "green"} />
         <Stat k="Net Margin" v={pct(r.margin)} tone="plain" />
         <Stat k="ROI" v={pct(r.roi)} tone="plain" />
+        {gstReg === "yes" ? (
+          <>
+            <Stat k="GST ITC Recoverable" v={inr(r.itcRecoverable)} tone="plain" />
+            <Stat k="Profit After ITC" v={inr(r.netProfitAfterItc)} tone={r.netProfitAfterItc < 0 ? "red" : "green"} />
+          </>
+        ) : null}
       </View>
 
       {/* LOW MARGIN BANNER */}
@@ -153,6 +176,12 @@ export default function ProfitScreen() {
         <BdRow l="Product + Packaging" r={`-${inr0(r.landed)}`} neg muted />
         <BdRow l={`Marketing (${acos || 0}%) + Returns (${returns || 0}%)`} r={`-${inr(r.marketing + r.returns)}`} neg muted />
         <BdRow l={`Net ${r.isLoss ? "Loss" : "Profit"} per Unit`} r={inr(r.netProfit)} final loss={r.isLoss} />
+        {gstReg === "yes" ? (
+          <>
+            <BdRow l="GST on fees recoverable as ITC" r={`+${inr(r.itcRecoverable)}`} muted />
+            <BdRow l="Net Profit after ITC" r={inr(r.netProfitAfterItc)} final loss={r.netProfitAfterItc < 0} />
+          </>
+        ) : null}
       </View>
 
       {/* COST SPLIT */}
@@ -253,6 +282,8 @@ const styles = StyleSheet.create({
   statRed: { backgroundColor: theme.color.redSoft, borderColor: "#FBD5D5" },
   statK: { fontSize: 11, fontWeight: theme.font.bold, letterSpacing: 0.6, color: theme.color.faint, marginBottom: 6 },
   statV: { fontSize: 22, fontWeight: theme.font.bold },
+
+  itcNote: { marginTop: 10, fontSize: 12.5, lineHeight: 18, color: theme.color.muted },
 
   warn: { marginTop: 14, backgroundColor: theme.color.orangeSoft, borderWidth: 1, borderColor: "#F7D9BE", borderRadius: 12, padding: 14 },
   warnTxt: { color: "#9A4B12", fontSize: 13, lineHeight: 19 },

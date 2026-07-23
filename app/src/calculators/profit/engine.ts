@@ -21,6 +21,9 @@ export type ProfitInput = {
   packaging: number;
   acosPct: number;
   returnsPct: number;
+  // GST-registered sellers reclaim the 18% GST on Amazon fees as input tax
+  // credit. Optional so existing callers are untouched; undefined = registered.
+  gstRegistered?: boolean;
 };
 
 export type ProfitResult = {
@@ -42,6 +45,8 @@ export type ProfitResult = {
   referralRate: number;      // fraction actually applied
   isLoss: boolean;
   lowMargin: boolean;        // < 15%
+  itcRecoverable: number;    // GST on Amazon fees claimable as ITC (0 if not registered)
+  netProfitAfterItc: number; // netProfit + itcRecoverable
 };
 
 function referralRate(categoryKey: string, price: number): number {
@@ -111,6 +116,9 @@ export function calculateProfit(i: ProfitInput): ProfitResult {
   const invested = landed + marketing + returns;
   const roi = invested > 0 ? (netProfit / invested) * 100 : 0;
 
+  const itcRecoverable = i.gstRegistered !== false ? gstOnFees : 0;
+  const netProfitAfterItc = netProfit + itcRecoverable;
+
   return {
     referral,
     closing,
@@ -130,6 +138,8 @@ export function calculateProfit(i: ProfitInput): ProfitResult {
     referralRate: rate,
     isLoss: netProfit < 0,
     lowMargin: margin < 15,
+    itcRecoverable,
+    netProfitAfterItc,
   };
 }
 
