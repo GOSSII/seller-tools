@@ -1870,6 +1870,21 @@ function loadPdfLib(){
   return pdfLibPromise;
 }
 
+const PDFJS_URL="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.min.js";
+const PDFJS_WORKER_URL="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js";
+let pdfJsPromise=null;
+function loadPdfJs(){
+  if(window.pdfjsLib) return Promise.resolve();
+  if(!pdfJsPromise) pdfJsPromise=new Promise((res,rej)=>{
+    const s=document.createElement("script");
+    s.src=PDFJS_URL;
+    s.onload=()=>{try{pdfjsLib.GlobalWorkerOptions.workerSrc=PDFJS_WORKER_URL;}catch(e){}res();};
+    s.onerror=()=>{pdfJsPromise=null;rej(new Error("load failed"));};
+    document.head.appendChild(s);
+  });
+  return pdfJsPromise;
+}
+
 const CROP_PRESETS={
   "es-quadrant":{name:"Easy Ship — label only (top-left quarter)",left:0,top:0,width:50,height:50},
   "top-half":{name:"Top half of page",left:0,top:0,width:100,height:50},
@@ -1877,7 +1892,7 @@ const CROP_PRESETS={
   "full":{name:"Full page (resize to 4×6)",left:0,top:0,width:100,height:100},
   "custom":{name:"Custom (set % below)",left:0,top:0,width:50,height:50},
 };
-let lcFiles=[], lcBusy=false;
+let lcFiles=[], lcBusy=false, lcPageInfo=[];
 
 function renderLabelCropper(){
   document.title="Amazon Label Cropper — Seller Tools";
@@ -1927,6 +1942,21 @@ function renderLabelCropper(){
               <option value="right"${saved.invPos==="right"?" selected":""}>Right half</option>
               <option value="bottom"${saved.invPos==="bottom"?" selected":""}>Bottom half</option>
             </select></div>
+          <div><label for="lc-sort">Sort labels</label>
+            <select id="lc-sort">
+              <option value="none"${(saved.sort||"none")==="none"?" selected":""}>Original order</option>
+              <option value="sku"${saved.sort==="sku"?" selected":""}>By SKU (auto-detect)</option>
+            </select></div>
+          <div><label for="lc-skuprint">Print SKU on label</label>
+            <select id="lc-skuprint">
+              <option value="no"${(saved.skuPrint||"no")==="no"?" selected":""}>No</option>
+              <option value="yes"${saved.skuPrint==="yes"?" selected":""}>Yes — top strip</option>
+            </select></div>
+          <div><label for="lc-olist">Order list page</label>
+            <select id="lc-olist">
+              <option value="no"${(saved.olist||"no")==="no"?" selected":""}>No</option>
+              <option value="yes"${saved.olist==="yes"?" selected":""}>Yes — first page</option>
+            </select></div>
         </div>
         <div class="optrow" style="margin-bottom:0">
           <button class="bigbtn" id="lc-go" disabled>Crop labels</button>
@@ -1935,6 +1965,7 @@ function renderLabelCropper(){
         </div>
         <div class="note" id="lc-status" style="margin:10px 0 0">Waiting for a PDF…</div>
       </div>
+      <div id="lc-skus"></div>
       <div id="lc-prev"></div>
     </div>`;
   const drop=document.getElementById("lc-drop"),file=document.getElementById("lc-file");
@@ -1961,7 +1992,7 @@ function renderLabelCropper(){
   const invPosWrap=document.getElementById("lc-invpos-wrap"),invSel=document.getElementById("lc-inv");
   const syncInv=()=>{invPosWrap.style.opacity=invSel.value==="none"?"0.45":"1";};
   invSel.addEventListener("change",syncInv);syncInv();
-  document.getElementById("lc-go").addEventListener("click",async()=>{
+  const lcProcess=async(useStored)=>{
     if(lcBusy||!lcFiles.length)return;
     lcBusy=true;
     const btn=document.getElementById("lc-go");btn.disabled=true;
@@ -1979,47 +2010,92 @@ function renderLabelCropper(){
       const fmt=document.getElementById("lc-fmt").value;
       const invMode=invSel.value;
       const invPos=document.getElementById("lc-invpos").value;
-      try{localStorage.setItem("lc_crop",JSON.stringify({preset:presetKey,custom:crop,fmt,invMode,invPos}));}catch(e){}
+      const sortMode=document.getElementById("lc-sort").value;
+      const skuPrint=document.getElementById("lc-skuprint").value==="yes";
+      const olist=document.getElementById("lc-olist").value==="yes";
+      try{localStorage.setItem("lc_crop",JSON.stringify({preset:presetKey,custom:crop,fmt,invMode,invPos,sort:sortMode,skuPrint:skuPrint?"yes":"no",olist:olist?"yes":"no"}));}catch(e){}
       const A4W=595.28,A4H=841.89;
       const white=()=>PDFLib.rgb(1,1,1);
 
+      const filesBytes=[];
+      for(const f of lcFiles) filesBytes.push(await f.arrayBuffer());
+      const srcDocs=[];
+      for(const b of filesBytes) srcDocs.push(await PDFLib.PDFDocument.load(b,{ignoreEncryption:true}));
+
+      // Build the page list; detect SKU + order id per page when needed.
+      const wantDetect=sortMode==="sku"||skuPrint||olist;
+      let detectFailed=false;
+      if(!useStored||!lcPageInfo.length){
+        lcPageInfo=[];
+        srcDocs.forEach((d,fi)=>d.getPageIndices().forEach(pi=>lcPageInfo.push({f:fi,i:pi,sku:"",oid:""})));
+        if(wantDetect){
+          status("Reading SKUs and order IDs…");
+          try{
+            await loadPdfJs();
+            for(let fi=0;fi<filesBytes.length;fi++){
+              const pdoc=await pdfjsLib.getDocument({data:filesBytes[fi].slice(0)}).promise;
+              for(let p=1;p<=pdoc.numPages;p++){
+                const tc=await (await pdoc.getPage(p)).getTextContent();
+                const text=tc.items.map(x=>x.str).join(" ");
+                const info=lcPageInfo.find(x=>x.f===fi&&x.i===p-1);
+                if(!info) continue;
+                const m=text.match(/\bSKU\b\s*[:#\-]?\s*([A-Za-z0-9][A-Za-z0-9_\-\/\.]{1,39})/i);
+                if(m) info.sku=m[1];
+                const mo=text.match(/\b(\d{3}-\d{7}-\d{7})\b/);
+                if(mo) info.oid=mo[1];
+              }
+              if(pdoc.destroy) pdoc.destroy();
+            }
+          }catch(e){ detectFailed=true; }
+        }
+      }
+      const orderList=[...lcPageInfo];
+      if(sortMode==="sku") orderList.sort((a,b)=>{
+        const ka=a.sku||"￿", kb=b.sku||"￿";
+        return ka<kb?-1:ka>kb?1:(a.f-b.f)||(a.i-b.i);
+      });
+
       // Stage 1: label-only 4x6 pages (masked), plus invoice pages if wanted.
+      status("Cropping…");
       const labelDoc=await PDFLib.PDFDocument.create();
       const invDoc=invMode==="none"?null:await PDFLib.PDFDocument.create();
+      const skuFont=skuPrint?await labelDoc.embedFont(PDFLib.StandardFonts.HelveticaBold):null;
+      const labelEmb=[],invEmb=[];
+      for(let fi=0;fi<filesBytes.length;fi++){
+        labelEmb.push(await labelDoc.embedPdf(filesBytes[fi],srcDocs[fi].getPageIndices()));
+        invEmb.push(invDoc?await invDoc.embedPdf(filesBytes[fi],srcDocs[fi].getPageIndices()):null);
+      }
       let labels=0;
-      for(const f of lcFiles){
-        const bytes=await f.arrayBuffer();
-        const src=await PDFLib.PDFDocument.load(bytes,{ignoreEncryption:true});
-        const idx=src.getPageIndices();
-        const embedded=await labelDoc.embedPdf(bytes,idx);
-        const invEmb=invDoc?await invDoc.embedPdf(bytes,idx):null;
-        for(let i=0;i<idx.length;i++){
-          const sp=src.getPage(idx[i]);
-          const W=sp.getWidth(),H=sp.getHeight();
-          const cw=crop.width/100*W, ch=crop.height/100*H;
-          const cx=crop.left/100*W, cy=H-(crop.top/100*H)-ch;
-          const scale=Math.min(288/cw,432/ch);
-          const page=labelDoc.addPage([288,432]);
-          const dx=(288-cw*scale)/2, dy=(432-ch*scale)/2;
-          page.drawPage(embedded[i],{x:dx-cx*scale,y:dy-cy*scale,xScale:scale,yScale:scale});
-          if(dx>0.1){page.drawRectangle({x:0,y:0,width:dx,height:432,color:white()});
-            page.drawRectangle({x:288-dx,y:0,width:dx,height:432,color:white()});}
-          if(dy>0.1){page.drawRectangle({x:0,y:0,width:288,height:dy,color:white()});
-            page.drawRectangle({x:0,y:432-dy,width:288,height:dy,color:white()});}
-          labels++;
-          if(invDoc){
-            let ix=0,iy=0,iw=W,ih=H;
-            if(invPos==="right"){ix=W/2;iw=W/2;}
-            else if(invPos==="bottom"){ih=H/2;}
-            const s2=Math.min((A4W-40)/iw,(A4H-40)/ih);
-            const ip=invDoc.addPage([A4W,A4H]);
-            const jx=(A4W-iw*s2)/2, jy=(A4H-ih*s2)/2;
-            ip.drawPage(invEmb[i],{x:jx-ix*s2,y:jy-iy*s2,xScale:s2,yScale:s2});
-            if(jx>0.1){ip.drawRectangle({x:0,y:0,width:jx,height:A4H,color:white()});
-              ip.drawRectangle({x:A4W-jx,y:0,width:jx,height:A4H,color:white()});}
-            if(jy>0.1){ip.drawRectangle({x:0,y:0,width:A4W,height:jy,color:white()});
-              ip.drawRectangle({x:0,y:A4H-jy,width:A4W,height:jy,color:white()});}
-          }
+      for(const info of orderList){
+        const sp=srcDocs[info.f].getPage(info.i);
+        const W=sp.getWidth(),H=sp.getHeight();
+        const cw=crop.width/100*W, ch=crop.height/100*H;
+        const cx=crop.left/100*W, cy=H-(crop.top/100*H)-ch;
+        const scale=Math.min(288/cw,432/ch);
+        const page=labelDoc.addPage([288,432]);
+        const dx=(288-cw*scale)/2, dy=(432-ch*scale)/2;
+        page.drawPage(labelEmb[info.f][info.i],{x:dx-cx*scale,y:dy-cy*scale,xScale:scale,yScale:scale});
+        if(dx>0.1){page.drawRectangle({x:0,y:0,width:dx,height:432,color:white()});
+          page.drawRectangle({x:288-dx,y:0,width:dx,height:432,color:white()});}
+        if(dy>0.1){page.drawRectangle({x:0,y:0,width:288,height:dy,color:white()});
+          page.drawRectangle({x:0,y:432-dy,width:288,height:dy,color:white()});}
+        if(skuPrint&&info.sku){
+          page.drawRectangle({x:0,y:416,width:288,height:16,color:white()});
+          page.drawText(info.sku,{x:8,y:420.5,size:9,font:skuFont,color:PDFLib.rgb(0,0,0)});
+        }
+        labels++;
+        if(invDoc){
+          let ix=0,iy=0,iw=W,ih=H;
+          if(invPos==="right"){ix=W/2;iw=W/2;}
+          else if(invPos==="bottom"){ih=H/2;}
+          const s2=Math.min((A4W-40)/iw,(A4H-40)/ih);
+          const ip=invDoc.addPage([A4W,A4H]);
+          const jx=(A4W-iw*s2)/2, jy=(A4H-ih*s2)/2;
+          ip.drawPage(invEmb[info.f][info.i],{x:jx-ix*s2,y:jy-iy*s2,xScale:s2,yScale:s2});
+          if(jx>0.1){ip.drawRectangle({x:0,y:0,width:jx,height:A4H,color:white()});
+            ip.drawRectangle({x:A4W-jx,y:0,width:jx,height:A4H,color:white()});}
+          if(jy>0.1){ip.drawRectangle({x:0,y:0,width:A4W,height:jy,color:white()});
+            ip.drawRectangle({x:0,y:A4H-jy,width:A4W,height:jy,color:white()});}
         }
       }
 
@@ -2071,6 +2147,38 @@ function renderLabelCropper(){
         }
       }
 
+      // Order list / picklist page(s) at the front.
+      if(olist){
+        const font=await outDoc.embedFont(PDFLib.StandardFonts.Helvetica);
+        const fontB=await outDoc.embedFont(PDFLib.StandardFonts.HelveticaBold);
+        const groups=new Map();
+        for(const x of orderList){
+          const k=x.sku||"(not detected)";
+          const g=groups.get(k)||{count:0,oids:[]};
+          g.count++; if(x.oid) g.oids.push(x.oid);
+          groups.set(k,g);
+        }
+        const rows=[...groups.entries()].sort((a,b)=>a[0]<b[0]?-1:1);
+        let inserted=1;
+        let pageO=outDoc.insertPage(0,[A4W,A4H]);
+        let y=A4H-60;
+        pageO.drawText("Order List / Picklist",{x:40,y,size:16,font:fontB});
+        y-=18;
+        pageO.drawText(`${labels} label(s), ${rows.length} SKU(s)`,{x:40,y,size:10,font});
+        y-=26;
+        for(const [sku,g] of rows){
+          if(y<50){pageO=outDoc.insertPage(inserted,[A4W,A4H]);inserted++;y=A4H-60;}
+          pageO.drawText(`${sku}  x${g.count}`,{x:40,y,size:11,font:fontB});
+          y-=13;
+          if(g.oids.length){
+            let line=g.oids.join(", ");
+            if(line.length>95) line=line.slice(0,92)+"...";
+            pageO.drawText(line,{x:52,y,size:8.5,font,color:PDFLib.rgb(0.35,0.35,0.35)});
+            y-=16;
+          } else y-=5;
+        }
+      }
+
       const outBytes=await outDoc.save();
       const url=URL.createObjectURL(new Blob([outBytes],{type:"application/pdf"}));
       const dl=document.getElementById("lc-dl");
@@ -2082,12 +2190,35 @@ function renderLabelCropper(){
       }else dl2.style.display="none";
       const fmtName=fmt==="4x6"?"4×6 thermal":fmt==="a4-4up"?"A4, 4 per sheet":"A4, 1 per sheet";
       document.getElementById("lc-prev").innerHTML=`<div class="panel"><h4>Preview — ${labels} label(s) on ${outDoc.getPageCount()} page(s) (${fmtName})</h4><iframe class="pdfprev" src="${url}" title="Cropped labels preview"></iframe></div>`;
-      status(`Done — ${labels} label(s), ${outDoc.getPageCount()} output page(s). Check the preview, adjust position values if the crop is off, then download.`);
+
+      // Detection review table — edit wrong/missing SKUs and re-crop.
+      if(wantDetect){
+        const counts={};
+        orderList.forEach(x=>{const k=x.sku||"(not detected)";counts[k]=(counts[k]||0)+1;});
+        document.getElementById("lc-skus").innerHTML=`<div class="panel"><h4>Detected SKUs <span class="sa-sub">— fix any that are wrong or missing, then re-crop</span></h4>
+          ${detectFailed?`<div class="banner warn">The text-reading engine could not load, so SKUs were not auto-detected. You can still type them below and re-crop — nothing was uploaded anywhere.</div>`:""}
+          <div class="chips" style="margin-bottom:10px">${Object.entries(counts).map(([k,n])=>`<span class="chip">${esc(k)} · ${n}</span>`).join("")}</div>
+          <div class="tblwrap"><table class="sa"><thead><tr><th>Output page</th><th>File</th><th>Source page</th><th>Order ID</th><th>SKU (editable)</th></tr></thead><tbody>
+          ${orderList.map((x,n)=>`<tr><td>${n+1}</td><td>${esc(lcFiles[x.f]?lcFiles[x.f].name:"")}</td><td>${x.i+1}</td><td>${esc(x.oid||"—")}</td>
+            <td><input data-lcf="${x.f}" data-lci="${x.i}" value="${esc(x.sku)}" style="min-height:34px;font-size:13px"></td></tr>`).join("")}
+          </tbody></table></div>
+          <div class="optrow" style="margin-bottom:0"><button class="bigbtn sec" id="lc-recrop">Re-crop with corrected SKUs</button></div></div>`;
+        document.getElementById("lc-recrop").addEventListener("click",()=>{
+          document.querySelectorAll("input[data-lcf]").forEach(inp=>{
+            const info=lcPageInfo.find(x=>x.f===+inp.dataset.lcf&&x.i===+inp.dataset.lci);
+            if(info) info.sku=inp.value.trim();
+          });
+          lcProcess(true);
+        });
+      } else document.getElementById("lc-skus").innerHTML="";
+
+      status(`Done — ${labels} label(s), ${outDoc.getPageCount()} output page(s)${sortMode==="sku"?", sorted by SKU":""}. Check the preview, adjust position values if the crop is off, then download.`);
     }catch(e){
       status("Could not process that PDF"+(String(e).includes("load failed")?" — the PDF engine failed to load (check your connection) and nothing was uploaded anywhere.":" — it may be corrupted or password-protected."));
     }
     btn.disabled=false;lcBusy=false;
-  });
+  };
+  document.getElementById("lc-go").addEventListener("click",()=>{lcProcess(false);});
 }
 
 /* ============================================================
