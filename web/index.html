@@ -276,6 +276,12 @@
   .viz-x{display:flex;justify-content:space-between;font-size:11px;color:var(--faint);margin-top:6px}
   .viz-tip{position:fixed;z-index:60;background:var(--ink);color:#fff;font-size:12px;padding:6px 9px;
     border-radius:8px;pointer-events:none;display:none;white-space:nowrap;box-shadow:0 2px 10px rgba(15,26,43,.25)}
+  .hbar{display:flex;align-items:center;gap:10px;padding:5px 0;font-size:13px}
+  .hbar .nm{flex:0 0 40%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
+  @media(min-width:700px){.hbar .nm{flex-basis:34%}}
+  .hbar .track{flex:1 1 auto;height:14px;background:#eef1f6;border-radius:4px;overflow:hidden}
+  .hbar .track i{display:block;height:100%;border-radius:0 4px 4px 0;background:var(--blue)}
+  .hbar .val{flex:0 0 auto;font-weight:700;font-variant-numeric:tabular-nums;min-width:24px;text-align:right}
 
   /* ---- Label cropper / order printer ---- */
   .pdfprev{width:100%;height:480px;border:1px solid var(--line);border-radius:12px;background:#f7f9fc}
@@ -1461,7 +1467,7 @@ function saBarChart(title,days,key,color,fmt){
 function saWireTips(root){
   let tip=document.getElementById("viz-tip");
   if(!tip){tip=document.createElement("div");tip.id="viz-tip";tip.className="viz-tip";document.body.appendChild(tip);}
-  root.querySelectorAll(".viz-bar").forEach(b=>{
+  root.querySelectorAll("[data-tip]").forEach(b=>{
     b.addEventListener("mouseenter",()=>{tip.textContent=b.dataset.tip;tip.style.display="block";});
     b.addEventListener("mousemove",e=>{tip.style.left=(e.clientX+12)+"px";tip.style.top=(e.clientY-34)+"px";});
     b.addEventListener("mouseleave",()=>{tip.style.display="none";});
@@ -2291,7 +2297,26 @@ function renderLabelCropper(){
       if(wantDetect){
         const counts={};
         orderList.forEach(x=>{const k=x.sku||"(not detected)";counts[k]=(counts[k]||0)+1;});
-        document.getElementById("lc-skus").innerHTML=`<div class="panel"><h4>Detected SKUs <span class="sa-sub">— fix any that are wrong or missing, then re-crop</span></h4>
+        // Batch analytics: units per SKU across this print batch.
+        const unitAgg={};
+        let totalUnits=0;
+        orderList.forEach(x=>{const k=x.sku||"(not detected)";const u=x.qty||1;unitAgg[k]=(unitAgg[k]||0)+u;totalUnits+=u;});
+        const unitRows=Object.entries(unitAgg).sort((a,b)=>b[1]-a[1]);
+        const maxUnits=unitRows.length?unitRows[0][1]:0;
+        const analyticsHtml=unitRows.length?`<div class="panel"><h4>Batch analytics <span class="sa-sub">— what you're shipping in this batch</span></h4>
+          <div class="stats">
+            <div class="stat blue"><div class="k">Labels</div><div class="v">${labels}</div></div>
+            <div class="stat"><div class="k">Units</div><div class="v">${totalUnits}</div></div>
+            <div class="stat"><div class="k">Products</div><div class="v">${unitRows.length}</div></div>
+            <div class="stat green"><div class="k">Top product</div><div class="v" style="font-size:14px">${esc(unitRows[0][0].slice(0,40))}</div></div>
+          </div>
+          <div style="background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 16px">
+            ${unitRows.map(([sku,u])=>`<div class="hbar" data-tip="${esc(sku)} · ${u} unit${u===1?"":"s"}">
+              <span class="nm">${esc(sku)}</span>
+              <span class="track"><i style="width:${(u/maxUnits*100).toFixed(1)}%"></i></span>
+              <span class="val">${u}</span></div>`).join("")}
+          </div></div>`:"";
+        document.getElementById("lc-skus").innerHTML=analyticsHtml+`<div class="panel"><h4>Detected SKUs <span class="sa-sub">— fix any that are wrong or missing, then re-crop</span></h4>
           ${detectFailed?`<div class="banner warn">The text-reading engine could not load, so SKUs were not auto-detected. You can still type them below and re-crop — nothing was uploaded anywhere.</div>`:""}
           <div class="chips" style="margin-bottom:10px">${Object.entries(counts).map(([k,n])=>`<span class="chip">${esc(k)} · ${n}</span>`).join("")}</div>
           <div class="tblwrap"><table class="sa"><thead><tr><th>Output page</th><th>File</th><th>Source page</th><th>Order ID</th><th>SKU (editable)</th></tr></thead><tbody>
@@ -2299,6 +2324,7 @@ function renderLabelCropper(){
             <td><input data-lcf="${x.f}" data-lci="${x.i}" value="${esc(x.sku)}" style="min-height:34px;font-size:13px"></td></tr>`).join("")}
           </tbody></table></div>
           <div class="optrow" style="margin-bottom:0"><button class="bigbtn sec" id="lc-recrop">Re-crop with corrected SKUs</button></div></div>`;
+        saWireTips(document.getElementById("lc-skus"));
         document.getElementById("lc-recrop").addEventListener("click",()=>{
           document.querySelectorAll("input[data-lcf]").forEach(inp=>{
             const info=lcPageInfo.find(x=>x.f===+inp.dataset.lcf&&x.i===+inp.dataset.lci);
