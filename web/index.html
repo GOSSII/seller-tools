@@ -1908,9 +1908,30 @@ function renderLabelCropper(){
           <div><label for="lc-w">Width (%)</label><input id="lc-w" inputmode="decimal" value="${c.width}"></div>
           <div><label for="lc-h">Height (%)</label><input id="lc-h" inputmode="decimal" value="${c.height}"></div>
         </div>
+        <div class="cropgrid" style="margin-top:12px">
+          <div style="grid-column:span 2"><label for="lc-fmt">Output format</label>
+            <select id="lc-fmt">
+              <option value="4x6"${(saved.fmt||"4x6")==="4x6"?" selected":""}>4×6 thermal — one label per page</option>
+              <option value="a4-4up"${saved.fmt==="a4-4up"?" selected":""}>A4 sheet — 4 labels per page (normal printer)</option>
+              <option value="a4-1up"${saved.fmt==="a4-1up"?" selected":""}>A4 sheet — one label per page</option>
+            </select></div>
+          <div><label for="lc-inv">Invoices</label>
+            <select id="lc-inv">
+              <option value="none"${(saved.invMode||"none")==="none"?" selected":""}>Don't include</option>
+              <option value="interleave"${saved.invMode==="interleave"?" selected":""}>Include after labels</option>
+              <option value="separate"${saved.invMode==="separate"?" selected":""}>Separate PDF</option>
+            </select></div>
+          <div id="lc-invpos-wrap"><label for="lc-invpos">Invoice area</label>
+            <select id="lc-invpos">
+              <option value="full"${(saved.invPos||"full")==="full"?" selected":""}>Full original page</option>
+              <option value="right"${saved.invPos==="right"?" selected":""}>Right half</option>
+              <option value="bottom"${saved.invPos==="bottom"?" selected":""}>Bottom half</option>
+            </select></div>
+        </div>
         <div class="optrow" style="margin-bottom:0">
-          <button class="bigbtn" id="lc-go" disabled>Crop to 4×6</button>
-          <a class="bigbtn sec" id="lc-dl" style="display:none" download="labels-4x6.pdf">Download PDF</a>
+          <button class="bigbtn" id="lc-go" disabled>Crop labels</button>
+          <a class="bigbtn sec" id="lc-dl" style="display:none" download="labels.pdf">Download labels</a>
+          <a class="bigbtn sec" id="lc-dl2" style="display:none" download="invoices.pdf">Download invoices</a>
         </div>
         <div class="note" id="lc-status" style="margin:10px 0 0">Waiting for a PDF…</div>
       </div>
@@ -1937,6 +1958,9 @@ function renderLabelCropper(){
       document.getElementById("lc-h").value=p.height;
     }
   });
+  const invPosWrap=document.getElementById("lc-invpos-wrap"),invSel=document.getElementById("lc-inv");
+  const syncInv=()=>{invPosWrap.style.opacity=invSel.value==="none"?"0.45":"1";};
+  invSel.addEventListener("change",syncInv);syncInv();
   document.getElementById("lc-go").addEventListener("click",async()=>{
     if(lcBusy||!lcFiles.length)return;
     lcBusy=true;
@@ -1944,7 +1968,7 @@ function renderLabelCropper(){
     try{
       status("Loading PDF engine…");
       await loadPdfLib();
-      status("Cropping…");
+      status("Processing…");
       const presetKey=document.getElementById("lc-preset").value;
       const crop={
         left:Math.max(0,parseFloat(document.getElementById("lc-left").value)||0),
@@ -1952,38 +1976,113 @@ function renderLabelCropper(){
         width:Math.min(100,Math.max(1,parseFloat(document.getElementById("lc-w").value)||50)),
         height:Math.min(100,Math.max(1,parseFloat(document.getElementById("lc-h").value)||50)),
       };
-      try{localStorage.setItem("lc_crop",JSON.stringify({preset:presetKey,custom:crop}));}catch(e){}
-      const out=await PDFLib.PDFDocument.create();
-      let pages=0;
+      const fmt=document.getElementById("lc-fmt").value;
+      const invMode=invSel.value;
+      const invPos=document.getElementById("lc-invpos").value;
+      try{localStorage.setItem("lc_crop",JSON.stringify({preset:presetKey,custom:crop,fmt,invMode,invPos}));}catch(e){}
+      const A4W=595.28,A4H=841.89;
+      const white=()=>PDFLib.rgb(1,1,1);
+
+      // Stage 1: label-only 4x6 pages (masked), plus invoice pages if wanted.
+      const labelDoc=await PDFLib.PDFDocument.create();
+      const invDoc=invMode==="none"?null:await PDFLib.PDFDocument.create();
+      let labels=0;
       for(const f of lcFiles){
         const bytes=await f.arrayBuffer();
         const src=await PDFLib.PDFDocument.load(bytes,{ignoreEncryption:true});
         const idx=src.getPageIndices();
-        const embedded=await out.embedPdf(bytes,idx);
+        const embedded=await labelDoc.embedPdf(bytes,idx);
+        const invEmb=invDoc?await invDoc.embedPdf(bytes,idx):null;
         for(let i=0;i<idx.length;i++){
           const sp=src.getPage(idx[i]);
           const W=sp.getWidth(),H=sp.getHeight();
           const cw=crop.width/100*W, ch=crop.height/100*H;
           const cx=crop.left/100*W, cy=H-(crop.top/100*H)-ch;
           const scale=Math.min(288/cw,432/ch);
-          const page=out.addPage([288,432]);
+          const page=labelDoc.addPage([288,432]);
           const dx=(288-cw*scale)/2, dy=(432-ch*scale)/2;
           page.drawPage(embedded[i],{x:dx-cx*scale,y:dy-cy*scale,xScale:scale,yScale:scale});
-          const white=PDFLib.rgb(1,1,1);
-          if(dx>0.1){page.drawRectangle({x:0,y:0,width:dx,height:432,color:white});
-            page.drawRectangle({x:288-dx,y:0,width:dx,height:432,color:white});}
-          if(dy>0.1){page.drawRectangle({x:0,y:0,width:288,height:dy,color:white});
-            page.drawRectangle({x:0,y:432-dy,width:288,height:dy,color:white});}
-          pages++;
+          if(dx>0.1){page.drawRectangle({x:0,y:0,width:dx,height:432,color:white()});
+            page.drawRectangle({x:288-dx,y:0,width:dx,height:432,color:white()});}
+          if(dy>0.1){page.drawRectangle({x:0,y:0,width:288,height:dy,color:white()});
+            page.drawRectangle({x:0,y:432-dy,width:288,height:dy,color:white()});}
+          labels++;
+          if(invDoc){
+            let ix=0,iy=0,iw=W,ih=H;
+            if(invPos==="right"){ix=W/2;iw=W/2;}
+            else if(invPos==="bottom"){ih=H/2;}
+            const s2=Math.min((A4W-40)/iw,(A4H-40)/ih);
+            const ip=invDoc.addPage([A4W,A4H]);
+            const jx=(A4W-iw*s2)/2, jy=(A4H-ih*s2)/2;
+            ip.drawPage(invEmb[i],{x:jx-ix*s2,y:jy-iy*s2,xScale:s2,yScale:s2});
+            if(jx>0.1){ip.drawRectangle({x:0,y:0,width:jx,height:A4H,color:white()});
+              ip.drawRectangle({x:A4W-jx,y:0,width:jx,height:A4H,color:white()});}
+            if(jy>0.1){ip.drawRectangle({x:0,y:0,width:A4W,height:jy,color:white()});
+              ip.drawRectangle({x:0,y:A4H-jy,width:A4W,height:jy,color:white()});}
+          }
         }
       }
-      const outBytes=await out.save();
-      const blob=new Blob([outBytes],{type:"application/pdf"});
-      const url=URL.createObjectURL(blob);
+
+      // Stage 2: lay labels out in the chosen format.
+      const labelBytes=await labelDoc.save();
+      let outDoc;
+      if(fmt==="4x6"){
+        outDoc=await PDFLib.PDFDocument.load(labelBytes);
+      }else{
+        outDoc=await PDFLib.PDFDocument.create();
+        const lsrc=await PDFLib.PDFDocument.load(labelBytes);
+        const lemb=await outDoc.embedPdf(labelBytes,lsrc.getPageIndices());
+        if(fmt==="a4-1up"){
+          const s=Math.min((A4W-60)/288,(A4H-60)/432);
+          for(const ep of lemb){
+            const p=outDoc.addPage([A4W,A4H]);
+            p.drawPage(ep,{x:(A4W-288*s)/2,y:(A4H-432*s)/2,xScale:s,yScale:s});
+          }
+        }else{ // a4-4up: 2×2 grid with cut lines
+          const cellW=A4W/2,cellH=A4H/2;
+          const s=Math.min((cellW-20)/288,(cellH-20)/432);
+          const grey=PDFLib.rgb(0.75,0.75,0.75);
+          for(let i=0;i<lemb.length;i++){
+            const slot=i%4;
+            const p=slot===0?outDoc.addPage([A4W,A4H]):outDoc.getPage(outDoc.getPageCount()-1);
+            if(slot===0){
+              p.drawLine({start:{x:cellW,y:0},end:{x:cellW,y:A4H},thickness:0.5,color:grey});
+              p.drawLine({start:{x:0,y:cellH},end:{x:A4W,y:cellH},thickness:0.5,color:grey});
+            }
+            const col=slot%2,rowi=Math.floor(slot/2);
+            const ox=col*cellW+(cellW-288*s)/2;
+            const oy=A4H-(rowi+1)*cellH+(cellH-432*s)/2;
+            p.drawPage(lemb[i],{x:ox,y:oy,xScale:s,yScale:s});
+          }
+        }
+      }
+
+      // Stage 3: invoices — appended into the same PDF or a separate one.
+      let invBytes=null;
+      if(invDoc){
+        invBytes=await invDoc.save();
+        if(invMode==="interleave"){
+          const merged=await PDFLib.PDFDocument.create();
+          const lp=await merged.copyPages(outDoc,outDoc.getPageIndices());
+          const ip=await merged.copyPages(invDoc,invDoc.getPageIndices());
+          if(fmt==="a4-4up"){lp.forEach(p=>merged.addPage(p));ip.forEach(p=>merged.addPage(p));}
+          else{for(let i=0;i<lp.length;i++){merged.addPage(lp[i]);if(ip[i])merged.addPage(ip[i]);}}
+          outDoc=merged;
+        }
+      }
+
+      const outBytes=await outDoc.save();
+      const url=URL.createObjectURL(new Blob([outBytes],{type:"application/pdf"}));
       const dl=document.getElementById("lc-dl");
       dl.href=url;dl.style.display="inline-block";
-      document.getElementById("lc-prev").innerHTML=`<div class="panel"><h4>Preview — ${pages} page(s), 4×6 in</h4><iframe class="pdfprev" src="${url}" title="Cropped labels preview"></iframe></div>`;
-      status(`Done — ${pages} label page(s). Check the preview, adjust the position values if the crop is off, then download.`);
+      const dl2=document.getElementById("lc-dl2");
+      if(invMode==="separate"&&invBytes){
+        dl2.href=URL.createObjectURL(new Blob([invBytes],{type:"application/pdf"}));
+        dl2.style.display="inline-block";
+      }else dl2.style.display="none";
+      const fmtName=fmt==="4x6"?"4×6 thermal":fmt==="a4-4up"?"A4, 4 per sheet":"A4, 1 per sheet";
+      document.getElementById("lc-prev").innerHTML=`<div class="panel"><h4>Preview — ${labels} label(s) on ${outDoc.getPageCount()} page(s) (${fmtName})</h4><iframe class="pdfprev" src="${url}" title="Cropped labels preview"></iframe></div>`;
+      status(`Done — ${labels} label(s), ${outDoc.getPageCount()} output page(s). Check the preview, adjust position values if the crop is off, then download.`);
     }catch(e){
       status("Could not process that PDF"+(String(e).includes("load failed")?" — the PDF engine failed to load (check your connection) and nothing was uploaded anywhere.":" — it may be corrupted or password-protected."));
     }
