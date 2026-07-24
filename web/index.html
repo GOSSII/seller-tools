@@ -257,6 +257,29 @@
   @media(min-width:800px){.kwgrid{grid-template-columns:1fr 1fr 1fr}}
   .optrow{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
 
+  /* ---- Label cropper / order printer ---- */
+  .pdfprev{width:100%;height:480px;border:1px solid var(--line);border-radius:12px;background:#f7f9fc}
+  .cropgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+  @media(min-width:700px){.cropgrid{grid-template-columns:repeat(4,1fr)}}
+  .bigbtn{display:inline-block;padding:12px 22px;border:0;border-radius:10px;background:var(--blue);
+    color:#fff;font-weight:700;font-size:14.5px;cursor:pointer;font-family:inherit;min-height:44px}
+  .bigbtn:hover{filter:brightness(1.06)}
+  .bigbtn.sec{background:#fff;color:var(--blue);border:1px solid var(--blue-line)}
+  .bigbtn[disabled]{opacity:.5;cursor:default}
+  #printhost{display:none}
+  @media print{
+    body>*:not(#printhost){display:none !important}
+    #printhost{display:block !important}
+    #printhost .pick-table{width:100%;border-collapse:collapse;font-size:13px}
+    #printhost .pick-table th,#printhost .pick-table td{border:1px solid #999;padding:6px 10px;text-align:left}
+    #printhost .slip{page-break-after:always;padding:18px;border:1px solid #999;border-radius:6px;margin-bottom:12px;font-size:13px}
+    #printhost .slip h3{margin:0 0 4px;font-size:16px}
+    #printhost .slip table{width:100%;border-collapse:collapse;margin-top:10px}
+    #printhost .slip th,#printhost .slip td{border-bottom:1px solid #ccc;padding:5px 8px;text-align:left;font-size:12.5px}
+    #printhost h2{font-size:18px;margin-bottom:4px}
+    #printhost .pmeta{font-size:12px;color:#444;margin-bottom:12px}
+  }
+
   footer{border-top:1px solid var(--line);background:#fff;padding:22px 0;font-size:12.5px;color:var(--faint);line-height:1.6}
   @media(min-width:600px){footer{padding:26px 0}}
 
@@ -275,6 +298,7 @@
 </header>
 
 <main id="app"></main>
+<div id="printhost" aria-hidden="true"></div>
 
 <footer>
   <div class="wrap">
@@ -1023,6 +1047,18 @@ function renderHome(){
           <div class="ico">🔤</div>
           <h3>Amazon Keyword Combiner</h3>
           <p>Turn word lists into every long-tail keyword permutation for PPC — broad, phrase and exact match, ready to paste.</p>
+        </a>
+        <a class="tile" href="#/label-cropper">
+          <span class="pill">New</span>
+          <div class="ico">🏷️</div>
+          <h3>Amazon Label Cropper</h3>
+          <p>Crop Easy Ship A4 label PDFs to clean 4×6 thermal-printer pages — adjustable position, fully in your browser.</p>
+        </a>
+        <a class="tile" href="#/order-printer">
+          <span class="pill">New</span>
+          <div class="ico">🖨️</div>
+          <h3>Amazon Order Printer</h3>
+          <p>Turn your unshipped-orders report into a printable picklist and per-order packing slips.</p>
         </a>
       </div>
     </div>`;
@@ -1816,6 +1852,272 @@ flask</textarea></div>
   update();
 }
 
+/* ============================================================
+   LABEL CROPPER
+   Crops Amazon's A4 label PDFs to 4x6 thermal pages, fully in
+   the browser via pdf-lib (lazy-loaded only on this page; the
+   PDF itself never leaves the device).
+   ============================================================ */
+const PDFLIB_URL="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js";
+let pdfLibPromise=null;
+function loadPdfLib(){
+  if(window.PDFLib) return Promise.resolve();
+  if(!pdfLibPromise) pdfLibPromise=new Promise((res,rej)=>{
+    const s=document.createElement("script");
+    s.src=PDFLIB_URL; s.onload=()=>res(); s.onerror=()=>{pdfLibPromise=null;rej(new Error("load failed"));};
+    document.head.appendChild(s);
+  });
+  return pdfLibPromise;
+}
+
+const CROP_PRESETS={
+  "es-quadrant":{name:"Easy Ship — label only (top-left quarter)",left:0,top:0,width:50,height:50},
+  "top-half":{name:"Top half of page",left:0,top:0,width:100,height:50},
+  "left-half":{name:"Left half of page",left:0,top:0,width:50,height:100},
+  "full":{name:"Full page (resize to 4×6)",left:0,top:0,width:100,height:100},
+  "custom":{name:"Custom (set % below)",left:0,top:0,width:50,height:50},
+};
+let lcFiles=[], lcBusy=false;
+
+function renderLabelCropper(){
+  document.title="Amazon Label Cropper — Seller Tools";
+  const md=document.querySelector('meta[name="description"]');
+  if(md) md.setAttribute("content","Crop Amazon India Easy Ship A4 label PDFs to clean 4×6 thermal-printer pages — free, fully in your browser.");
+  backBtn.hidden=false;
+  let saved={};
+  try{saved=JSON.parse(localStorage.getItem("lc_crop")||"{}");}catch(e){}
+  const preset=saved.preset||"es-quadrant";
+  const c=Object.assign({},CROP_PRESETS[preset]||CROP_PRESETS["es-quadrant"],saved.custom&&preset==="custom"?saved.custom:{});
+  app.innerHTML=`
+    <div class="wrap page">
+      <h2>Amazon Label Cropper</h2>
+      <p class="lede">Amazon's Easy Ship labels come on A4 pages with the invoice attached. Drop the PDF(s) here and get clean 4×6 pages for a thermal printer — label position is adjustable for other layouts.</p>
+      <label class="sa-drop" id="lc-drop">
+        <div class="ico">🏷️</div>
+        <h3>Drop label PDF(s) here</h3>
+        <p>or click to choose — you can select multiple files</p>
+        <input type="file" id="lc-file" accept="application/pdf,.pdf" multiple>
+      </label>
+      <div class="sa-priv">🔒 Private by design — PDFs are processed entirely in your browser and never uploaded.</div>
+      <div class="card" style="margin-top:14px">
+        <label for="lc-preset">Label position on the page</label>
+        <select id="lc-preset">${Object.entries(CROP_PRESETS).map(([k,p])=>`<option value="${k}"${k===preset?" selected":""}>${esc(p.name)}</option>`).join("")}</select>
+        <div class="cropgrid" style="margin-top:12px">
+          <div><label for="lc-left">From left (%)</label><input id="lc-left" inputmode="decimal" value="${c.left}"></div>
+          <div><label for="lc-top">From top (%)</label><input id="lc-top" inputmode="decimal" value="${c.top}"></div>
+          <div><label for="lc-w">Width (%)</label><input id="lc-w" inputmode="decimal" value="${c.width}"></div>
+          <div><label for="lc-h">Height (%)</label><input id="lc-h" inputmode="decimal" value="${c.height}"></div>
+        </div>
+        <div class="optrow" style="margin-bottom:0">
+          <button class="bigbtn" id="lc-go" disabled>Crop to 4×6</button>
+          <a class="bigbtn sec" id="lc-dl" style="display:none" download="labels-4x6.pdf">Download PDF</a>
+        </div>
+        <div class="note" id="lc-status" style="margin:10px 0 0">Waiting for a PDF…</div>
+      </div>
+      <div id="lc-prev"></div>
+    </div>`;
+  const drop=document.getElementById("lc-drop"),file=document.getElementById("lc-file");
+  const status=t=>{document.getElementById("lc-status").textContent=t;};
+  ["dragenter","dragover"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add("over");}));
+  ["dragleave","drop"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove("over");}));
+  const take=list=>{
+    lcFiles=[...list].filter(f=>/pdf$/i.test(f.name)||f.type==="application/pdf");
+    if(!lcFiles.length){status("That doesn't look like a PDF.");return;}
+    document.getElementById("lc-go").disabled=false;
+    status(`${lcFiles.length} file(s) ready — ${lcFiles.map(f=>f.name).join(", ")}. Click "Crop to 4×6".`);
+  };
+  drop.addEventListener("drop",ev=>take(ev.dataTransfer.files));
+  file.addEventListener("change",()=>take(file.files));
+  document.getElementById("lc-preset").addEventListener("change",e=>{
+    const p=CROP_PRESETS[e.target.value];
+    if(p&&e.target.value!=="custom"){
+      document.getElementById("lc-left").value=p.left;
+      document.getElementById("lc-top").value=p.top;
+      document.getElementById("lc-w").value=p.width;
+      document.getElementById("lc-h").value=p.height;
+    }
+  });
+  document.getElementById("lc-go").addEventListener("click",async()=>{
+    if(lcBusy||!lcFiles.length)return;
+    lcBusy=true;
+    const btn=document.getElementById("lc-go");btn.disabled=true;
+    try{
+      status("Loading PDF engine…");
+      await loadPdfLib();
+      status("Cropping…");
+      const presetKey=document.getElementById("lc-preset").value;
+      const crop={
+        left:Math.max(0,parseFloat(document.getElementById("lc-left").value)||0),
+        top:Math.max(0,parseFloat(document.getElementById("lc-top").value)||0),
+        width:Math.min(100,Math.max(1,parseFloat(document.getElementById("lc-w").value)||50)),
+        height:Math.min(100,Math.max(1,parseFloat(document.getElementById("lc-h").value)||50)),
+      };
+      try{localStorage.setItem("lc_crop",JSON.stringify({preset:presetKey,custom:crop}));}catch(e){}
+      const out=await PDFLib.PDFDocument.create();
+      let pages=0;
+      for(const f of lcFiles){
+        const bytes=await f.arrayBuffer();
+        const src=await PDFLib.PDFDocument.load(bytes,{ignoreEncryption:true});
+        const idx=src.getPageIndices();
+        const embedded=await out.embedPdf(bytes,idx);
+        for(let i=0;i<idx.length;i++){
+          const sp=src.getPage(idx[i]);
+          const W=sp.getWidth(),H=sp.getHeight();
+          const cw=crop.width/100*W, ch=crop.height/100*H;
+          const cx=crop.left/100*W, cy=H-(crop.top/100*H)-ch;
+          const scale=Math.min(288/cw,432/ch);
+          const page=out.addPage([288,432]);
+          const dx=(288-cw*scale)/2, dy=(432-ch*scale)/2;
+          page.drawPage(embedded[i],{x:dx-cx*scale,y:dy-cy*scale,xScale:scale,yScale:scale});
+          const white=PDFLib.rgb(1,1,1);
+          if(dx>0.1){page.drawRectangle({x:0,y:0,width:dx,height:432,color:white});
+            page.drawRectangle({x:288-dx,y:0,width:dx,height:432,color:white});}
+          if(dy>0.1){page.drawRectangle({x:0,y:0,width:288,height:dy,color:white});
+            page.drawRectangle({x:0,y:432-dy,width:288,height:dy,color:white});}
+          pages++;
+        }
+      }
+      const outBytes=await out.save();
+      const blob=new Blob([outBytes],{type:"application/pdf"});
+      const url=URL.createObjectURL(blob);
+      const dl=document.getElementById("lc-dl");
+      dl.href=url;dl.style.display="inline-block";
+      document.getElementById("lc-prev").innerHTML=`<div class="panel"><h4>Preview — ${pages} page(s), 4×6 in</h4><iframe class="pdfprev" src="${url}" title="Cropped labels preview"></iframe></div>`;
+      status(`Done — ${pages} label page(s). Check the preview, adjust the position values if the crop is off, then download.`);
+    }catch(e){
+      status("Could not process that PDF"+(String(e).includes("load failed")?" — the PDF engine failed to load (check your connection) and nothing was uploaded anywhere.":" — it may be corrupted or password-protected."));
+    }
+    btn.disabled=false;lcBusy=false;
+  });
+}
+
+/* ============================================================
+   ORDER PRINTER — picklist + packing slips
+   Reads the unshipped-orders report (tab-delimited export from
+   Seller Central > Orders > Order Reports) and prints a picklist
+   and per-order packing slips via the browser. Fully local.
+   ============================================================ */
+function parseOrdersReport(text){
+  const lines=text.split(/\r\n|\r|\n/).filter((l,i)=>!(l.trim()===""));
+  if(!lines.length) return {orders:[],header:[],missing:["(empty file)"]};
+  const delim=lines[0].includes("\t")?"\t":",";
+  const header=saSplit(lines[0],delim).map(h=>h.trim());
+  const norm=header.map(saNormHeader);
+  const col=name=>norm.indexOf(name);
+  const pick=(fields,name)=>{const i=col(name);return i===-1?"":(fields[i]??"").trim();};
+  const need=["order-id","sku"];
+  const missing=need.filter(n=>col(n)===-1);
+  if(missing.length) return {orders:[],header,missing};
+  const byOrder=new Map();
+  for(let i=1;i<lines.length;i++){
+    const f=saSplit(lines[i],delim);
+    if(f.length<2) continue;
+    const oid=pick(f,"order-id"); if(!oid) continue;
+    const qty=parseInt(pick(f,"quantity-to-ship")||pick(f,"quantity-purchased"),10)||1;
+    let o=byOrder.get(oid);
+    if(!o){
+      o={orderId:oid,
+        buyer:pick(f,"recipient-name")||pick(f,"buyer-name"),
+        addr:[pick(f,"ship-address-1"),pick(f,"ship-address-2"),pick(f,"ship-address-3")].filter(Boolean).join(", "),
+        city:pick(f,"ship-city"),state:pick(f,"ship-state"),pin:pick(f,"ship-postal-code"),
+        service:pick(f,"ship-service-level"),date:pick(f,"purchase-date"),
+        promise:pick(f,"promise-date"),items:[]};
+      byOrder.set(oid,o);
+    }
+    o.items.push({sku:pick(f,"sku"),name:pick(f,"product-name"),qty});
+  }
+  return {orders:[...byOrder.values()],header,missing:[]};
+}
+
+let opParsed=null;
+function renderOrderPrinter(){
+  document.title="Amazon Order Printer — Picklist & Packing Slips — Seller Tools";
+  const md=document.querySelector('meta[name="description"]');
+  if(md) md.setAttribute("content","Turn your Amazon unshipped-orders report into a printable picklist and packing slips — free, fully in your browser.");
+  backBtn.hidden=false;
+  app.innerHTML=`
+    <div class="wrap page">
+      <h2>Amazon Order Printer</h2>
+      <p class="lede">Export your <b>unshipped orders report</b> from Seller Central (Orders → Order Reports → Unshipped Orders), drop it here, and print a picklist (total units per SKU) plus a packing slip for every order.</p>
+      <label class="sa-drop" id="op-drop">
+        <div class="ico">🖨️</div>
+        <h3>Drop your orders report here</h3>
+        <p>or click to choose — .txt or .csv</p>
+        <input type="file" id="op-file" accept=".csv,.txt,text/plain,text/csv">
+      </label>
+      <div class="sa-priv">🔒 Private by design — the report (including customer addresses) is read locally and never leaves your device.</div>
+      <div id="op-out"></div>
+    </div>`;
+  const drop=document.getElementById("op-drop"),file=document.getElementById("op-file");
+  ["dragenter","dragover"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add("over");}));
+  ["dragleave","drop"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove("over");}));
+  const read=f=>{
+    const rd=new FileReader();
+    rd.onload=()=>{opParsed=parseOrdersReport(String(rd.result));opRender();};
+    rd.readAsText(f);
+  };
+  drop.addEventListener("drop",ev=>{const f=ev.dataTransfer.files[0];if(f)read(f);});
+  file.addEventListener("change",()=>{const f=file.files[0];if(f)read(f);});
+  if(opParsed) opRender();
+}
+
+function opRender(){
+  const out=document.getElementById("op-out"); if(!out)return;
+  const r=opParsed;
+  if(r.missing.length){
+    out.innerHTML=`<div class="banner warn" style="margin-top:16px">This file is missing the ${r.missing.map(esc).join(", ")} column(s). Export the <b>Unshipped Orders</b> report from Seller Central → Orders → Order Reports and try again.</div>`;
+    return;
+  }
+  const orders=r.orders;
+  const totalUnits=orders.reduce((s,o)=>s+o.items.reduce((x,i)=>x+i.qty,0),0);
+  const pick=new Map();
+  for(const o of orders) for(const it of o.items){
+    const k=it.sku;
+    const p=pick.get(k)||{sku:it.sku,name:it.name,qty:0,orders:0};
+    p.qty+=it.qty;p.orders++;if(!p.name&&it.name)p.name=it.name;
+    pick.set(k,p);
+  }
+  const pickRows=[...pick.values()].sort((a,b)=>b.qty-a.qty);
+  const hasAddr=orders.some(o=>o.addr||o.city);
+  out.innerHTML=`
+    <div class="stats" style="margin-top:16px">
+      <div class="stat blue"><div class="k">Orders</div><div class="v">${orders.length}</div></div>
+      <div class="stat"><div class="k">Units to pick</div><div class="v">${totalUnits}</div></div>
+      <div class="stat"><div class="k">Distinct SKUs</div><div class="v">${pickRows.length}</div></div>
+      <div class="stat green"><div class="k">Ready</div><div class="v" style="font-size:15px">Print below</div></div>
+    </div>
+    ${hasAddr?"":`<div class="banner info">No shipping addresses in this file (Amazon hides buyer data in some report types) — packing slips will show order and item details only.</div>`}
+    <div class="optrow">
+      <button class="bigbtn" id="op-pick">🖨️ Print picklist</button>
+      <button class="bigbtn sec" id="op-slips">🖨️ Print ${orders.length} packing slip(s)</button>
+    </div>
+    <div class="panel"><h4>Picklist preview</h4>
+      <div class="tblwrap"><table class="sa">
+        <thead><tr><th>SKU</th><th>Product</th><th class="num">Orders</th><th class="num">Units to pick</th></tr></thead>
+        <tbody>${pickRows.map(p=>`<tr><td>${esc(p.sku)}</td><td>${esc(p.name||"—")}</td><td class="num">${p.orders}</td><td class="num"><b>${p.qty}</b></td></tr>`).join("")}</tbody>
+      </table></div></div>`;
+  const today=new Date().toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"});
+  document.getElementById("op-pick").addEventListener("click",()=>{
+    document.getElementById("printhost").innerHTML=`
+      <h2>Picklist — ${orders.length} orders, ${totalUnits} units</h2>
+      <div class="pmeta">Generated ${esc(today)} · Seller Tools</div>
+      <table class="pick-table"><thead><tr><th>✓</th><th>SKU</th><th>Product</th><th>Orders</th><th>Units</th></tr></thead>
+      <tbody>${pickRows.map(p=>`<tr><td style="width:28px"></td><td>${esc(p.sku)}</td><td>${esc(p.name||"")}</td><td>${p.orders}</td><td><b>${p.qty}</b></td></tr>`).join("")}</tbody></table>`;
+    window.print();
+  });
+  document.getElementById("op-slips").addEventListener("click",()=>{
+    document.getElementById("printhost").innerHTML=orders.map(o=>`
+      <div class="slip">
+        <h3>Order ${esc(o.orderId)}</h3>
+        <div class="pmeta">${esc(o.date?("Ordered "+o.date):"")}${o.promise?` · Ship by ${esc(o.promise)}`:""}${o.service?` · ${esc(o.service)}`:""}</div>
+        ${o.buyer||o.addr?`<div><b>${esc(o.buyer||"")}</b><br>${esc(o.addr||"")}${o.city?`<br>${esc(o.city)}, ${esc(o.state)} ${esc(o.pin)}`:""}</div>`:""}
+        <table><thead><tr><th>SKU</th><th>Product</th><th>Qty</th></tr></thead>
+        <tbody>${o.items.map(it=>`<tr><td>${esc(it.sku)}</td><td>${esc(it.name||"")}</td><td><b>${it.qty}</b></td></tr>`).join("")}</tbody></table>
+      </div>`).join("");
+    window.print();
+  });
+}
+
 function route(){
   const h=location.hash.replace(/^#\/?/,"");
   if(!h){renderHome();window.scrollTo(0,0);return;}
@@ -1824,6 +2126,8 @@ function route(){
   if(h==="sku-report"){renderSkuReport();window.scrollTo(0,0);return;}
   if(h==="link-builder"){renderLinkBuilder();window.scrollTo(0,0);return;}
   if(h==="keyword-combiner"){renderKeywordCombiner();window.scrollTo(0,0);return;}
+  if(h==="label-cropper"){renderLabelCropper();window.scrollTo(0,0);return;}
+  if(h==="order-printer"){renderOrderPrinter();window.scrollTo(0,0);return;}
   renderCalc(h);
   window.scrollTo(0,0);
 }
