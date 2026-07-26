@@ -2036,8 +2036,9 @@ function renderLabelCropper(){
             </select></div>
           <div><label for="lc-olist">Order list page</label>
             <select id="lc-olist">
-              <option value="no"${(saved.olist||"no")==="no"?" selected":""}>No</option>
-              <option value="yes"${saved.olist==="yes"?" selected":""}>Yes — first page</option>
+              <option value="no"${(saved.olist==="yes"||saved.olist==="first"||saved.olist==="last")?"":" selected"}>No</option>
+              <option value="first"${(saved.olist==="yes"||saved.olist==="first")?" selected":""}>Yes — first page</option>
+              <option value="last"${saved.olist==="last"?" selected":""}>Yes — last page</option>
             </select></div>
         </div>
         <div class="optrow" style="margin-bottom:0">
@@ -2093,8 +2094,8 @@ function renderLabelCropper(){
       const invMode=invSel.value;
       const invPos=document.getElementById("lc-invpos").value;
       const skuPrint=document.getElementById("lc-skuprint").value==="yes";
-      const olist=document.getElementById("lc-olist").value==="yes";
-      try{localStorage.setItem("lc_crop",JSON.stringify({preset:presetKey,custom:crop,fmt,invMode,invPos,skuPrint:skuPrint?"yes":"no",olist:olist?"yes":"no"}));}catch(e){}
+      const olist=document.getElementById("lc-olist").value; // no | first | last
+      try{localStorage.setItem("lc_crop",JSON.stringify({preset:presetKey,custom:crop,fmt,invMode,invPos,skuPrint:skuPrint?"yes":"no",olist}));}catch(e){}
       const A4W=595.28,A4H=841.89;
       const white=()=>PDFLib.rgb(1,1,1);
 
@@ -2130,6 +2131,11 @@ function renderLabelCropper(){
               // 2) "Product name | Qty: n" header (labels processed by other tools)
               const m2=text.match(/([A-Za-z0-9][^|]{1,60}?)\s*\|\s*Qty\s*[:#]?\s*\d+/i);
               if(m2) info.sku=m2[1].trim();
+              else{
+                // 3) "Product name ( Qty : n )" caption variant
+                const m3=text.match(/([A-Za-z0-9][^()|]{1,60}?)\s*\(\s*Qty\s*[:#]?\s*\d+\s*\)/i);
+                if(m3) info.sku=m3[1].trim();
+              }
             }
             const mq=text.match(/\bQty\s*[:#]?\s*(\d+)/i);
             if(mq) info.qty=parseInt(mq[1],10)||0;
@@ -2282,8 +2288,8 @@ function renderLabelCropper(){
         }
       }
 
-      // Order list / picklist page(s) at the front.
-      if(olist){
+      // Order list / picklist page(s) — first or last per the option.
+      if(olist!=="no"){
         const font=await outDoc.embedFont(PDFLib.StandardFonts.Helvetica);
         const fontB=await outDoc.embedFont(PDFLib.StandardFonts.HelveticaBold);
         const groups=new Map();
@@ -2294,15 +2300,16 @@ function renderLabelCropper(){
           groups.set(k,g);
         }
         const rows=[...groups.entries()].sort((a,b)=>a[0]<b[0]?-1:1);
+        const mkPage=n=>olist==="first"?outDoc.insertPage(n,[A4W,A4H]):outDoc.addPage([A4W,A4H]);
         let inserted=1;
-        let pageO=outDoc.insertPage(0,[A4W,A4H]);
+        let pageO=mkPage(0);
         let y=A4H-60;
         pageO.drawText("Order List / Picklist",{x:40,y,size:16,font:fontB});
         y-=18;
         pageO.drawText(`${labels} label(s), ${rows.length} SKU(s)`,{x:40,y,size:10,font});
         y-=26;
         for(const [sku,g] of rows){
-          if(y<50){pageO=outDoc.insertPage(inserted,[A4W,A4H]);inserted++;y=A4H-60;}
+          if(y<50){pageO=mkPage(inserted);inserted++;y=A4H-60;}
           pageO.drawText(`${sku.slice(0,60)}  x${g.units}`,{x:40,y,size:11,font:fontB});
           y-=13;
           if(g.oids.length){
