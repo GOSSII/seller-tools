@@ -164,6 +164,20 @@
   .r.fin .rl{font-weight:700} .r.fin .rv{color:var(--green);font-size:17px}
   .r.fin.loss{background:var(--red-soft)} .r.fin.loss .rv{color:var(--red)}
 
+  details.howto{background:#fff;border:1px solid var(--line);border-radius:12px;margin-bottom:16px}
+  details.howto summary{cursor:pointer;font-weight:700;font-size:13.5px;padding:12px 16px;color:var(--blue);
+    list-style:none;display:flex;align-items:center;gap:8px;min-height:44px}
+  details.howto summary::-webkit-details-marker{display:none}
+  details.howto summary::before{content:"▸";font-size:11px;transition:transform .15s}
+  details.howto[open] summary::before{transform:rotate(90deg)}
+  details.howto .hbody{padding:0 16px 14px;font-size:13.5px;color:var(--muted);line-height:1.65}
+  details.howto .hbody b{color:var(--ink)}
+  details.howto .hbody code{background:#f1f4f9;border-radius:5px;padding:1px 6px;font-size:12.5px}
+  details.howto .hbody ol{margin:6px 0 4px 20px}
+  details.howto .hbody li{margin:3px 0}
+  details.howto .htag{display:block;font-size:11px;font-weight:700;letter-spacing:.05em;
+    text-transform:uppercase;color:var(--faint);margin:10px 0 4px}
+
   .banner{border:1px solid;border-radius:12px;padding:12px 14px;font-size:13.5px;line-height:1.5;margin-bottom:14px}
   @media(min-width:600px){.banner{padding:13px 15px;margin-bottom:16px}}
   .banner.warn{background:var(--orange-soft);border-color:var(--orange-line);color:#9a4b12}
@@ -1013,6 +1027,59 @@ const CALCS = [
 const CALCMAP=Object.fromEntries(CALCS.map(c=>[c.id,c]));
 
 /* ============================================================
+   PER-TOOL HELP — how to use each tool and where in Amazon
+   Seller Central its input comes from.
+   ============================================================ */
+const HELP={
+  "profit":{input:`No file needed — it's a what-if calculator. To match your real listing, check your exact referral fee in <b>Seller Central → Reports → Fee Preview</b> (or your category rate card).`,
+    steps:["Enter selling price, product cost and packaging cost.","Pick category, weight, size and fulfilment (Self / Easy Ship / FBA).","Add ACOS % and returns % if you advertise.","Read Settlement, Net Profit, Margin and ROI — the breakdown lists every fee. GST-registered sellers: keep the ITC toggle on to see profit after input tax credit."]},
+  "fba-fee":{input:`No file needed. Weight and dimensions are on your listing or box; verify actual charges in <b>Reports → Fee Preview</b>.`,
+    steps:["Enter price, category, weight, size tier and zone.","Read total FBA fees, fee % of price, and your net settlement."]},
+  "fba-storage":{input:`No file needed. Use your carton/unit dimensions; current storage charges appear under <b>Payments → Transaction View → Service fees</b>.`,
+    steps:["Enter unit dimensions, units stored and duration.","Read monthly and total storage cost, including peak-season months."]},
+  "acos":{input:`Spend and ad sales are columns in the <b>Advertising console → Campaign Manager</b> table.`,
+    steps:["Enter ad spend and the sales those ads produced.","Compare your ACOS with the break-even ACOS calculator to know if ads are profitable."]},
+  "break-even-acos":{input:`Get your per-unit Amazon fees from the profit calculator on this site, or from <b>Reports → Fee Preview</b>.`,
+    steps:["Enter price, cost and fees per unit.","The result is the maximum ACOS at which an ad sale still breaks even — above it, every ad sale loses money."]},
+  "advertising-roi":{input:`Spend, clicks and conversion numbers come from <b>Advertising console → Campaign Manager</b>.`,
+    steps:["Enter your campaign numbers.","Read the return per rupee of ad spend and profit per ad-driven order."]},
+  "marketing-budget":{input:`No file needed — a planning tool.`,
+    steps:["Enter target revenue and margin assumptions.","Read the suggested marketing budget and its split."]},
+  "launch-budget":{input:`No file needed — a planning tool.`,
+    steps:["Enter launch window, daily PPC, coupon and giveaway plans.","Read the total launch investment and where it goes."]},
+  "coupon-roi":{input:`The coupon redemption fee is shown when creating the coupon (<b>Advertising → Coupons</b>).`,
+    steps:["Enter price, discount %, redemption fee, expected uplift and baseline orders.","The verdict compares contribution with vs without the coupon, including the break-even uplift."]},
+  "price-bands":{input:`No file needed — same inputs as the profit calculator.`,
+    steps:["Enter your planned price and costs.","Check whether a price just under a fee band (₹250 / ₹300 / ₹500 / ₹1,000) nets MORE per unit than your planned price."]},
+  "target-price":{input:`No file needed.`,
+    steps:["Pick a target: margin % or profit ₹, and enter your costs.","The tool scans every whole-rupee price through all fee bands and returns the lowest price that reaches the target."]},
+  "restock-planner":{input:`Daily sales rate: drop a settlement file into the <b>SKU Profitability Report</b> on this site (units ÷ days in the period), or use <b>Reports → Business Reports → Detail Page Sales and Traffic</b>.`,
+    steps:["Enter current stock, daily sales, supplier lead time and a safety buffer (FBA: add Amazon inbound/check-in time to lead time).","Read days of cover, projected stockout date, the order-by date and suggested order quantity."]},
+  "link-builder":{input:`Your ASIN is in <b>Inventory → Manage Inventory</b>, or in any product URL right after <code>/dp/</code>.`,
+    steps:["Enter the ASIN, target keyword and cart quantity.","Copy the link you need: search, 2-step, canonical, or add-to-cart.","Open a link in your browser to test it before putting ad spend behind it."]},
+  "keyword-combiner":{input:`Best source words: <b>Advertising console → Sponsored ads reports → Search term report</b> — the words customers actually type.`,
+    steps:["Paste word lists into A, B and (optionally) C — one term per line.","Pick broad / \"phrase\" / [exact] wrapping; enable reversed A↔B if word order matters.","Copy all combinations into your PPC campaign."]},
+  "label-cropper":{input:`<b>Orders → Manage Orders</b> → tick your unshipped Easy Ship orders → <b>Print label &amp; invoice</b> — Amazon downloads the label PDF. Drop that file here (several files at once is fine).`,
+    steps:["Drop the PDF — labels are sorted by product automatically, and invoice pages are recognised.","Pick the output: 4×6 thermal, or A4 with 1 or 4 labels per sheet; choose whether invoices are skipped, attached, or a separate PDF.","Keep \"Print SKU on label\" on so packers see the product name; add the Order List page first or last.","Check the preview, download, print."]},
+  "order-printer":{input:`<b>Orders → Order Reports → Unshipped Orders</b> → Request report → Download (a .txt file). If you want customer addresses on packing slips, enable the address columns in the report settings on that page.`,
+    steps:["Drop the report file.","Print the picklist — total units per SKU, one trip to the shelf.","Print packing slips — one per order, each on its own page."]},
+  "settlement-analyzer":{input:`<b>Payments → All Statements</b> → pick a closed settlement → <b>Download Flat File V2</b> (a .txt file). Any completed settlement period works.`,
+    steps:["Enter the access password, then drop the file — it is parsed in your browser and never uploaded.","Check the reconciliation line: the sum of all rows should match your deposit to the paisa.","Explore the daily order/sales charts, the fee breakdown by label, and every transaction itemised."]},
+  "gst-report":{input:`Same file as the Settlement Analyzer: <b>Payments → All Statements → Download Flat File V2</b>.`,
+    steps:["Drop the settlement file.","Read TCS (match against GSTR-2A), TDS under section 194-O, and the GST on Amazon fees claimable as input tax credit.","Hand the numbers to your accountant at filing time."]},
+  "sku-report":{input:`Same file: <b>Payments → All Statements → Download Flat File V2</b>.`,
+    steps:["Drop the settlement file.","Sort by Net to see which products actually make money after fees, taxes and refunds.","Sort by Refund % to spot problem products. Units ÷ days gives the daily sales rate for the Restock Planner."]},
+};
+function helpHtml(id){
+  const e=HELP[id];
+  if(!e) return "";
+  return `<details class="howto"><summary>How to use this tool &amp; where to get the input</summary><div class="hbody">
+    ${e.input?`<span class="htag">Input — from your Amazon seller account</span><div>${e.input}</div>`:""}
+    <span class="htag">Steps</span><ol>${e.steps.map(s=>`<li>${s}</li>`).join("")}</ol>
+  </div></details>`;
+}
+
+/* ============================================================
    RENDERER + ROUTER
    ============================================================ */
 const app=document.getElementById("app");
@@ -1120,6 +1187,7 @@ function renderCalc(id){
     <div class="wrap page">
       <h2>${esc(c.name)}</h2>
       <p class="lede">${esc(c.desc)}</p>
+      ${helpHtml(c.id)}
       <div class="cols">
         <div class="card">
           <div class="fields">
@@ -1349,6 +1417,7 @@ function renderSettlementAnalyzer(){
     <div class="wrap page">
       <h2>Amazon Settlement Analyzer</h2>
       <p class="lede">Drop the settlement report you exported from Seller Central (Payments → All Statements → download the flat-file V2). It's parsed right here in your browser and broken down into every fee, tax and deduction.</p>
+      ${helpHtml("settlement-analyzer")}
       <label class="sa-drop" id="sa-drop">
         <div class="ico">🧾</div>
         <h3>Drop your settlement file here</h3>
@@ -1610,6 +1679,7 @@ function renderGstReport(){
     <div class="wrap page">
       <h2>GST &amp; TCS Report</h2>
       <p class="lede">Drop a settlement report and get the tax numbers you need at filing time: TCS withheld by Amazon (to claim in GSTR-2A/8A), TDS under Section 194-O (visible in Form 26AS), GST charged on Amazon's fees (claimable as input tax credit), and the output GST Amazon collected on your sales.</p>
+      ${helpHtml("gst-report")}
       <label class="sa-drop" id="gst-drop">
         <div class="ico">🧾</div>
         <h3>Drop your settlement file here</h3>
@@ -1725,6 +1795,7 @@ function renderSkuReport(){
     <div class="wrap page">
       <h2>SKU Profitability Report</h2>
       <p class="lede">Drop a settlement report and see your business per product: units sold, gross sales, what Amazon took, what refunds cost, and the net that actually reached your bank — per SKU and per unit.</p>
+      ${helpHtml("sku-report")}
       <label class="sa-drop" id="sku-drop">
         <div class="ico">📊</div>
         <h3>Drop your settlement file here</h3>
@@ -1836,6 +1907,7 @@ function renderLinkBuilder(){
     <div class="wrap page">
       <h2>Amazon Link Builder</h2>
       <p class="lede">Enter your ASIN and target keyword to generate the link formats sellers use for external traffic, ranking campaigns and ads — built entirely in your browser.</p>
+      ${helpHtml("link-builder")}
       <div class="card">
         <div class="fields">
           <div><label for="lb-asin">ASIN</label><input id="lb-asin" autocomplete="off" spellcheck="false" placeholder="B0XXXXXXXX" maxlength="10"></div>
@@ -1890,6 +1962,7 @@ function renderKeywordCombiner(){
     <div class="wrap page">
       <h2>Amazon Keyword Combiner</h2>
       <p class="lede">Paste up to three word lists (one term per line). Every combination is generated in order — A × B × C — ready to paste into a PPC campaign. List C is optional.</p>
+      ${helpHtml("keyword-combiner")}
       <div class="card">
         <div class="kwgrid">
           <div><label for="kw-a">List A</label><textarea id="kw-a" class="kwta" spellcheck="false">steel
@@ -1994,6 +2067,7 @@ function renderLabelCropper(){
     <div class="wrap page">
       <h2>Amazon Label Cropper</h2>
       <p class="lede">Drop your Amazon label PDF(s) and get clean, print-ready pages. Labels are automatically sorted by SKU (unrecognised ones go last), invoice pages are detected and handled per your choice below, and the label position is adjustable for different layouts.</p>
+      ${helpHtml("label-cropper")}
       <label class="sa-drop" id="lc-drop">
         <div class="ico">🏷️</div>
         <h3>Drop label PDF(s) here</h3>
@@ -2424,6 +2498,7 @@ function renderOrderPrinter(){
     <div class="wrap page">
       <h2>Amazon Order Printer</h2>
       <p class="lede">Export your <b>unshipped orders report</b> from Seller Central (Orders → Order Reports → Unshipped Orders), drop it here, and print a picklist (total units per SKU) plus a packing slip for every order.</p>
+      ${helpHtml("order-printer")}
       <label class="sa-drop" id="op-drop">
         <div class="ico">🖨️</div>
         <h3>Drop your orders report here</h3>
