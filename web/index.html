@@ -1993,7 +1993,7 @@ function renderLabelCropper(){
   app.innerHTML=`
     <div class="wrap page">
       <h2>Amazon Label Cropper</h2>
-      <p class="lede">Amazon's Easy Ship labels come on A4 pages with the invoice attached. Drop the PDF(s) here and get clean 4×6 pages for a thermal printer — label position is adjustable for other layouts.</p>
+      <p class="lede">Drop your Amazon label PDF(s) and get clean, print-ready pages. Labels are automatically sorted by SKU (unrecognised ones go last), invoice pages are detected and handled per your choice below, and the label position is adjustable for different layouts.</p>
       <label class="sa-drop" id="lc-drop">
         <div class="ico">🏷️</div>
         <h3>Drop label PDF(s) here</h3>
@@ -2029,15 +2029,10 @@ function renderLabelCropper(){
               <option value="right"${saved.invPos==="right"?" selected":""}>Right half</option>
               <option value="bottom"${saved.invPos==="bottom"?" selected":""}>Bottom half</option>
             </select></div>
-          <div><label for="lc-sort">Sort labels</label>
-            <select id="lc-sort">
-              <option value="none"${(saved.sort||"none")==="none"?" selected":""}>Original order</option>
-              <option value="sku"${saved.sort==="sku"?" selected":""}>By SKU (auto-detect)</option>
-            </select></div>
           <div><label for="lc-skuprint">Print SKU on label</label>
             <select id="lc-skuprint">
-              <option value="no"${(saved.skuPrint||"no")==="no"?" selected":""}>No</option>
-              <option value="yes"${saved.skuPrint==="yes"?" selected":""}>Yes — top strip</option>
+              <option value="yes"${(saved.skuPrint||"yes")==="yes"?" selected":""}>Yes — top strip</option>
+              <option value="no"${saved.skuPrint==="no"?" selected":""}>No</option>
             </select></div>
           <div><label for="lc-olist">Order list page</label>
             <select id="lc-olist">
@@ -2097,10 +2092,9 @@ function renderLabelCropper(){
       const fmt=document.getElementById("lc-fmt").value;
       const invMode=invSel.value;
       const invPos=document.getElementById("lc-invpos").value;
-      const sortMode=document.getElementById("lc-sort").value;
       const skuPrint=document.getElementById("lc-skuprint").value==="yes";
       const olist=document.getElementById("lc-olist").value==="yes";
-      try{localStorage.setItem("lc_crop",JSON.stringify({preset:presetKey,custom:crop,fmt,invMode,invPos,sort:sortMode,skuPrint:skuPrint?"yes":"no",olist:olist?"yes":"no"}));}catch(e){}
+      try{localStorage.setItem("lc_crop",JSON.stringify({preset:presetKey,custom:crop,fmt,invMode,invPos,skuPrint:skuPrint?"yes":"no",olist:olist?"yes":"no"}));}catch(e){}
       const A4W=595.28,A4H=841.89;
       const white=()=>PDFLib.rgb(1,1,1);
 
@@ -2109,46 +2103,73 @@ function renderLabelCropper(){
       const srcDocs=[];
       for(const b of filesBytes) srcDocs.push(await PDFLib.PDFDocument.load(b,{ignoreEncryption:true}));
 
-      // Build the page list; detect SKU + order id per page when needed.
-      const wantDetect=sortMode==="sku"||skuPrint||olist;
+      // Build the page list; detect SKU / order id / qty and classify
+      // invoice-only pages (Amazon's alternating label+invoice format).
       let detectFailed=false;
-      if(!useStored||!lcPageInfo.length){
-        lcPageInfo=[];
-        srcDocs.forEach((d,fi)=>d.getPageIndices().forEach(pi=>lcPageInfo.push({f:fi,i:pi,sku:"",oid:"",qty:0})));
-        if(wantDetect){
-          status("Reading SKUs and order IDs…");
-          try{
-            await loadPdfJs();
-            for(let fi=0;fi<filesBytes.length;fi++){
-              const pdoc=await pdfjsLib.getDocument({data:filesBytes[fi].slice(0)}).promise;
-              for(let p=1;p<=pdoc.numPages;p++){
-                const tc=await (await pdoc.getPage(p)).getTextContent();
-                const text=tc.items.map(x=>x.str).join(" ");
-                const info=lcPageInfo.find(x=>x.f===fi&&x.i===p-1);
-                if(!info) continue;
-                // 1) explicit "SKU: xyz" marker (raw Amazon labels/invoices)
-                const m=text.match(/\bSKU\b\s*[:#\-]?\s*([A-Za-z0-9][A-Za-z0-9_\-\/\.]{1,39})/i);
-                if(m) info.sku=m[1];
-                else{
-                  // 2) "Product name | Qty: n" header (labels processed by other tools)
-                  const m2=text.match(/([A-Za-z0-9][^|]{1,60}?)\s*\|\s*Qty\s*[:#]?\s*\d+/i);
-                  if(m2) info.sku=m2[1].trim();
-                }
-                const mq=text.match(/\bQty\s*[:#]?\s*(\d+)/i);
-                if(mq) info.qty=parseInt(mq[1],10)||0;
-                const mo=text.match(/\b(\d{3}-\d{7}-\d{7})\b/);
-                if(mo) info.oid=mo[1];
-              }
-              if(pdoc.destroy) pdoc.destroy();
+      lcPageInfo=[];
+      srcDocs.forEach((d,fi)=>d.getPageIndices().forEach(pi=>lcPageInfo.push({f:fi,i:pi,sku:"",oid:"",qty:0,inv:false,invs:[]})));
+      status("Reading labels…");
+      try{
+        await loadPdfJs();
+        // Deliberately specific markers: a combined label+invoice page also
+        // contains these, so classification only splits when the file has
+        // BOTH marked and unmarked pages (see below).
+        const invRe=/\btax\s+invoice\b|\bbill\s+of\s+supply\b|\boriginal\s+for\s+recipient\b|\binvoice\s+(number|no\.?|date)\b/i;
+        for(let fi=0;fi<filesBytes.length;fi++){
+          const pdoc=await pdfjsLib.getDocument({data:filesBytes[fi].slice(0)}).promise;
+          for(let p=1;p<=pdoc.numPages;p++){
+            const tc=await (await pdoc.getPage(p)).getTextContent();
+            const text=tc.items.map(x=>x.str).join(" ");
+            const info=lcPageInfo.find(x=>x.f===fi&&x.i===p-1);
+            if(!info) continue;
+            info.inv=invRe.test(text);
+            // 1) explicit "SKU: xyz" marker (raw Amazon labels/invoices)
+            const m=text.match(/\bSKU\b\s*[:#\-]?\s*([A-Za-z0-9][A-Za-z0-9_\-\/\.]{1,39})/i);
+            if(m) info.sku=m[1];
+            else{
+              // 2) "Product name | Qty: n" header (labels processed by other tools)
+              const m2=text.match(/([A-Za-z0-9][^|]{1,60}?)\s*\|\s*Qty\s*[:#]?\s*\d+/i);
+              if(m2) info.sku=m2[1].trim();
             }
-          }catch(e){ detectFailed=true; }
+            const mq=text.match(/\bQty\s*[:#]?\s*(\d+)/i);
+            if(mq) info.qty=parseInt(mq[1],10)||0;
+            const mo=text.match(/\b(\d{3}-\d{7}-\d{7})\b/);
+            if(mo) info.oid=mo[1];
+          }
+          if(pdoc.destroy) pdoc.destroy();
+        }
+      }catch(e){ detectFailed=true; }
+      // If EVERY page carries invoice markers, this is the combined
+      // label+invoice-on-one-page format — treat all pages as labels.
+      if(!lcPageInfo.some(x=>!x.inv)) lcPageInfo.forEach(x=>{x.inv=false;});
+      // Link each invoice page to its label (label first, then its
+      // invoice pages — Amazon's alternating layout). An invoice with no
+      // preceding label in its file attaches to the next label.
+      for(let fi=0;fi<filesBytes.length;fi++){
+        const pages=lcPageInfo.filter(x=>x.f===fi);
+        let lastLabel=null; const orphans=[];
+        for(const x of pages){
+          if(x.inv){ if(lastLabel) lastLabel.invs.push(x); else orphans.push(x); }
+          else{ lastLabel=x; if(orphans.length){x.invs.push(...orphans);orphans.length=0;} }
         }
       }
-      const orderList=[...lcPageInfo];
-      if(sortMode==="sku") orderList.sort((a,b)=>{
+      // Labels inherit SKU / order id / qty from their invoice pages.
+      for(const x of lcPageInfo){
+        if(x.inv) continue;
+        for(const iv of x.invs){
+          if(!x.sku&&iv.sku) x.sku=iv.sku;
+          if(!x.oid&&iv.oid) x.oid=iv.oid;
+          if(!x.qty&&iv.qty) x.qty=iv.qty;
+        }
+      }
+      // Labels only, always sorted by SKU; unrecognised SKUs go last in
+      // their original order.
+      const orderList=lcPageInfo.filter(x=>!x.inv);
+      orderList.sort((a,b)=>{
         const ka=a.sku||"￿", kb=b.sku||"￿";
         return ka<kb?-1:ka>kb?1:(a.f-b.f)||(a.i-b.i);
       });
+      const skippedInv=lcPageInfo.filter(x=>x.inv).length;
 
       // Stage 1: label-only 4x6 pages (masked), plus invoice pages if wanted.
       status("Cropping…");
@@ -2161,6 +2182,7 @@ function renderLabelCropper(){
         invEmb.push(invDoc?await invDoc.embedPdf(filesBytes[fi],srcDocs[fi].getPageIndices()):null);
       }
       let labels=0;
+      const invCounts=[];
       for(const info of orderList){
         const sp=srcDocs[info.f].getPage(info.i);
         const W=sp.getWidth(),H=sp.getHeight();
@@ -2181,18 +2203,34 @@ function renderLabelCropper(){
         }
         labels++;
         if(invDoc){
-          let ix=0,iy=0,iw=W,ih=H;
-          if(invPos==="right"){ix=W/2;iw=W/2;}
-          else if(invPos==="bottom"){ih=H/2;}
-          const s2=Math.min((A4W-40)/iw,(A4H-40)/ih);
-          const ip=invDoc.addPage([A4W,A4H]);
-          const jx=(A4W-iw*s2)/2, jy=(A4H-ih*s2)/2;
-          ip.drawPage(invEmb[info.f][info.i],{x:jx-ix*s2,y:jy-iy*s2,xScale:s2,yScale:s2});
-          if(jx>0.1){ip.drawRectangle({x:0,y:0,width:jx,height:A4H,color:white()});
-            ip.drawRectangle({x:A4W-jx,y:0,width:jx,height:A4H,color:white()});}
-          if(jy>0.1){ip.drawRectangle({x:0,y:0,width:A4W,height:jy,color:white()});
-            ip.drawRectangle({x:0,y:A4H-jy,width:A4W,height:jy,color:white()});}
-        }
+          let added=0;
+          if(info.invs.length){
+            // The file has dedicated invoice pages — use them as-is.
+            for(const iv of info.invs){
+              const vp=srcDocs[iv.f].getPage(iv.i);
+              const VW=vp.getWidth(),VH=vp.getHeight();
+              const s2=Math.min((A4W-40)/VW,(A4H-40)/VH);
+              const ip=invDoc.addPage([A4W,A4H]);
+              ip.drawPage(invEmb[iv.f][iv.i],{x:(A4W-VW*s2)/2,y:(A4H-VH*s2)/2,xScale:s2,yScale:s2});
+              added++;
+            }
+          }else{
+            // Combined format: cut the invoice area out of the label page.
+            let ix=0,iy=0,iw=W,ih=H;
+            if(invPos==="right"){ix=W/2;iw=W/2;}
+            else if(invPos==="bottom"){ih=H/2;}
+            const s2=Math.min((A4W-40)/iw,(A4H-40)/ih);
+            const ip=invDoc.addPage([A4W,A4H]);
+            const jx=(A4W-iw*s2)/2, jy=(A4H-ih*s2)/2;
+            ip.drawPage(invEmb[info.f][info.i],{x:jx-ix*s2,y:jy-iy*s2,xScale:s2,yScale:s2});
+            if(jx>0.1){ip.drawRectangle({x:0,y:0,width:jx,height:A4H,color:white()});
+              ip.drawRectangle({x:A4W-jx,y:0,width:jx,height:A4H,color:white()});}
+            if(jy>0.1){ip.drawRectangle({x:0,y:0,width:A4W,height:jy,color:white()});
+              ip.drawRectangle({x:0,y:A4H-jy,width:A4W,height:jy,color:white()});}
+            added=1;
+          }
+          invCounts.push(added);
+        }else invCounts.push(0);
       }
 
       // Stage 2: lay labels out in the chosen format.
@@ -2238,7 +2276,8 @@ function renderLabelCropper(){
           const lp=await merged.copyPages(outDoc,outDoc.getPageIndices());
           const ip=await merged.copyPages(invDoc,invDoc.getPageIndices());
           if(fmt==="a4-4up"){lp.forEach(p=>merged.addPage(p));ip.forEach(p=>merged.addPage(p));}
-          else{for(let i=0;i<lp.length;i++){merged.addPage(lp[i]);if(ip[i])merged.addPage(ip[i]);}}
+          else{let off=0;for(let i=0;i<lp.length;i++){merged.addPage(lp[i]);
+            for(let k=0;k<(invCounts[i]||0);k++){if(ip[off])merged.addPage(ip[off]);off++;}}}
           outDoc=merged;
         }
       }
@@ -2287,28 +2326,19 @@ function renderLabelCropper(){
       const fmtName=fmt==="4x6"?"4×6 thermal":fmt==="a4-4up"?"A4, 4 per sheet":"A4, 1 per sheet";
       document.getElementById("lc-prev").innerHTML=`<div class="panel"><h4>Preview — ${labels} label(s) on ${outDoc.getPageCount()} page(s) (${fmtName})</h4><iframe class="pdfprev" src="${url}" title="Cropped labels preview"></iframe></div>`;
 
-      // Detection review table — edit wrong/missing SKUs and re-crop.
-      if(wantDetect){
+      // Compact detection summary — chips per SKU, no table.
+      {
         const counts={};
-        orderList.forEach(x=>{const k=x.sku||"(not detected)";counts[k]=(counts[k]||0)+1;});
-        document.getElementById("lc-skus").innerHTML=`<div class="panel"><h4>Detected SKUs <span class="sa-sub">— fix any that are wrong or missing, then re-crop</span></h4>
-          ${detectFailed?`<div class="banner warn">The text-reading engine could not load, so SKUs were not auto-detected. You can still type them below and re-crop — nothing was uploaded anywhere.</div>`:""}
-          <div class="chips" style="margin-bottom:10px">${Object.entries(counts).map(([k,n])=>`<span class="chip">${esc(k)} · ${n}</span>`).join("")}</div>
-          <div class="tblwrap"><table class="sa"><thead><tr><th>Output page</th><th>File</th><th>Source page</th><th>Order ID</th><th>SKU (editable)</th></tr></thead><tbody>
-          ${orderList.map((x,n)=>`<tr><td>${n+1}</td><td>${esc(lcFiles[x.f]?lcFiles[x.f].name:"")}</td><td>${x.i+1}</td><td>${esc(x.oid||"—")}</td>
-            <td><input data-lcf="${x.f}" data-lci="${x.i}" value="${esc(x.sku)}" style="min-height:34px;font-size:13px"></td></tr>`).join("")}
-          </tbody></table></div>
-          <div class="optrow" style="margin-bottom:0"><button class="bigbtn sec" id="lc-recrop">Re-crop with corrected SKUs</button></div></div>`;
-        document.getElementById("lc-recrop").addEventListener("click",()=>{
-          document.querySelectorAll("input[data-lcf]").forEach(inp=>{
-            const info=lcPageInfo.find(x=>x.f===+inp.dataset.lcf&&x.i===+inp.dataset.lci);
-            if(info) info.sku=inp.value.trim();
-          });
-          lcProcess(true);
-        });
-      } else document.getElementById("lc-skus").innerHTML="";
+        orderList.forEach(x=>{if(x.sku)counts[x.sku]=(counts[x.sku]||0)+1;});
+        const entries=Object.entries(counts);
+        const unknown=orderList.length-entries.reduce((s,e)=>s+e[1],0);
+        document.getElementById("lc-skus").innerHTML=(entries.length||detectFailed)?`<div class="panel">
+          ${detectFailed?`<div class="banner warn">The text-reading engine could not load, so labels are in their original order. Nothing was uploaded anywhere — try again once online.</div>`:""}
+          ${entries.length?`<div class="chips">${entries.map(([k,n])=>`<span class="chip">${esc(k)} · ${n}</span>`).join("")}${unknown?`<span class="chip">(no SKU read) · ${unknown}</span>`:""}</div>`:""}
+        </div>`:"";
+      }
 
-      status(`Done — ${labels} label(s), ${outDoc.getPageCount()} output page(s)${sortMode==="sku"?", sorted by SKU":""}. Check the preview, adjust position values if the crop is off, then download.`);
+      status(`Done — ${labels} label(s)${skippedInv?`, ${invMode==="none"?"skipped":"paired"} ${skippedInv} invoice page(s)`:""}, ${outDoc.getPageCount()} output page(s), sorted by SKU. Check the preview, then download.`);
     }catch(e){
       status("Could not process that PDF"+(String(e).includes("load failed")?" — the PDF engine failed to load (check your connection) and nothing was uploaded anywhere.":" — it may be corrupted or password-protected."));
     }
