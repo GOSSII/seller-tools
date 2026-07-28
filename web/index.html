@@ -1542,6 +1542,38 @@ function saWireTips(root){
   });
 }
 
+/* ---- money flow: every settlement line assigned to exactly one
+        named bucket, so the rows always sum to the deposit. ---- */
+function saFlow(records){
+  const B={gross:0,refunded:0,promo:0,referral:0,fulfil:0,gstFees:0,prodTax:0,shipNet:0,tcs:0,tds:0,credits:0,otherFees:0,otherPrincipal:0};
+  let orders=0,units=0,refunds=0;
+  for(const rec of records){
+    const isOrder=rec.transactionType==="Order";
+    const isRefund=/refund/i.test(rec.transactionType);
+    if(isOrder){orders++;units+=rec.quantity||0;}
+    if(rec.transactionType==="Refund")refunds++;
+    for(const l of rec.amounts){
+      const a=l.amount;
+      if(/^principal$/i.test(l.amountDescription)){
+        if(isOrder)B.gross+=a; else if(isRefund)B.refunded+=a; else B.otherPrincipal+=a;
+        continue;
+      }
+      const lab=(l.amountDescription||l.amountType||"").trim();
+      if(/^tcs/i.test(lab))B.tcs+=a;
+      else if(/tds|194/i.test(lab))B.tds+=a;
+      else if(/^product tax/i.test(lab))B.prodTax+=a;
+      else if(/^shipping( tax)?( discount)?$/i.test(lab))B.shipNet+=a;
+      else if(/(cgst|sgst|igst|gst)/i.test(lab))B.gstFees+=a;
+      else if(/commission|closing/i.test(lab))B.referral+=a;
+      else if(/easy ship|weight handling|pick.*pack|postage|base fee|fba|storage/i.test(lab))B.fulfil+=a;
+      else if(/promo/i.test(lab))B.promo+=a;
+      else if(a>=0)B.credits+=a;
+      else B.otherFees+=a;
+    }
+  }
+  return {B,orders,units,refunds};
+}
+
 function saRenderResults(){
   const r=saParsed,out=document.getElementById("sa-out"); if(!out)return;
   const agg=saAggregate(r);
@@ -1564,6 +1596,35 @@ function saRenderResults(){
 
   if(r.summary)
     h+=`<div class="panel"><div class="sa-sub" style="font-size:13px">Settlement <b>${esc(r.summary.settlementId)}</b> · ${esc(r.summary.settlementStartDate)} → ${esc(r.summary.settlementEndDate)} · deposited ${esc(r.summary.depositDate)}${agg.credits?` · credits &amp; reimbursements ${inr(agg.credits)}`:""}</div></div>`;
+
+  // Business stats + money flow (every line in exactly one bucket).
+  const flow=saFlow(r.records);
+  const FB=flow.B;
+  const flowSum=Object.values(FB).reduce((s,x)=>s+x,0);
+  h+=`<div class="stats" style="margin-top:14px">
+    <div class="stat"><div class="k">Orders · Units</div><div class="v">${flow.orders} · ${flow.units}</div></div>
+    <div class="stat"><div class="k">Avg order value</div><div class="v">${flow.orders?inr(FB.gross/flow.orders):"—"}</div></div>
+    <div class="stat ${FB.gross&&Math.abs(FB.refunded)/FB.gross>0.1?"red":""}"><div class="k">Refund rate (by value)</div><div class="v">${FB.gross?(Math.abs(FB.refunded)/FB.gross*100).toFixed(1)+"%":"—"}</div></div>
+    <div class="stat green"><div class="k">GST on fees — claim as ITC</div><div class="v">${inr(Math.abs(Math.min(0,FB.gstFees)))}</div></div>
+  </div>`;
+  const rowsFlow=[
+    ["Gross product sales",FB.gross],
+    ["Refunded sales",FB.refunded],
+    ["Promotions funded by you",FB.promo],
+    ["Referral & closing fees",FB.referral],
+    ["Fulfilment & shipping fees",FB.fulfil],
+    ["GST on Amazon fees (claimable as ITC in GSTR-3B)",FB.gstFees],
+    ["Product & shipping tax collected (net)",FB.prodTax+FB.shipNet],
+    ["TCS withheld (claim in GSTR-2A/8A)",FB.tcs],
+    ["TDS u/s 194-O (visible in Form 26AS)",FB.tds],
+    ["Reimbursements & credits",FB.credits+FB.otherPrincipal],
+    ["Other fees",FB.otherFees],
+  ].filter(x=>Math.abs(x[1])>=0.005);
+  h+=`<div class="panel"><h4>Where the money went <span class="sa-sub">— every line of the settlement in one bucket; adds up to your deposit</span></h4>
+    <div class="rows">${rowsFlow.map(([l,v])=>`<div class="r mut"><span class="rl">${esc(l)}</span><span class="rv ${v<0?"neg":""}">${v<0?"−":"+"}${inr(Math.abs(v))}</span></div>`).join("")}
+    <div class="r fin"><span class="rl">Deposited to your bank</span><span class="rv">${inr(flowSum)}</span></div></div>
+    ${Math.abs(flowSum-total)>0.01?`<div class="banner warn" style="margin-top:12px">Bucket sum differs from the deposit by ${inr(Math.abs(flowSum-total))} — please report this file so we can improve the mapping.</div>`:""}
+  </div>`;
   if(r.missingColumns.length)
     h+=`<div class="banner warn">Missing expected columns: ${r.missingColumns.map(esc).join(", ")}.</div>`;
 
