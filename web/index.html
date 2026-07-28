@@ -412,7 +412,14 @@ const num  = n => Math.round(isFinite(n)?n:0).toLocaleString("en-IN");
    CALCULATOR DEFINITIONS
    Each = fields + compute(). Add one object to add a calculator.
    ============================================================ */
-const catOptions = CATS.map(c=>({v:c.key,l:c.name}));
+// Category options show the referral-fee range across price bands,
+// e.g. "Electronics — 4.5–9% fee" (single figure when flat, like Books).
+const catOptions = CATS.map(c=>{
+  const rates=c.referral.map(x=>x*100);
+  const lo=Math.min(...rates), hi=Math.max(...rates);
+  const f=n=>n.toFixed(n%1?1:0);
+  return {v:c.key, l:`${c.name} — ${lo===hi?f(lo)+"%":f(lo)+"–"+f(hi)+"%"} fee`};
+});
 
 const CALCS = [
 {
