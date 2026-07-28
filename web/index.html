@@ -2199,25 +2199,39 @@ function renderLabelCropper(){
           const pdoc=await pdfjsLib.getDocument({data:filesBytes[fi].slice(0)}).promise;
           for(let p=1;p<=pdoc.numPages;p++){
             const tc=await (await pdoc.getPage(p)).getTextContent();
-            const text=tc.items.map(x=>x.str).join(" ");
+            const items=tc.items.map(x=>x.str);
+            const text=items.join(" ");
             const info=lcPageInfo.find(x=>x.f===fi&&x.i===p-1);
             if(!info) continue;
             info.inv=invRe.test(text);
+            // Caption overlays ("Name | Qty - 1", "Name ( Qty : 1 )") are
+            // single text items — match them item-by-item first, anchored
+            // at the start, so dates/amounts nearby can't pollute the name.
+            // Qty separator varies by tool: ':', '-', '#', or nothing.
+            let cap=null;
+            for(const s of items){
+              cap=s.match(/^\s*([A-Za-z0-9][^|]{1,60}?)\s*\|\s*Qty\s*[-:#]?\s*(\d+)/i)
+                ||s.match(/^\s*([A-Za-z0-9][^()|]{1,60}?)\s*\(\s*Qty\s*[-:#]?\s*(\d+)\s*\)/i);
+              if(cap) break;
+            }
             // 1) explicit "SKU: xyz" marker (raw Amazon labels/invoices)
             const m=text.match(/\bSKU\b\s*[:#\-]?\s*([A-Za-z0-9][A-Za-z0-9_\-\/\.]{1,39})/i);
             if(m) info.sku=m[1];
+            else if(cap) info.sku=cap[1].trim();
             else{
-              // 2) "Product name | Qty: n" header (labels processed by other tools)
+              // joined-text fallbacks for captions split across items
               const m2=text.match(/([A-Za-z0-9][^|]{1,60}?)\s*\|\s*Qty\s*[:#]?\s*\d+/i);
               if(m2) info.sku=m2[1].trim();
               else{
-                // 3) "Product name ( Qty : n )" caption variant
                 const m3=text.match(/([A-Za-z0-9][^()|]{1,60}?)\s*\(\s*Qty\s*[:#]?\s*\d+\s*\)/i);
                 if(m3) info.sku=m3[1].trim();
               }
             }
-            const mq=text.match(/\bQty\s*[:#]?\s*(\d+)/i);
-            if(mq) info.qty=parseInt(mq[1],10)||0;
+            if(cap) info.qty=parseInt(cap[2],10)||0;
+            else{
+              const mq=text.match(/\bQty\s*[-:#]?\s*(\d+)/i);
+              if(mq) info.qty=parseInt(mq[1],10)||0;
+            }
             const mo=text.match(/\b(\d{3}-\d{7}-\d{7})\b/);
             if(mo) info.oid=mo[1];
           }
@@ -2281,10 +2295,12 @@ function renderLabelCropper(){
           page.drawRectangle({x:288-dx,y:0,width:dx,height:432,color:white()});}
         if(dy>0.1){page.drawRectangle({x:0,y:0,width:288,height:dy,color:white()});
           page.drawRectangle({x:0,y:432-dy,width:288,height:dy,color:white()});}
-        if(skuPrint&&info.sku){
+        if(skuPrint){
           page.drawRectangle({x:0,y:416,width:288,height:16,color:white()});
-          const strip=info.sku+(info.qty?" | Qty: "+info.qty:"");
-          page.drawText(strip.slice(0,58),{x:8,y:420.5,size:9,font:skuFont,color:PDFLib.rgb(0,0,0)});
+          const strip="#"+(labels+1)+"/"+orderList.length
+            +(info.sku?"  "+info.sku:"")
+            +(info.qty?" | Qty: "+info.qty:"");
+          page.drawText(strip.slice(0,60),{x:8,y:420.5,size:9,font:skuFont,color:PDFLib.rgb(0,0,0)});
         }
         labels++;
         if(invDoc){
