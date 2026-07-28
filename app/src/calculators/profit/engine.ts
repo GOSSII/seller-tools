@@ -107,9 +107,12 @@ export function calculateProfit(i: ProfitInput): ProfitResult {
   const amazonFees = feeSum + gstOnFees;
   const settlement = sp - amazonFees;
 
-  const marketing = sp * ((i.acosPct || 0) / 100);
-  const returns = sp * ((i.returnsPct || 0) / 100);
   const landed = (i.productCost || 0) + (i.packaging || 0);
+  // ACOS % and Returns % apply to what's left after Amazon's settlement
+  // and product+packaging cost (owner's convention, July 2026).
+  const remaining = Math.max(0, settlement - landed);
+  const marketing = remaining * ((i.acosPct || 0) / 100);
+  const returns = remaining * ((i.returnsPct || 0) / 100);
 
   const netProfit = settlement - landed - marketing - returns;
   const margin = hasSale ? (netProfit / sp) * 100 : 0;

@@ -442,7 +442,11 @@ const CALCS = [
     const feeSum=referral+closing+shipping+pp+st;
     const gst=feeSum*GST, fees=feeSum+gst;
     const settle=sp-fees;
-    const mkt=sp*v.acos/100, ret=sp*v.ret/100, landed=v.cost+v.pack;
+    // ACOS % and Returns % apply to what's left after Amazon's
+    // settlement and product+packaging cost (owner's convention).
+    const landed=v.cost+v.pack;
+    const remain=Math.max(0,settle-landed);
+    const mkt=remain*v.acos/100, ret=remain*v.ret/100;
     const net=settle-landed-mkt-ret;
     const margin=sp>0?net/sp*100:0;
     const inv=landed+mkt+ret;
@@ -484,7 +488,7 @@ const CALCS = [
         {l:`Amazon Fees (${sp>0?(fees/sp*100).toFixed(2):"0.00"}% of SP)`,v:"-"+inr(fees),neg:1,mut:1},
         {l:"Settlement from Amazon",v:inr(settle),hl:1},
         {l:"Product + Packaging",v:"-"+inr0(landed),neg:1,mut:1},
-        {l:`Marketing (${v.acos}%) + Returns (${v.ret}%)`,v:"-"+inr(mkt+ret),neg:1,mut:1},
+        {l:`Marketing (${v.acos}%) + Returns (${v.ret}%) of remaining`,v:"-"+inr(mkt+ret),neg:1,mut:1},
         {l:`Net ${loss?"Loss":"Profit"} per Unit`,v:inr(net),fin:1,loss:loss},
         ...(gstReg?[
           {l:"GST on fees recoverable as ITC",v:"+"+inr(itc),mut:1},
@@ -870,7 +874,8 @@ const CALCS = [
       const pp=v.ful==="fba"?pickPack(v.kg||0.5):0;
       const st=v.ful==="fba"?STORAGE_TIER[v.size]:0;
       const fees=(referral+closing+shipping+pp+st)*(1+GST);
-      return p-fees-(v.cost+v.pack)-p*(v.acos+v.ret)/100;
+      const remain=p-fees-(v.cost+v.pack);
+      return remain>0?remain*(1-(v.acos+v.ret)/100):remain;
     };
     const sp=Math.max(1,Math.round(v.sp||1));
     const lo=Math.max(1,Math.round(sp*0.7)),hi=Math.round(sp*1.3);
@@ -934,7 +939,7 @@ const CALCS = [
       const feeSum=referral+closing+shipping+pp+st;
       return {referral,closing,shipping,pp,st,gst:feeSum*GST,total:feeSum*(1+GST),rate};
     };
-    const netAt=p=>p-feesAt(p).total-(v.cost+v.pack)-p*(v.acos+v.ret)/100;
+    const netAt=p=>{const r=p-feesAt(p).total-(v.cost+v.pack);return r>0?r*(1-(v.acos+v.ret)/100):r;};
     const MAX=49999;
     let price=0;
     for(let p=1;p<=MAX;p++){
