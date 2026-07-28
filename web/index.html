@@ -2244,6 +2244,18 @@ function renderLabelCropper(){
               else{
                 const m3=text.match(/([A-Za-z0-9][^()|]{1,60}?)\s*\(\s*Qty\s*[:#]?\s*\d+\s*\)/i);
                 if(m3) info.sku=m3[1].trim();
+                else{
+                  // 4) raw Amazon invoice row: "ASIN ( seller SKU )" —
+                  // table amounts can interleave into the paren content in
+                  // reading order, so strip currency/percent/tax tokens.
+                  const m4=text.match(/\bB0[A-Z0-9]{8}\b\s*\(\s*([^)]{2,220}?)\s*\)/);
+                  if(m4){
+                    const s=m4[1].replace(/₹\s?[\d.,]+/g," ").replace(/\b\d+(?:\.\d+)?%/g," ")
+                      .replace(/\b(?:IGST|CGST|SGST|UTGST|GST)\b/g," ").replace(/\b\d+\b/g," ")
+                      .replace(/\s+/g," ").trim();
+                    if(s.length>=2) info.sku=s.slice(0,60);
+                  }
+                }
               }
             }
             if(cap) info.qty=parseInt(cap[2],10)||0;
