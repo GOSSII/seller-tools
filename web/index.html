@@ -2119,6 +2119,12 @@ function renderLabelCropper(){
               <option value="first"${(saved.olist==="yes"||saved.olist==="first")?" selected":""}>Yes — first page</option>
               <option value="last"${saved.olist==="last"?" selected":""}>Yes — last page</option>
             </select></div>
+          <div><label for="lc-split">Labels per page</label>
+            <select id="lc-split">
+              <option value="auto"${(saved.split||"auto")==="auto"?" selected":""}>Auto detect</option>
+              <option value="1"${saved.split==="1"?" selected":""}>1</option>
+              <option value="2"${saved.split==="2"?" selected":""}>2 — stacked</option>
+            </select></div>
         </div>
         <div class="optrow" style="margin-bottom:0">
           <button class="bigbtn" id="lc-go" disabled>Crop labels</button>
@@ -2174,7 +2180,8 @@ function renderLabelCropper(){
       const invPos=document.getElementById("lc-invpos").value;
       const skuPrint=document.getElementById("lc-skuprint").value==="yes";
       const olist=document.getElementById("lc-olist").value; // no | first | last
-      try{localStorage.setItem("lc_crop",JSON.stringify({preset:presetKey,custom:crop,fmt,invMode,invPos,skuPrint:skuPrint?"yes":"no",olist}));}catch(e){}
+      const splitSel=document.getElementById("lc-split").value; // auto | 1 | 2
+      try{localStorage.setItem("lc_crop",JSON.stringify({preset:presetKey,custom:crop,fmt,invMode,invPos,skuPrint:skuPrint?"yes":"no",olist,split:splitSel}));}catch(e){}
       const A4W=595.28,A4H=841.89;
       const white=()=>PDFLib.rgb(1,1,1);
 
@@ -2198,8 +2205,12 @@ function renderLabelCropper(){
         for(let fi=0;fi<filesBytes.length;fi++){
           const pdoc=await pdfjsLib.getDocument({data:filesBytes[fi].slice(0)}).promise;
           for(let p=1;p<=pdoc.numPages;p++){
-            const tc=await (await pdoc.getPage(p)).getTextContent();
-            const items=tc.items.map(x=>x.str);
+            const pageObj=await pdoc.getPage(p);
+            const tc=await pageObj.getTextContent();
+            const pageH=pageObj.view[3]-pageObj.view[1];
+            const pageW=pageObj.view[2]-pageObj.view[0];
+            const posItems=tc.items.map(x=>({s:x.str,y:x.transform[5],x:x.transform[4]}));
+            const items=posItems.map(x=>x.s);
             const text=items.join(" ");
             const info=lcPageInfo.find(x=>x.f===fi&&x.i===p-1);
             if(!info) continue;
@@ -2208,11 +2219,19 @@ function renderLabelCropper(){
             // single text items — match them item-by-item first, anchored
             // at the start, so dates/amounts nearby can't pollute the name.
             // Qty separator varies by tool: ':', '-', '#', or nothing.
+            const capRe1=/^\s*([A-Za-z0-9][^|]{1,60}?)\s*\|\s*Qty\s*[-:#]?\s*(\d+)/i;
+            const capRe2=/^\s*([A-Za-z0-9][^()|]{1,60}?)\s*\(\s*Qty\s*[-:#]?\s*(\d+)\s*\)/i;
+            // Per-half detection for multi-label pages (two orders stacked
+            // on one sheet, as some label tools produce).
+            info.pageW=pageW;
+            info.halves=[{cap:false,sku:"",qty:0,oid:"",capX:0},{cap:false,sku:"",qty:0,oid:"",capX:0}];
             let cap=null;
-            for(const s of items){
-              cap=s.match(/^\s*([A-Za-z0-9][^|]{1,60}?)\s*\|\s*Qty\s*[-:#]?\s*(\d+)/i)
-                ||s.match(/^\s*([A-Za-z0-9][^()|]{1,60}?)\s*\(\s*Qty\s*[-:#]?\s*(\d+)\s*\)/i);
-              if(cap) break;
+            for(const it of posItems){
+              const half=info.halves[it.y>=pageH/2?0:1];
+              const c=it.s.match(capRe1)||it.s.match(capRe2);
+              if(c&&!half.cap){half.cap=true;half.sku=c[1].trim();half.qty=parseInt(c[2],10)||0;half.capX=it.x;}
+              if(!half.oid){const mo2=it.s.match(/\b(\d{3}-\d{7}-\d{7})\b/);if(mo2)half.oid=mo2[1];}
+              if(c&&!cap) cap=c;
             }
             // 1) explicit "SKU: xyz" marker (raw Amazon labels/invoices)
             const m=text.match(/\bSKU\b\s*[:#\-]?\s*([A-Za-z0-9][A-Za-z0-9_\-\/\.]{1,39})/i);
@@ -2241,6 +2260,44 @@ function renderLabelCropper(){
       // If EVERY page carries invoice markers, this is the combined
       // label+invoice-on-one-page format — treat all pages as labels.
       if(!lcPageInfo.some(x=>!x.inv)) lcPageInfo.forEach(x=>{x.inv=false;});
+      // Multi-label pages: some tools put TWO orders on one sheet (two
+      // labels stacked left, invoices right). Auto mode splits when pages
+      // carry a caption in BOTH halves; splitting halves the crop region
+      // vertically and each half keeps its own SKU / qty / order id.
+      let split=splitSel==="1"?1:splitSel==="2"?2:0;
+      if(!split){
+        const both=lcPageInfo.filter(x=>!x.inv&&x.halves&&x.halves[0].cap&&x.halves[1].cap).length;
+        const any=lcPageInfo.filter(x=>!x.inv&&x.halves&&(x.halves[0].cap||x.halves[1].cap)).length;
+        split=(both>=1&&both*2>=any)?2:1;
+      }
+      let autoLeft=false;
+      if(split===2){
+        // Two-order sheets usually keep labels in the left column with
+        // invoices on the right — narrow a full-page crop automatically.
+        if(presetKey==="full"){crop.left=0;crop.top=0;crop.width=50;crop.height=100;autoLeft=true;}
+        const units=[];
+        for(const x of lcPageInfo){
+          if(x.inv){units.push(x);continue;}
+          // Only split pages that really carry two orders (a caption in
+          // each half) unless the user forces 2-per-page. Single-caption
+          // pages (e.g. payment/continuation sheets) stay whole.
+          // The caption sits under its label, so its x position says which
+          // column the label occupies — some tools alternate the label
+          // between left and right of the invoice from page to page.
+          const sideOf=h=>h&&h.cap?(h.capX>=(x.pageW||595)/2?1:0):undefined;
+          const both=x.halves&&x.halves[0].cap&&x.halves[1].cap;
+          if(splitSel==="2"||both){
+            for(let r=0;r<2;r++){
+              const h=x.halves?x.halves[r]:{sku:"",qty:0,oid:""};
+              units.push({f:x.f,i:x.i,region:r,side:sideOf(h),sku:h.sku||"",oid:h.oid||"",qty:h.qty||0,inv:false,invs:[]});
+            }
+          }else{
+            x.side=sideOf(x.halves&&(x.halves[0].cap?x.halves[0]:x.halves[1]));
+            units.push(x);
+          }
+        }
+        lcPageInfo=units;
+      }
       // Link each invoice page to its label (label first, then its
       // invoice pages — Amazon's alternating layout). An invoice with no
       // preceding label in its file attaches to the next label.
@@ -2285,12 +2342,17 @@ function renderLabelCropper(){
       for(const info of orderList){
         const sp=srcDocs[info.f].getPage(info.i);
         const W=sp.getWidth(),H=sp.getHeight();
-        const cw=crop.width/100*W, ch=crop.height/100*H;
-        const cx=crop.left/100*W, cy=H-(crop.top/100*H)-ch;
+        const cw=crop.width/100*W;
+        let ch=crop.height/100*H;
+        const cx=crop.left/100*W;
+        let cy=H-(crop.top/100*H)-ch;
+        if(info.region!==undefined){ ch=ch/2; if(info.region===0) cy+=ch; }
+        let ucx=cx;
+        if(autoLeft&&info.side===1) ucx=W/2;
         const scale=Math.min(288/cw,432/ch);
         const page=labelDoc.addPage([288,432]);
         const dx=(288-cw*scale)/2, dy=(432-ch*scale)/2;
-        page.drawPage(labelEmb[info.f][info.i],{x:dx-cx*scale,y:dy-cy*scale,xScale:scale,yScale:scale});
+        page.drawPage(labelEmb[info.f][info.i],{x:dx-ucx*scale,y:dy-cy*scale,xScale:scale,yScale:scale});
         if(dx>0.1){page.drawRectangle({x:0,y:0,width:dx,height:432,color:white()});
           page.drawRectangle({x:288-dx,y:0,width:dx,height:432,color:white()});}
         if(dy>0.1){page.drawRectangle({x:0,y:0,width:288,height:dy,color:white()});
@@ -2317,8 +2379,14 @@ function renderLabelCropper(){
             }
           }else{
             // Combined format: cut the invoice area out of the label page.
+            // For split units the invoice sits in the unit's own horizontal
+            // band (typically to the right of its label).
             let ix=0,iy=0,iw=W,ih=H;
-            if(invPos==="right"){ix=W/2;iw=W/2;}
+            if(info.region!==undefined||info.side!==undefined){
+              iy=cy;ih=ch;
+              if(invPos!=="full"){iw=W/2;ix=(info.side===1)?0:W/2;}
+            }
+            else if(invPos==="right"){ix=W/2;iw=W/2;}
             else if(invPos==="bottom"){ih=H/2;}
             const s2=Math.min((A4W-40)/iw,(A4H-40)/ih);
             const ip=invDoc.addPage([A4W,A4H]);
@@ -2462,7 +2530,7 @@ function renderLabelCropper(){
         </div>`:"";
       }
 
-      status(`Done — ${labels} label(s)${skippedInv?`, ${invMode==="none"?"skipped":"paired"} ${skippedInv} invoice page(s)`:""}, ${outDoc.getPageCount()} output page(s), sorted by SKU. Check the preview, then download.`);
+      status(`Done — ${labels} label(s)${split===2?` (2 per page detected${autoLeft?", labels column auto-cropped":""})`:""}${skippedInv?`, ${invMode==="none"?"skipped":"paired"} ${skippedInv} invoice page(s)`:""}, ${outDoc.getPageCount()} output page(s), sorted by SKU. Check the preview, then download.`);
     }catch(e){
       status("Could not process that PDF"+(String(e).includes("load failed")?" — the PDF engine failed to load (check your connection) and nothing was uploaded anywhere.":" — it may be corrupted or password-protected."));
     }
