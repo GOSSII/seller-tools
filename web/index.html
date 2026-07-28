@@ -1544,6 +1544,22 @@ function saWireTips(root){
 
 /* ---- money flow: every settlement line assigned to exactly one
         named bucket, so the rows always sum to the deposit. ---- */
+function saBucketOf(lab,amt){
+  lab=(lab||"").trim();
+  if(/^tcs/i.test(lab))return "tcs";
+  if(/tds|194/i.test(lab))return "tds";
+  if(/^product tax/i.test(lab))return "prodTax";
+  if(/^shipping( tax)?( discount)?$/i.test(lab))return "shipNet";
+  if(/(cgst|sgst|igst|gst)/i.test(lab))return "gstFees";
+  if(/commission|closing/i.test(lab))return "referral";
+  if(/easy ship|weight handling|pick.*pack|postage|base fee|fba|storage/i.test(lab))return "fulfil";
+  if(/promo/i.test(lab))return "promo";
+  return amt>=0?"credits":"otherFees";
+}
+const SA_BUCKET_NAMES={gross:"Gross product sales",refunded:"Refunded sales",promo:"Promotions funded by you",
+  referral:"Referral & closing fees",fulfil:"Fulfilment & shipping fees",gstFees:"GST on Amazon fees (ITC)",
+  prodTax:"Product & shipping tax (net)",shipNet:"Buyer shipping (net)",tcs:"TCS withheld",tds:"TDS u/s 194-O",
+  credits:"Reimbursements & credits",otherFees:"Other fees",otherPrincipal:"Other credits"};
 function saFlow(records){
   const B={gross:0,refunded:0,promo:0,referral:0,fulfil:0,gstFees:0,prodTax:0,shipNet:0,tcs:0,tds:0,credits:0,otherFees:0,otherPrincipal:0};
   let orders=0,units=0,refunds=0;
@@ -1558,17 +1574,7 @@ function saFlow(records){
         if(isOrder)B.gross+=a; else if(isRefund)B.refunded+=a; else B.otherPrincipal+=a;
         continue;
       }
-      const lab=(l.amountDescription||l.amountType||"").trim();
-      if(/^tcs/i.test(lab))B.tcs+=a;
-      else if(/tds|194/i.test(lab))B.tds+=a;
-      else if(/^product tax/i.test(lab))B.prodTax+=a;
-      else if(/^shipping( tax)?( discount)?$/i.test(lab))B.shipNet+=a;
-      else if(/(cgst|sgst|igst|gst)/i.test(lab))B.gstFees+=a;
-      else if(/commission|closing/i.test(lab))B.referral+=a;
-      else if(/easy ship|weight handling|pick.*pack|postage|base fee|fba|storage/i.test(lab))B.fulfil+=a;
-      else if(/promo/i.test(lab))B.promo+=a;
-      else if(a>=0)B.credits+=a;
-      else B.otherFees+=a;
+      B[saBucketOf(l.amountDescription||l.amountType,a)]+=a;
     }
   }
   return {B,orders,units,refunds};
@@ -1830,7 +1836,7 @@ function skuCompute(r){
   const bySku={};
   for(const rec of r.records){
     const key=rec.sku||"(no SKU)";
-    const s=bySku[key]||(bySku[key]={sku:key,units:0,orders:0,refunds:0,sales:0,refundValue:0,fees:0,taxes:0,other:0,net:0});
+    const s=bySku[key]||(bySku[key]={sku:key,units:0,orders:0,refunds:0,sales:0,refundValue:0,fees:0,taxes:0,other:0,net:0,b:{}});
     const isOrder=rec.transactionType==="Order";
     const isRefund=/refund/i.test(rec.transactionType);
     if(isOrder){s.orders++;s.units+=rec.quantity||0;}
@@ -1844,6 +1850,8 @@ function skuCompute(r){
       }else{
         const label=l.amountDescription||l.amountType||"";
         if(saIsTax(label))s.taxes+=l.amount; else s.fees+=l.amount;
+        const bk=saBucketOf(label,l.amount);
+        s.b[bk]=(s.b[bk]||0)+l.amount;
       }
     }
   }
