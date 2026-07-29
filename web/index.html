@@ -408,6 +408,55 @@
   .foot-nav a{color:var(--blue);font-weight:600}
   @media(hover:hover){.foot-nav a:hover{text-decoration:underline}}
 
+  /* ============================================================
+     AUTH — header slot, dropdown menu, login/signup/account forms
+     ============================================================ */
+  .mast-right{display:flex;align-items:center;gap:10px;min-width:0}
+  .authslot{display:flex;align-items:center}
+  .hdr-login{display:inline-flex;align-items:center;justify-content:center;min-height:38px;
+    padding:0 15px;border-radius:10px;font-weight:700;font-size:14px;color:#fff;background:var(--blue);
+    white-space:nowrap}
+  @media(hover:hover){.hdr-login:hover{filter:brightness(1.06)}}
+  .hdr-menu{position:relative}
+  .hdr-user{display:inline-flex;align-items:center;gap:7px;min-height:38px;padding:0 12px;
+    border-radius:10px;font-weight:700;font-size:14px;color:var(--ink);background:#fff;
+    border:1px solid var(--line);cursor:pointer;max-width:180px}
+  .hdr-user .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .hdr-user .av{width:22px;height:22px;border-radius:50%;background:var(--blue-soft);color:var(--blue);
+    display:grid;place-items:center;font-size:12px;font-weight:800;flex:none}
+  .hdr-user .caret{color:var(--faint);font-size:11px}
+  .hdr-dd{position:absolute;top:calc(100% + 6px);right:0;background:#fff;border:1px solid var(--line);
+    border-radius:12px;box-shadow:0 10px 30px rgba(15,26,43,.12);min-width:180px;padding:6px;z-index:40}
+  .hdr-dd[hidden]{display:none}
+  .hdr-dd .who{padding:8px 10px 10px;border-bottom:1px solid var(--line);margin-bottom:6px}
+  .hdr-dd .who .e{font-size:12.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .hdr-dd a,.hdr-dd button{display:flex;width:100%;align-items:center;gap:8px;text-align:left;
+    padding:9px 10px;border-radius:8px;font-size:14px;font-weight:600;color:var(--ink);
+    background:none;border:0;cursor:pointer;min-height:40px}
+  @media(hover:hover){.hdr-dd a:hover,.hdr-dd button:hover{background:var(--bg)}}
+  .hdr-dd button.danger{color:var(--red)}
+
+  .auth{max-width:420px;margin:0 auto}
+  .auth h2{font-size:clamp(21px,4.5vw,26px);letter-spacing:-.02em;margin-bottom:4px}
+  .auth .lede{color:var(--muted);font-size:14px;margin-bottom:18px}
+  .auth .card{display:flex;flex-direction:column;gap:14px}
+  .auth .agree{display:flex;gap:10px;align-items:flex-start;font-size:13px;color:var(--muted);line-height:1.45}
+  .auth .agree input{width:18px;height:18px;min-height:18px;margin-top:1px;flex:none;accent-color:var(--blue)}
+  .auth .agree a{color:var(--blue);font-weight:600}
+  .auth-msg{font-size:13.5px;padding:11px 13px;border-radius:10px;line-height:1.45}
+  .auth-msg.err{background:var(--red-soft);border:1px solid var(--red-line);color:#b42318}
+  .auth-msg.ok{background:var(--green-soft);border:1px solid var(--green-line);color:#087443}
+  .auth-links{text-align:center;font-size:13.5px;color:var(--muted);margin-top:16px;line-height:1.8}
+  .auth-links a{color:var(--blue);font-weight:600}
+  .acct-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:13px 0;
+    border-bottom:1px solid var(--line);font-size:14px}
+  .acct-row:last-child{border-bottom:0}
+  .acct-row .k{color:var(--muted)}
+  .acct-row .v{font-weight:700;text-align:right;overflow-wrap:anywhere}
+  .plan-badge{display:inline-block;font-size:12px;font-weight:800;padding:3px 11px;border-radius:999px;
+    background:var(--blue-soft);color:var(--blue)}
+  .plan-badge.free{background:var(--bg);color:var(--muted)}
+
   footer{border-top:1px solid var(--line);background:#fff;padding:22px 0;font-size:12.5px;color:var(--faint);line-height:1.6}
   @media(min-width:600px){footer{padding:26px 0}}
 
@@ -421,7 +470,10 @@
 <header>
   <div class="wrap mast">
     <a class="brand" href="#/"><span class="logo" aria-hidden="true">₹</span><span class="txt">Seller Tools</span></a>
-    <a class="back" id="back" href="#/" hidden>← All calculators</a>
+    <div class="mast-right">
+      <a class="back" id="back" href="#/" hidden>← All calculators</a>
+      <span id="authslot" class="authslot"></span>
+    </div>
   </div>
 </header>
 
@@ -1198,6 +1250,290 @@ function setMeta(title,desc){
   document.title=title;
   const md=document.querySelector('meta[name="description"]');
   if(md&&desc) md.setAttribute("content",desc);
+}
+
+/* ============================================================
+   SUPABASE AUTH  (Phase 2)
+   The URL + anon key below are PUBLIC by design — the anon key is meant
+   for browsers and row-level security protects the data. The service_role
+   key is NEVER here; it lives only in Vercel env for web/api/* functions.
+   supabase-js is loaded lazily (same pattern as pdf-lib) — only when an
+   auth screen is opened. The header reads the persisted session straight
+   from localStorage, so ordinary tool pages never fetch the library.
+   ============================================================ */
+const SUPABASE_CONFIG={
+  url:"https://qlqxshtjgiunwkcffate.supabase.co",
+  anonKey:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFscXhzaHRqZ2l1bndrY2ZmYXRlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzMTA3NTQsImV4cCI6MjEwMDg4Njc1NH0.OxvQnVWDLG7qv-7CGnu8EcO9fFKemGQNMNBEAUKPJZQ"
+};
+const SUPABASE_AUTH_KEY="sa_auth";
+const SUPABASE_JS_URL="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js";
+let supabaseJsPromise=null, _sbClient=null;
+function loadSupabaseJs(){
+  if(window.supabase) return Promise.resolve();
+  if(!supabaseJsPromise) supabaseJsPromise=new Promise((res,rej)=>{
+    const s=document.createElement("script");
+    s.src=SUPABASE_JS_URL; s.onload=()=>res();
+    s.onerror=()=>{supabaseJsPromise=null;rej(new Error("load failed"));};
+    document.head.appendChild(s);
+  });
+  return supabaseJsPromise;
+}
+async function sb(){
+  if(_sbClient) return _sbClient;
+  await loadSupabaseJs();
+  _sbClient=window.supabase.createClient(SUPABASE_CONFIG.url,SUPABASE_CONFIG.anonKey,
+    {auth:{persistSession:true,autoRefreshToken:true,storageKey:SUPABASE_AUTH_KEY}});
+  return _sbClient;
+}
+/* Read the session supabase persisted, without loading the library. Handles
+   the couple of shapes supabase-js has stored a session under. */
+function storedSession(){
+  try{
+    const raw=localStorage.getItem(SUPABASE_AUTH_KEY);
+    if(!raw) return null;
+    const j=JSON.parse(raw);
+    const s=(j&&j.user)?j:(j&&j.currentSession&&j.currentSession.user?j.currentSession:null);
+    return (s&&s.user)?s:null;
+  }catch(e){return null;}
+}
+function sessionUser(){const s=storedSession();return s?s.user:null;}
+function userDisplayName(u){
+  if(!u) return "";
+  const n=(u.user_metadata&&u.user_metadata.name||"").trim();
+  return n || (u.email||"").split("@")[0] || "Account";
+}
+function initials(name){
+  const p=String(name||"").trim().split(/\s+/).filter(Boolean);
+  return ((p[0]||"?")[0]+(p[1]?p[1][0]:"")).toUpperCase();
+}
+/* Friendly, Hindi-English error messages from Supabase's raw text. */
+function authFriendly(msg){
+  const m=String(msg||"").toLowerCase();
+  if(m.includes("invalid login")) return "Email ya password galat hai. Please dobara try karein.";
+  if(m.includes("already registered")||m.includes("already been registered")) return "Yeh email pehle se registered hai — seedha login karein.";
+  if(m.includes("email not confirmed")) return "Email abhi confirm nahi hui. Apne inbox ka confirmation link kholein.";
+  if(m.includes("password should be")||m.includes("at least 6")) return "Password kam se kam 6 characters ka hona chahiye.";
+  if(m.includes("rate limit")||m.includes("too many")) return "Bahut zyada attempts. Thodi der baad try karein.";
+  if(m.includes("load failed")||m.includes("network")) return "Network issue — connection check karke dobara try karein.";
+  return msg || "Kuch galat ho gaya. Dobara try karein.";
+}
+
+let hdrMenuOpen=false;
+function renderAuthSlot(){
+  const slot=document.getElementById("authslot");
+  if(!slot) return;
+  const u=sessionUser();
+  if(!u){ hdrMenuOpen=false; slot.innerHTML=`<a class="hdr-login" href="#/login">Login</a>`; return; }
+  const nm=userDisplayName(u);
+  slot.innerHTML=`
+    <div class="hdr-menu">
+      <button type="button" class="hdr-user" id="hdr-user" aria-haspopup="true" aria-expanded="${hdrMenuOpen}">
+        <span class="av" aria-hidden="true">${esc(initials(nm))}</span>
+        <span class="nm">${esc(nm)}</span>
+        <span class="caret" aria-hidden="true">▾</span>
+      </button>
+      <div class="hdr-dd" id="hdr-dd" role="menu" ${hdrMenuOpen?"":"hidden"}>
+        <div class="who"><div class="nm" style="font-weight:700">${esc(nm)}</div><div class="e">${esc(u.email||"")}</div></div>
+        <a href="#/account" role="menuitem">Account</a>
+        <button type="button" role="menuitem" class="danger" id="hdr-logout">Logout</button>
+      </div>
+    </div>`;
+  const btn=document.getElementById("hdr-user"), dd=document.getElementById("hdr-dd");
+  btn.addEventListener("click",e=>{e.stopPropagation();hdrMenuOpen=!hdrMenuOpen;dd.hidden=!hdrMenuOpen;btn.setAttribute("aria-expanded",hdrMenuOpen);});
+  document.getElementById("hdr-logout").addEventListener("click",doLogout);
+}
+/* Close the dropdown on any outside click. */
+document.addEventListener("click",()=>{
+  if(!hdrMenuOpen) return;
+  hdrMenuOpen=false;
+  const dd=document.getElementById("hdr-dd"), btn=document.getElementById("hdr-user");
+  if(dd) dd.hidden=true;
+  if(btn) btn.setAttribute("aria-expanded","false");
+});
+
+async function doLogout(){
+  try{ const c=await sb(); await c.auth.signOut(); }catch(e){}
+  try{ localStorage.removeItem(SUPABASE_AUTH_KEY); }catch(e){}
+  _sbClient=null; hdrMenuOpen=false;
+  renderAuthSlot();
+  location.hash="#/";
+}
+
+function authShell(title,lede,inner){
+  backBtn.hidden=false;
+  app.innerHTML=`<div class="wrap page"><div class="auth">
+    <h2>${esc(title)}</h2><p class="lede">${esc(lede)}</p>${inner}</div></div>`;
+}
+function authMsg(el,type,text){
+  el.className="auth-msg "+type; el.textContent=text; el.hidden=false;
+}
+
+function renderLogin(){
+  if(sessionUser()){location.hash="#/account";return;}
+  setMeta("Login — Seller Tools","Log in to your Seller Tools account.");
+  authShell("Welcome back","Log in to your account.",`
+    <form class="card" id="login-form" novalidate>
+      <div id="login-msg" class="auth-msg err" hidden></div>
+      <div><label for="lg-email">Email</label>
+        <input id="lg-email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com"></div>
+      <div><label for="lg-pass">Password</label>
+        <input id="lg-pass" type="password" autocomplete="current-password" placeholder="Your password"></div>
+      <button type="submit" class="bigbtn" id="lg-submit">Log in</button>
+    </form>
+    <div class="auth-links">
+      <a href="#/reset">Forgot password?</a><br>
+      New here? <a href="#/signup">Create an account</a>
+    </div>`);
+  const form=document.getElementById("login-form"), msg=document.getElementById("login-msg"),
+        submit=document.getElementById("lg-submit");
+  form.addEventListener("submit",async e=>{
+    e.preventDefault(); msg.hidden=true;
+    const email=document.getElementById("lg-email").value.trim();
+    const pass=document.getElementById("lg-pass").value;
+    if(!email||!pass){authMsg(msg,"err","Email aur password dono bharein.");return;}
+    submit.disabled=true; submit.textContent="Logging in…";
+    try{
+      const c=await sb();
+      const {error}=await c.auth.signInWithPassword({email,password:pass});
+      if(error){authMsg(msg,"err",authFriendly(error.message));return;}
+      renderAuthSlot(); location.hash="#/account";
+    }catch(err){authMsg(msg,"err",authFriendly(err.message));}
+    finally{submit.disabled=false; submit.textContent="Log in";}
+  });
+}
+
+function renderSignup(){
+  if(sessionUser()){location.hash="#/account";return;}
+  setMeta("Sign up — Seller Tools","Create your free Seller Tools account.");
+  authShell("Create your account","Free to start. No card needed.",`
+    <form class="card" id="signup-form" novalidate>
+      <div id="signup-msg" class="auth-msg" hidden></div>
+      <div><label for="su-name">Name</label>
+        <input id="su-name" type="text" autocomplete="name" placeholder="Your name"></div>
+      <div><label for="su-email">Email</label>
+        <input id="su-email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com"></div>
+      <div><label for="su-pass">Password</label>
+        <input id="su-pass" type="password" autocomplete="new-password" placeholder="At least 6 characters"></div>
+      <label class="agree"><input type="checkbox" id="su-agree">
+        <span>I agree to the <a href="/terms.html" target="_blank" rel="noopener">Terms</a> and <a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</span></label>
+      <button type="submit" class="bigbtn" id="su-submit">Create account</button>
+    </form>
+    <div class="auth-links">Already have an account? <a href="#/login">Log in</a></div>`);
+  const form=document.getElementById("signup-form"), msg=document.getElementById("signup-msg"),
+        submit=document.getElementById("su-submit");
+  form.addEventListener("submit",async e=>{
+    e.preventDefault(); msg.hidden=true;
+    const name=document.getElementById("su-name").value.trim();
+    const email=document.getElementById("su-email").value.trim();
+    const pass=document.getElementById("su-pass").value;
+    const agree=document.getElementById("su-agree").checked;
+    if(!name){authMsg(msg,"err","Apna naam bharein.");return;}
+    if(!email){authMsg(msg,"err","Email bharein.");return;}
+    if(pass.length<6){authMsg(msg,"err","Password kam se kam 6 characters ka hona chahiye.");return;}
+    if(!agree){authMsg(msg,"err","Aage badhne ke liye Terms aur Privacy accept karein.");return;}
+    submit.disabled=true; submit.textContent="Creating…";
+    try{
+      const c=await sb();
+      const {data,error}=await c.auth.signUp({email,password:pass,options:{data:{name}}});
+      if(error){authMsg(msg,"err",authFriendly(error.message));return;}
+      if(data&&data.session){ renderAuthSlot(); location.hash="#/account"; }
+      else { authMsg(msg,"ok","Ho gaya! Apne email ka confirmation link kholein, phir login karein."); form.reset(); }
+    }catch(err){authMsg(msg,"err",authFriendly(err.message));}
+    finally{submit.disabled=false; submit.textContent="Create account";}
+  });
+}
+
+function renderReset(){
+  setMeta("Reset password — Seller Tools","Reset your Seller Tools password.");
+  authShell("Reset your password","We'll email you a reset link.",`
+    <form class="card" id="reset-form" novalidate>
+      <div id="reset-msg" class="auth-msg" hidden></div>
+      <div><label for="rs-email">Email</label>
+        <input id="rs-email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com"></div>
+      <button type="submit" class="bigbtn" id="rs-submit">Send reset link</button>
+    </form>
+    <div class="auth-links"><a href="#/login">Back to login</a></div>`);
+  const form=document.getElementById("reset-form"), msg=document.getElementById("reset-msg"),
+        submit=document.getElementById("rs-submit");
+  form.addEventListener("submit",async e=>{
+    e.preventDefault(); msg.hidden=true;
+    const email=document.getElementById("rs-email").value.trim();
+    if(!email){authMsg(msg,"err","Email bharein.");return;}
+    submit.disabled=true; submit.textContent="Sending…";
+    try{
+      const c=await sb();
+      const {error}=await c.auth.resetPasswordForEmail(email,{redirectTo:location.origin+"/#/login"});
+      if(error){authMsg(msg,"err",authFriendly(error.message));return;}
+      authMsg(msg,"ok","Agar yeh email registered hai, reset link bhej diya gaya hai. Apna inbox check karein.");
+    }catch(err){authMsg(msg,"err",authFriendly(err.message));}
+    finally{submit.disabled=false; submit.textContent="Send reset link";}
+  });
+}
+
+/* Read the newest non-expired entitlement for the logged-in user. RLS means
+   the query only ever returns this user's own rows. Empty ⇒ Free. */
+async function fetchEntitlement(client){
+  try{
+    const {data,error}=await client.from("entitlements")
+      .select("plan,starts_at,expires_at").order("created_at",{ascending:false}).limit(5);
+    if(error||!data||!data.length) return {plan:"free",expires_at:null};
+    const now=Date.now();
+    const live=data.find(r=>!r.expires_at||new Date(r.expires_at).getTime()>now);
+    return live?{plan:live.plan,expires_at:live.expires_at}:{plan:"free",expires_at:null};
+  }catch(e){return {plan:"free",expires_at:null};}
+}
+function fmtDate(d){
+  if(!d) return "—";
+  try{return new Date(d).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"});}
+  catch(e){return "—";}
+}
+
+function renderAccount(){
+  if(!sessionUser()){location.hash="#/login";return;}
+  setMeta("Account — Seller Tools","Your Seller Tools account and plan.");
+  const u0=sessionUser();
+  authShell("Your account","Manage your profile and plan.",`
+    <div class="card">
+      <div class="acct-row"><span class="k">Email</span><span class="v" id="ac-email">${esc(u0.email||"")}</span></div>
+      <div class="acct-row"><span class="k">Name</span>
+        <span class="v" style="display:flex;gap:8px;align-items:center;flex:1;justify-content:flex-end">
+          <input id="ac-name" type="text" style="max-width:200px" value="${esc(userDisplayName(u0))}">
+        </span></div>
+      <div class="acct-row"><span class="k">Plan</span><span class="v" id="ac-plan"><span class="plan-badge free">Free</span></span></div>
+      <div class="acct-row"><span class="k">Plan expires</span><span class="v" id="ac-exp">—</span></div>
+    </div>
+    <div id="ac-msg" class="auth-msg" hidden style="margin-top:14px"></div>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button type="button" class="bigbtn" id="ac-save">Save name</button>
+      <button type="button" class="bigbtn sec" id="ac-logout">Logout</button>
+    </div>`);
+  const msg=document.getElementById("ac-msg");
+  document.getElementById("ac-logout").addEventListener("click",doLogout);
+  document.getElementById("ac-save").addEventListener("click",async()=>{
+    const name=document.getElementById("ac-name").value.trim();
+    if(!name){authMsg(msg,"err","Naam khaali nahi ho sakta.");return;}
+    const btn=document.getElementById("ac-save"); btn.disabled=true; btn.textContent="Saving…";
+    try{
+      const c=await sb();
+      const {error}=await c.auth.updateUser({data:{name}});
+      if(error){authMsg(msg,"err",authFriendly(error.message));}
+      else{ authMsg(msg,"ok","Naam save ho gaya."); renderAuthSlot(); }
+    }catch(err){authMsg(msg,"err",authFriendly(err.message));}
+    finally{btn.disabled=false; btn.textContent="Save name";}
+  });
+  /* Load the live plan from entitlements (Free for everyone until payments). */
+  (async()=>{
+    try{
+      const c=await sb();
+      const ent=await fetchEntitlement(c);
+      const pl=document.getElementById("ac-plan"), ex=document.getElementById("ac-exp");
+      if(pl){
+        if(ent.plan==="free") pl.innerHTML='<span class="plan-badge free">Free</span>';
+        else pl.innerHTML='<span class="plan-badge">'+esc(ent.plan.charAt(0).toUpperCase()+ent.plan.slice(1))+'</span>';
+      }
+      if(ex) ex.textContent=ent.expires_at?fmtDate(ent.expires_at):"—";
+    }catch(e){}
+  })();
 }
 
 function renderHome(){
@@ -3000,8 +3336,13 @@ function opRender(){
 
 function route(){
   const h=location.hash.replace(/^#\/?/,"");
+  renderAuthSlot();
   if(!h){renderHome();window.scrollTo(0,0);return;}
   if(h==="pricing"){renderPricing();window.scrollTo(0,0);return;}
+  if(h==="login"){renderLogin();window.scrollTo(0,0);return;}
+  if(h==="signup"){renderSignup();window.scrollTo(0,0);return;}
+  if(h==="reset"){renderReset();window.scrollTo(0,0);return;}
+  if(h==="account"){renderAccount();window.scrollTo(0,0);return;}
   if(h==="settlement-analyzer"){renderSettlementAnalyzer();window.scrollTo(0,0);return;}
   if(h==="gst-report"){renderGstReport();window.scrollTo(0,0);return;}
   if(h==="sku-report"){renderSkuReport();window.scrollTo(0,0);return;}
@@ -3014,6 +3355,7 @@ function route(){
 }
 window.addEventListener("hashchange",route);
 (function(){const y=document.getElementById("foot-year");if(y)y.textContent=new Date().getFullYear();})();
+renderAuthSlot();
 route();
 </script>
 </body>
