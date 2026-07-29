@@ -453,6 +453,17 @@
   .auth-msg.ok{background:var(--green-soft);border:1px solid var(--green-line);color:#087443}
   .auth-links{text-align:center;font-size:13.5px;color:var(--muted);margin-top:16px;line-height:1.8}
   .auth-links a{color:var(--blue);font-weight:600}
+  .acct-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+  .acct-head h2{font-size:clamp(21px,4.5vw,26px);letter-spacing:-.02em;margin:0}
+  .acct-cols{display:grid;gap:16px;align-items:start}
+  @media(min-width:900px){.acct-cols{grid-template-columns:1fr 1.25fr}}
+  .acct-card{padding:18px 20px}
+  .acct-card>h3{font-size:15.5px;margin:0 0 8px;letter-spacing:-.01em}
+  .acct-h4{font-size:13.5px;margin:18px 0 8px;letter-spacing:-.01em}
+  .acct-inset{border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--bg)}
+  .acct-links{display:flex;flex-direction:column;gap:2px;margin-top:4px}
+  .acct-links a{display:block;padding:9px 10px;border-radius:9px;text-decoration:none;color:var(--ink);font-weight:600;font-size:13.5px}
+  .acct-links a:hover{background:var(--blue-soft);color:var(--blue)}
   .acct-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:13px 0;
     border-bottom:1px solid var(--line);font-size:14px}
   .acct-row:last-child{border-bottom:0}
@@ -1876,6 +1887,9 @@ const inrPaise = p => "₹"+((p||0)/100).toLocaleString("en-IN",{minimumFraction
 async function startCheckout(planKey, autoRenew){
   const u=sessionUser();
   if(!u){ location.hash="#/signup"; return; }
+  // Load the Razorpay script IN PARALLEL with the auth + server round-trips
+  // below — it's the single slowest step on a cold cache.
+  const rzpLoad=loadRazorpay();
   const token=await accessToken();
   if(!token){ location.hash="#/login"; return; }
   const post=url=>fetch(url,{method:"POST",
@@ -1897,7 +1911,7 @@ async function startCheckout(planKey, autoRenew){
     }catch(e){ renderPaymentProblem("Network issue starting the payment. Please try again."); return; }
   }
   autoRenew=usedAuto;
-  try{ await loadRazorpay(); }
+  try{ await rzpLoad; }
   catch(e){ renderPaymentProblem("Couldn't load the payment window. Check your connection and retry."); return; }
   const opts={
     key:order.key_id, name:"Amazon Seller Tools",
@@ -1968,25 +1982,52 @@ function renderAccount(){
   if(!sessionUser()){location.hash="#/login";return;}
   setMeta("Account — Seller Tools","Your Seller Tools account and plan.");
   const u0=sessionUser();
-  authShell("Your account","Manage your profile and plan.",`
-    <div class="card">
-      <div class="acct-row"><span class="k">Email</span><span class="v" id="ac-email">${esc(u0.email||"")}</span></div>
-      <div class="acct-row"><span class="k">Name</span>
-        <span class="v" style="display:flex;gap:8px;align-items:center;flex:1;justify-content:flex-end">
-          <input id="ac-name" type="text" style="max-width:200px" value="${esc(userDisplayName(u0))}">
-        </span></div>
-      <div class="acct-row"><span class="k">Plan</span><span class="v" id="ac-plan"><span class="plan-badge free">Free</span></span></div>
-      <div class="acct-row"><span class="k">Plan expires</span><span class="v" id="ac-exp">—</span></div>
+  backBtn.hidden=false;
+  app.innerHTML=`<div class="wrap page">
+    <div class="acct-head">
+      <div><h2>Your account</h2><p class="lede" style="margin:4px 0 0;font-size:14px">Welcome back, ${esc(userDisplayName(u0))}.</p></div>
+      <button type="button" class="lp-btn sec" id="ac-logout">Logout</button>
     </div>
-    <div id="ac-msg" class="auth-msg" hidden style="margin-top:14px"></div>
-    <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
-      <button type="button" class="bigbtn" id="ac-save">Save name</button>
-      <a class="bigbtn sec" id="ac-renew" href="#/pricing">Renew / change plan</a>
-      <button type="button" class="bigbtn sec" id="ac-logout">Logout</button>
+    <div class="stats" style="margin:18px 0">
+      <div class="stat blue"><div class="k">Current plan</div><div class="v" id="ac-plan"><span class="plan-badge free">Free</span></div></div>
+      <div class="stat"><div class="k">Plan expires</div><div class="v" id="ac-exp" style="font-size:16px">—</div></div>
+      <div class="stat"><div class="k">Auto-renewal</div><div class="v" id="ac-substat" style="font-size:16px">—</div></div>
     </div>
-    <div id="ac-sub" style="margin-top:22px"></div>
-    <div id="ac-pay" style="margin-top:22px"></div>
-    <div id="ac-activity" style="margin-top:22px"></div>`);
+    <div class="acct-cols">
+      <div>
+        <div class="card acct-card">
+          <h3>Profile</h3>
+          <div class="acct-row"><span class="k">Email</span><span class="v" id="ac-email">${esc(u0.email||"")}</span></div>
+          <div class="acct-row"><span class="k">Name</span>
+            <span class="v" style="display:flex;gap:8px;align-items:center;flex:1;justify-content:flex-end">
+              <input id="ac-name" type="text" style="max-width:200px" value="${esc(userDisplayName(u0))}">
+            </span></div>
+          <div id="ac-msg" class="auth-msg" hidden style="margin-top:10px"></div>
+          <div style="margin-top:12px"><button type="button" class="lp-btn" id="ac-save">Save name</button></div>
+        </div>
+        <div class="card acct-card" style="margin-top:16px">
+          <h3>Quick open</h3>
+          <div class="acct-links">
+            <a href="#/settlement-analyzer">🧾 Settlement Analyzer</a>
+            <a href="#/gst-report">🧮 GST &amp; TCS Report</a>
+            <a href="#/sku-report">📊 SKU Profitability</a>
+            <a href="#/reconcile">🕵️ Reconciliation &amp; SAFE-T</a>
+            <a href="#/trends">📈 Multi-Month Trends</a>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="card acct-card">
+          <h3>Plan &amp; billing</h3>
+          <p class="sa-sub" style="margin:0 0 12px">Your plan, auto-renewal and payment history.</p>
+          <a class="lp-btn" id="ac-renew" href="#/pricing">Renew / change plan</a>
+          <div id="ac-sub"></div>
+          <div id="ac-pay"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card acct-card" id="ac-activity" style="margin-top:16px"></div>
+  </div>`;
   const msg=document.getElementById("ac-msg");
   document.getElementById("ac-logout").addEventListener("click",doLogout);
   document.getElementById("ac-save").addEventListener("click",async()=>{
@@ -2030,22 +2071,26 @@ function renderAccount(){
         .order("created_at",{ascending:false}).limit(5);
       const live=["created","authenticated","active","pending","cancel_requested","halted","paused"];
       const s=(data||[]).find(x=>live.includes(x.status));
-      if(!s){ host.innerHTML=""; return; }
+      const substat=document.getElementById("ac-substat");
+      if(!s){ host.innerHTML=""; if(substat) substat.textContent="Off"; return; }
       const plan=(s.plan||"").charAt(0).toUpperCase()+(s.plan||"").slice(1);
       const nice=`${plan} · ${s.period||""}`;
       const nextDt=s.current_end?fmtDate(s.current_end):null;
       const render=(status)=>{
-        let body="", btn="";
-        if(status==="cancel_requested")
+        let body="", btn="", stat="On 🔁";
+        if(status==="cancel_requested"){
+          stat="Ending";
           body=`Auto-renewal is <b>ending</b>${nextDt?` — no charge after ${esc(nextDt)}`:""}. You keep access until the end of the period you've paid for.`;
-        else if(status==="halted"||status==="paused")
+        }else if(status==="halted"||status==="paused"){
+          stat="Paused";
           body=`Auto-renewal is <b>paused</b> — the last charge didn't go through. Renew from the <a href="#/pricing">pricing page</a> to continue.`;
-        else{
+        }else{
           body=`Auto-renewal is <b>ON</b> for <b>${esc(nice)}</b>${nextDt?` — next charge around ${esc(nextDt)}`:""}. Cancel anytime; you keep access until the period ends.`;
-          btn=`<button type="button" class="bigbtn sec" id="ac-sub-cancel" style="margin-top:10px">Cancel auto-renewal</button>`;
+          btn=`<button type="button" class="lp-btn sec" id="ac-sub-cancel" style="margin-top:10px">Cancel auto-renewal</button>`;
         }
-        host.innerHTML=`<h3 style="font-size:16px;margin:0 0 10px">Auto-renewal</h3>
-          <div class="card"><p style="font-size:14px;margin:0">🔁 ${body}</p>${btn}
+        if(substat) substat.textContent=stat;
+        host.innerHTML=`<h4 class="acct-h4">Auto-renewal</h4>
+          <div class="acct-inset"><p style="font-size:13.5px;margin:0;line-height:1.55">🔁 ${body}</p>${btn}
           <div id="ac-sub-msg" class="auth-msg" hidden style="margin-top:10px"></div></div>`;
         const cb=document.getElementById("ac-sub-cancel");
         if(cb) cb.addEventListener("click",async()=>{
@@ -2073,7 +2118,7 @@ function renderAccount(){
         .order("created_at",{ascending:false}).limit(20);
       const rows=(data||[]).filter(r=>r.status==="paid");
       if(!rows.length){ host.innerHTML=""; return; }
-      host.innerHTML=`<h3 style="font-size:16px;margin:0 0 10px">Payment history</h3>
+      host.innerHTML=`<h4 class="acct-h4">Payment history</h4>
         <div class="pay-wrap"><table class="pay-table">
           <thead><tr><th>Date</th><th>Plan</th><th>Amount</th><th>Payment ID</th></tr></thead>
           <tbody>${rows.map(r=>`<tr>
@@ -2107,14 +2152,14 @@ function renderAccount(){
           <td class="pid">${esc(maskIp(e.ip))}</td>
         </tr>`).join("")}</tbody>
         </table></div>`:"";
-      if(!devHtml && !evHtml){ host.innerHTML=""; return; }
-      host.innerHTML=`<h3 style="font-size:16px;margin:0 0 10px">Login activity &amp; devices</h3>
+      if(!devHtml && !evHtml){ host.style.display="none"; host.innerHTML=""; return; }
+      host.innerHTML=`<h3>Login activity &amp; devices</h3>
         ${devHtml}${evHtml}
         <p style="font-size:12.5px;color:var(--faint);margin-top:10px">We record login time, IP, browser/OS and a device identifier to enforce one active login and the device limit — see our <a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</p>
-        <button type="button" class="bigbtn sec" id="ac-logout-all" style="margin-top:8px">Log out everywhere</button>`;
+        <button type="button" class="lp-btn sec" id="ac-logout-all" style="margin-top:8px">Log out everywhere</button>`;
       const lo=document.getElementById("ac-logout-all");
       if(lo) lo.addEventListener("click",()=>{ lo.disabled=true; lo.textContent="Signing out…"; logoutEverywhere(); });
-    }catch(e){ host.innerHTML=""; }
+    }catch(e){ host.style.display="none"; host.innerHTML=""; }
   })();
 }
 /* Browser/OS label from a user-agent string (client mirror of the server's
@@ -2520,10 +2565,16 @@ function renderPricing(){
     </div>`;
   const seg=document.getElementById("pr-seg");
   if(seg) seg.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{pricingPeriod=b.dataset.p;renderPricing();}));
-  app.querySelectorAll("[data-checkout]").forEach(b=>b.addEventListener("click",()=>{
+  app.querySelectorAll("[data-checkout]").forEach(b=>b.addEventListener("click",async()=>{
     const cb=app.querySelector('[data-auto="'+b.dataset.checkout+'"]');
-    startCheckout(b.dataset.checkout, !!(cb&&cb.checked));
+    const old=b.textContent; b.disabled=true; b.textContent="Opening secure checkout…";
+    try{ await startCheckout(b.dataset.checkout, !!(cb&&cb.checked)); }
+    finally{ b.disabled=false; b.textContent=old; }
   }));
+  // Warm the slow parts while the user is still reading: Razorpay's checkout
+  // script and the Supabase client (token refresh) both load ahead of the
+  // click, so the payment window opens fast.
+  if(loggedIn){ try{ loadRazorpay().catch(()=>{}); sb().catch(()=>{}); }catch(e){} }
 }
 
 /* Every control is explicitly labelled: `for`/`id` on the native inputs, and
