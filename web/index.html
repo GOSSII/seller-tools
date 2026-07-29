@@ -457,6 +457,35 @@
     background:var(--blue-soft);color:var(--blue)}
   .plan-badge.free{background:var(--bg);color:var(--muted)}
 
+  /* ============================================================
+     PAYWALL — shown in place of a gated tool for users without a plan
+     ============================================================ */
+  .paywall{display:grid;grid-template-columns:1fr;gap:20px;align-items:center;
+    background:#fff;border:1px solid var(--line);border-radius:16px;padding:20px;
+    box-shadow:0 10px 30px rgba(15,26,43,.05)}
+  @media(min-width:760px){.paywall{grid-template-columns:1fr 1fr;gap:34px;padding:28px}}
+  .pw-mock{background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:14px;order:2}
+  @media(min-width:760px){.pw-mock{order:0}}
+  .pw-mock .row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;
+    border-bottom:1px solid var(--line);font-size:12.5px;color:var(--muted)}
+  .pw-mock .row:last-child{border-bottom:0}
+  .pw-mock .row b{color:var(--ink)}
+  .pw-mock .amt.neg{color:var(--red)}.pw-mock .amt.pos{color:var(--green)}
+  .pw-mock .big{font-size:20px;font-weight:800}
+  .pw-lock{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:800;
+    letter-spacing:.03em;text-transform:uppercase;color:var(--blue);background:var(--blue-soft);
+    border:1px solid var(--blue-line);padding:5px 11px;border-radius:999px;margin-bottom:12px}
+  .pw-desc{color:var(--muted);font-size:15px;line-height:1.5;margin-bottom:14px}
+  .pw-price{font-size:20px;font-weight:800;letter-spacing:-.01em;margin-bottom:16px}
+  .pw-cta{display:flex;flex-wrap:wrap;gap:10px}
+  .pw-code{margin-top:20px;border-top:1px solid var(--line);padding-top:14px}
+  .pw-code summary{cursor:pointer;font-size:13px;color:var(--muted);font-weight:600;
+    list-style:none;min-height:32px;display:flex;align-items:center}
+  .pw-code summary::-webkit-details-marker{display:none}
+  .pw-code-row{display:flex;gap:8px;margin-top:10px;max-width:340px}
+  .pw-code-row input{flex:1}
+  .pw-code-msg{font-size:12.5px;color:var(--red);margin-top:8px}
+
   footer{border-top:1px solid var(--line);background:#fff;padding:22px 0;font-size:12.5px;color:var(--faint);line-height:1.6}
   @media(min-width:600px){footer{padding:26px 0}}
 
@@ -1354,7 +1383,7 @@ document.addEventListener("click",()=>{
 async function doLogout(){
   try{ const c=await sb(); await c.auth.signOut(); }catch(e){}
   try{ localStorage.removeItem(SUPABASE_AUTH_KEY); }catch(e){}
-  _sbClient=null; hdrMenuOpen=false;
+  _sbClient=null; hdrMenuOpen=false; resetEntitlement();
   renderAuthSlot();
   location.hash="#/";
 }
@@ -1396,7 +1425,7 @@ function renderLogin(){
       const c=await sb();
       const {error}=await c.auth.signInWithPassword({email,password:pass});
       if(error){authMsg(msg,"err",authFriendly(error.message));return;}
-      renderAuthSlot(); location.hash="#/account";
+      resetEntitlement(); renderAuthSlot(); location.hash="#/account";
     }catch(err){authMsg(msg,"err",authFriendly(err.message));}
     finally{submit.disabled=false; submit.textContent="Log in";}
   });
@@ -1436,7 +1465,7 @@ function renderSignup(){
       const c=await sb();
       const {data,error}=await c.auth.signUp({email,password:pass,options:{data:{name}}});
       if(error){authMsg(msg,"err",authFriendly(error.message));return;}
-      if(data&&data.session){ renderAuthSlot(); location.hash="#/account"; }
+      if(data&&data.session){ resetEntitlement(); renderAuthSlot(); location.hash="#/account"; }
       else { authMsg(msg,"ok","Ho gaya! Apne email ka confirmation link kholein, phir login karein."); form.reset(); }
     }catch(err){authMsg(msg,"err",authFriendly(err.message));}
     finally{submit.disabled=false; submit.textContent="Create account";}
@@ -1470,18 +1499,114 @@ function renderReset(){
   });
 }
 
-/* Read the newest non-expired entitlement for the logged-in user. RLS means
-   the query only ever returns this user's own rows. Empty ⇒ Free. */
-async function fetchEntitlement(client){
-  try{
-    const {data,error}=await client.from("entitlements")
-      .select("plan,starts_at,expires_at").order("created_at",{ascending:false}).limit(5);
-    if(error||!data||!data.length) return {plan:"free",expires_at:null};
-    const now=Date.now();
-    const live=data.find(r=>!r.expires_at||new Date(r.expires_at).getTime()>now);
-    return live?{plan:live.plan,expires_at:live.expires_at}:{plan:"free",expires_at:null};
-  }catch(e){return {plan:"free",expires_at:null};}
+/* ------------------------------------------------------------------
+   Entitlement (Phase 3). The server is authoritative: /api/entitlement
+   verifies the Supabase JWT and answers {plan, expires_at}. Logged-out
+   users are "free" without any network call. Memoised per access token;
+   resetEntitlement() clears it on login/logout. */
+let _entCache=null; // {key, promise}
+function resetEntitlement(){_entCache=null;}
+async function getEntitlement(){
+  const s=storedSession();
+  if(!s) return {plan:"free",expires_at:null};
+  const key=s.access_token||"anon";
+  if(_entCache && _entCache.key===key) return _entCache.promise;
+  const p=(async()=>{
+    let token=s.access_token||null;
+    // Refresh the token if the library is loadable, so a stale stored token
+    // doesn't wrongly downgrade a paid user. (Loads supabase-js only for a
+    // logged-in user hitting a gated tool.)
+    try{const c=await sb();const {data}=await c.auth.getSession();
+      if(data&&data.session&&data.session.access_token) token=data.session.access_token;}catch(e){}
+    if(!token) return {plan:"free",expires_at:null};
+    try{
+      const r=await fetch("/api/entitlement",{headers:{Authorization:"Bearer "+token},cache:"no-store"});
+      if(!r.ok) return {plan:"free",expires_at:null};
+      const j=await r.json();
+      return {plan:(j&&j.plan)||"free",expires_at:(j&&j.expires_at)||null};
+    }catch(e){return {plan:"free",expires_at:null};}
+  })();
+  _entCache={key,promise:p};
+  return p;
 }
+
+/* Premium gating. saUnlocked() (the "2023" access code) is the owner bypass
+   and needs no network or Supabase at all. Otherwise ask the server. */
+async function gatePremium(info, body){
+  if(saUnlocked()){ body(); return; }
+  app.innerHTML=`<div class="wrap page"><h2>${esc(info.title)}</h2><p class="lede">Checking your access…</p></div>`;
+  let ent={plan:"free"};
+  try{ ent=await getEntitlement(); }catch(e){}
+  if(location.hash.replace(/^#\/?/,"")!==info.route) return; // user navigated away
+  if(saUnlocked()){ body(); return; }
+  if(ent.plan==="starter"||ent.plan==="pro"){ body(); return; }
+  renderPaywall(info);
+}
+function renderPaywall(info){
+  backBtn.hidden=false;
+  const loggedIn=!!sessionUser();
+  app.innerHTML=`
+    <div class="wrap page">
+      <h2>${esc(info.title)}</h2>
+      <div class="paywall">
+        <div class="pw-mock" aria-hidden="true">${info.mock}</div>
+        <div class="pw-body">
+          <div class="pw-lock">🔒 ${esc(info.plan)} feature</div>
+          <p class="pw-desc">${esc(info.desc)}</p>
+          <div class="pw-price">${esc(info.price)}</div>
+          <div class="pw-cta">
+            <a class="lp-btn" href="#/pricing">See pricing</a>
+            ${loggedIn?"":'<a class="lp-btn sec" href="#/login">Login</a>'}
+          </div>
+          <details class="pw-code">
+            <summary>Have an access code?</summary>
+            <div class="pw-code-row">
+              <input id="pw-code" type="password" inputmode="numeric" autocomplete="off" placeholder="Access code">
+              <button type="button" class="lp-btn sec" id="pw-code-btn">Unlock</button>
+            </div>
+            <div id="pw-code-msg" class="pw-code-msg" hidden>Incorrect code.</div>
+          </details>
+        </div>
+      </div>
+    </div>`;
+  const btn=document.getElementById("pw-code-btn"),inp=document.getElementById("pw-code"),
+        msg=document.getElementById("pw-code-msg");
+  const tryCode=()=>{
+    if(inp.value===SA_PASSWORD){try{sessionStorage.setItem("sa_unlocked","1");}catch(e){}route();}
+    else{msg.hidden=false;}
+  };
+  btn.addEventListener("click",tryCode);
+  inp.addEventListener("keydown",e=>{if(e.key==="Enter")tryCode();});
+}
+
+/* Small pure-CSS teaser mockups reused in the paywall panels. */
+const PW_MOCKS={
+  settlement:`<div class="row"><span>Product charges</span><b class="amt pos">+₹42,180</b></div>
+    <div class="row"><span>Fees + shipping</span><b class="amt neg">−₹10,756</b></div>
+    <div class="row"><span>Refunds</span><b class="amt neg">−₹1,841</b></div>
+    <div class="row"><span>Net deposit</span><b class="big">₹29,582.35</b></div>`,
+  gst:`<div class="row"><span>Output GST on sales</span><b>₹7,592</b></div>
+    <div class="row"><span>TCS withheld</span><b>₹412</b></div>
+    <div class="row"><span>TDS 194-O</span><b>₹298</b></div>
+    <div class="row"><span>GST on fees (ITC)</span><b class="amt pos">₹1,936</b></div>`,
+  sku:`<div class="row"><span>KURTA-RED-M</span><b class="amt pos">+₹184/u</b></div>
+    <div class="row"><span>MUG-CERAMIC</span><b class="amt pos">+₹63/u</b></div>
+    <div class="row"><span>CABLE-USB-C</span><b class="amt neg">−₹11/u</b></div>
+    <div class="row"><span>Net after fees</span><b class="big">per SKU</b></div>`
+};
+const SA_INFO={route:"settlement-analyzer",title:"Amazon Settlement Analyzer",plan:"Starter",
+  price:"₹199/month — unlock with Starter",
+  desc:"See where every rupee of your payout went — every fee, tax, refund and deduction itemised from your settlement file.",
+  mock:PW_MOCKS.settlement};
+const GST_INFO={route:"gst-report",title:"GST & TCS Report",plan:"Starter",
+  price:"₹199/month — unlock with Starter",
+  desc:"Turn one settlement file into your filing numbers: output GST, TCS, TDS 194-O and the GST on fees you can claim as input tax credit.",
+  mock:PW_MOCKS.gst};
+const SKU_INFO={route:"sku-report",title:"SKU Profitability Report",plan:"Starter",
+  price:"₹199/month — unlock with Starter",
+  desc:"See which products actually make money after fees, taxes and refunds — per SKU and per unit.",
+  mock:PW_MOCKS.sku};
+
 function fmtDate(d){
   if(!d) return "—";
   try{return new Date(d).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"});}
@@ -1521,11 +1646,10 @@ function renderAccount(){
     }catch(err){authMsg(msg,"err",authFriendly(err.message));}
     finally{btn.disabled=false; btn.textContent="Save name";}
   });
-  /* Load the live plan from entitlements (Free for everyone until payments). */
+  /* Live plan from the server API (Free for everyone until payments). */
   (async()=>{
     try{
-      const c=await sb();
-      const ent=await fetchEntitlement(c);
+      const ent=await getEntitlement();
       const pl=document.getElementById("ac-plan"), ex=document.getElementById("ac-exp");
       if(pl){
         if(ent.plan==="free") pl.innerHTML='<span class="plan-badge free">Free</span>';
@@ -1688,6 +1812,11 @@ function renderPricing(){
     "Simple pricing for Amazon India sellers. Free calculators and tools, plus Starter (₹199/month) and Pro (₹499/month) plans for settlement, GST and SKU reports.");
   backBtn.hidden=false;
   const waitlist='mailto:dipsgos7@gmail.com?subject=Waitlist';
+  /* Logged-out visitors are sent to sign up first; logged-in visitors join
+     the waitlist until the payments phase ships. */
+  const loggedIn=!!sessionUser();
+  const paidHref=loggedIn?waitlist:"#/signup";
+  const paidLabel=loggedIn?"Coming soon — join waitlist":"Sign up to get started";
   app.innerHTML=`
     <div class="wrap page">
       <div class="pr-head">
@@ -1722,7 +1851,7 @@ function renderPricing(){
             <li><span class="tick">✓</span> SKU Profitability Report</li>
             <li><span class="tick">✓</span> One active login, kept simple</li>
           </ul>
-          <a class="lp-btn" href="${waitlist}">Coming soon — join waitlist</a>
+          <a class="lp-btn" href="${paidHref}">${paidLabel}</a>
         </div>
 
         <div class="pr-card">
@@ -1735,7 +1864,7 @@ function renderPricing(){
             <li><span class="tick">✓</span> Reconciliation &amp; SAFE-T finder<span class="soon">coming soon</span></li>
             <li><span class="tick">✓</span> Multi-month Trends<span class="soon">coming soon</span></li>
           </ul>
-          <a class="lp-btn sec" href="${waitlist}">Coming soon — join waitlist</a>
+          <a class="lp-btn sec" href="${paidHref}">${paidLabel}</a>
         </div>
       </div>
       <p class="pr-note">Prices in INR, inclusive of applicable taxes. Paid plans include a 7-day money-back guarantee on your first purchase — see our <a href="/refunds.html">Refund Policy</a>. Tools are estimates; always verify against Seller Central and your CA.</p>
@@ -2001,9 +2130,9 @@ function renderSettlementAnalyzer(){
   const md=document.querySelector('meta[name="description"]');
   if(md) md.setAttribute("content","Upload your Amazon settlement report and see every fee, tax and deduction itemised. Runs fully in your browser.");
   backBtn.hidden=false;
-
-  if(!saUnlocked()){ renderSaGate(); return; }
-
+  gatePremium(SA_INFO, saAnalyzerBody);
+}
+function saAnalyzerBody(){
   app.innerHTML=`
     <div class="wrap page">
       <h2>Amazon Settlement Analyzer</h2>
@@ -2026,30 +2155,10 @@ function renderSettlementAnalyzer(){
   if(saParsed) saRenderResults();
 }
 
-/* One gate for all private-preview tools: unlocking once (per browser
-   session) opens every gated tool. */
-function renderGate(title,next,msg){
-  app.innerHTML=`
-    <div class="wrap page">
-      <h2>${esc(title)}</h2>
-      <p class="lede">This tool is in private preview. Enter the access password to continue.</p>
-      <div class="card" style="max-width:420px">
-        <label for="sa-pw">Access password</label>
-        <input id="sa-pw" type="password" inputmode="numeric" autocomplete="off" placeholder="••••">
-        ${msg?`<div class="banner warn" style="margin-top:12px;margin-bottom:0">${esc(msg)}</div>`:""}
-        <button class="showmore" id="sa-unlock" style="color:#fff;background:var(--blue);border-color:var(--blue);margin-top:14px">Unlock</button>
-      </div>
-    </div>`;
-  const pw=document.getElementById("sa-pw"),btn=document.getElementById("sa-unlock");
-  const tryUnlock=()=>{
-    if(pw.value===SA_PASSWORD){try{sessionStorage.setItem("sa_unlocked","1");}catch(e){}next();}
-    else renderGate(title,next,"Incorrect password. Please try again.");
-  };
-  btn.addEventListener("click",tryUnlock);
-  pw.addEventListener("keydown",e=>{if(e.key==="Enter")tryUnlock();});
-  pw.focus();
-}
-function renderSaGate(msg){renderGate("Amazon Settlement Analyzer",renderSettlementAnalyzer,msg);}
+/* The old "private preview" password screen (renderGate) is gone in Phase 3.
+   The "2023" code still works as an owner bypass via the paywall's
+   "Have an access code?" field (see renderPaywall); sessionStorage
+   sa_unlocked continues to unlock every gated tool. */
 
 function saRead(file){
   const rd=new FileReader();
@@ -2331,8 +2440,9 @@ function renderGstReport(){
   const md=document.querySelector('meta[name="description"]');
   if(md) md.setAttribute("content","Upload your Amazon settlement report and get the GST, TCS and TDS numbers you need for monthly filing — computed locally in your browser.");
   backBtn.hidden=false;
-  if(!saUnlocked()){ renderGate("GST & TCS Report",renderGstReport); return; }
-
+  gatePremium(GST_INFO, gstReportBody);
+}
+function gstReportBody(){
   app.innerHTML=`
     <div class="wrap page">
       <h2>GST &amp; TCS Report</h2>
@@ -2449,8 +2559,9 @@ function renderSkuReport(){
   const md=document.querySelector('meta[name="description"]');
   if(md) md.setAttribute("content","Upload your Amazon settlement report and see which SKUs actually make money after fees, taxes and refunds — computed locally in your browser.");
   backBtn.hidden=false;
-  if(!saUnlocked()){ renderGate("SKU Profitability Report",renderSkuReport); return; }
-
+  gatePremium(SKU_INFO, skuReportBody);
+}
+function skuReportBody(){
   app.innerHTML=`
     <div class="wrap page">
       <h2>SKU Profitability Report</h2>
