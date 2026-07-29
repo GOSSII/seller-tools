@@ -2069,7 +2069,9 @@ function renderAccount(){
       const {data}=await c.from("subscriptions")
         .select("plan,period,status,current_end,created_at")
         .order("created_at",{ascending:false}).limit(5);
-      const live=["created","authenticated","active","pending","cancel_requested","halted","paused"];
+      // 'created' rows are abandoned checkouts (popup opened, never paid) —
+      // they are NOT an active auto-renewal and must not show as one.
+      const live=["authenticated","active","pending","cancel_requested","halted","paused"];
       const s=(data||[]).find(x=>live.includes(x.status));
       const substat=document.getElementById("ac-substat");
       if(!s){ host.innerHTML=""; if(substat) substat.textContent="Off"; return; }
