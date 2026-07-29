@@ -517,6 +517,16 @@
   .sku-bk{display:flex;justify-content:space-between;gap:14px;font-size:12.5px;color:var(--muted);padding:4px 0;border-bottom:1px dashed var(--line)}
   .sku-bk:last-child{border-bottom:0}
   .sku-bk b{color:var(--ink)}
+  .rec-files{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 2px}
+  .rec-file{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;border:1px solid var(--line);border-radius:999px;padding:4px 6px 4px 11px;background:var(--card);color:var(--muted)}
+  .rec-file b{color:var(--ink);font-weight:600}
+  .rec-file .rf-kind{background:var(--blue-soft);border:1px solid var(--blue-line);color:var(--blue);border-radius:999px;padding:1px 7px;font-size:11px;font-weight:700}
+  .rec-file button{border:0;background:none;cursor:pointer;color:var(--muted);font-weight:800;min-height:auto;padding:0 5px;font-size:13px}
+  .rec-file button:hover{color:var(--red)}
+  tr.rec-done td{opacity:.5}
+  tr.rec-done td:not(:first-child){text-decoration:line-through}
+  .rec-claim{margin-top:10px;font-size:12.5px;color:#1e3a5f;background:var(--blue-soft);border:1px solid var(--blue-line);border-radius:10px;padding:9px 12px;line-height:1.55}
+  .rec-claim b{color:var(--ink)}
 
   footer{border-top:1px solid var(--line);background:#fff;padding:22px 0;font-size:12.5px;color:var(--faint);line-height:1.6}
   @media(min-width:600px){footer{padding:26px 0}}
@@ -1288,6 +1298,8 @@ const HELP={
     steps:["Drop the settlement file.","Read TCS (match against GSTR-2A), TDS under section 194-O, and the GST on Amazon fees claimable as input tax credit.","Hand the numbers to your accountant at filing time."]},
   "sku-report":{input:`Same file: <b>Payments → All Statements → Download Flat File V2</b>.`,
     steps:["Drop the settlement file.","Sort by Net to see which products actually make money after fees, taxes and refunds.","Sort by Refund % to spot problem products. Units ÷ days gives the daily sales rate for the Restock Planner."]},
+  "reconcile":{input:`Settlement file(s): <b>Payments → All Statements → Download Flat File V2</b> — drop every statement for the period you're checking. Optional but recommended: the matching MTR — <b>Reports → Tax Document Library → Merchant Tax Reports → B2C</b> (.csv) — so shipped-but-unpaid orders can be caught too.`,
+    steps:["Drop your settlement file(s), and the MTR for the same months if you have it.","Work through each issue list — every row shows the order, the amount at stake and the exact Seller Central path to claim it.","Tick rows off as you raise them (ticks are saved in your browser), and export the checklist as CSV to track claims."]},
 };
 function helpHtml(id){
   const e=HELP[id];
@@ -1695,8 +1707,27 @@ async function gatePremium(info, body){
   if(ent.taken) return; // session-taken panel already shown
   if(location.hash.replace(/^#\/?/,"")!==info.route) return; // user navigated away
   if(saUnlocked()){ body(); return; }
-  if(ent.plan==="starter"||ent.plan==="pro"){ body(); return; }
+  if(ent.plan==="pro"){ body(); return; }
+  if(ent.plan==="starter"){
+    if(info.needPro){ renderProUpgrade(info); return; } // Pro-only tool, Starter user
+    body(); return;
+  }
   renderPaywall(info);
+}
+/* Shown to Starter users on a Pro-only tool: the price difference, not a
+   generic paywall — they already pay, so sell the upgrade specifically. */
+function renderProUpgrade(info){
+  backBtn.hidden=false;
+  app.innerHTML=`
+    <div class="wrap page">
+      <h2>${esc(info.title)}</h2>
+      <div class="panel" style="border-color:var(--blue-line);background:var(--blue-soft);max-width:620px">
+        <h4>${esc(info.title)} is a Pro feature</h4>
+        <p class="sa-sub">You're on Starter (₹199/month). Upgrade to <b>Pro (₹499/month — just ₹300 more)</b> and you also get SKU P&amp;L with your product costs and multi-month Trends.</p>
+        <p class="sa-sub">${esc(info.desc)}</p>
+        <a class="lp-btn" href="#/pricing" style="margin-top:8px">See Pro pricing</a>
+      </div>
+    </div>`;
 }
 function renderPaywall(info){
   backBtn.hidden=false;
@@ -1748,7 +1779,11 @@ const PW_MOCKS={
   sku:`<div class="row"><span>KURTA-RED-M</span><b class="amt pos">+₹184/u</b></div>
     <div class="row"><span>MUG-CERAMIC</span><b class="amt pos">+₹63/u</b></div>
     <div class="row"><span>CABLE-USB-C</span><b class="amt neg">−₹11/u</b></div>
-    <div class="row"><span>Net after fees</span><b class="big">per SKU</b></div>`
+    <div class="row"><span>Net after fees</span><b class="big">per SKU</b></div>`,
+  reconcile:`<div class="row"><span>Referral fee not returned</span><b class="amt pos">+₹1,242</b></div>
+    <div class="row"><span>SAFE-T-eligible refunds</span><b class="amt pos">+₹3,940</b></div>
+    <div class="row"><span>Shipped but not paid</span><b class="amt pos">+₹2,118</b></div>
+    <div class="row"><span>Worth chasing</span><b class="big">₹7,300</b></div>`
 };
 const SA_INFO={route:"settlement-analyzer",title:"Amazon Settlement Analyzer",plan:"Starter",
   price:"₹199/month — unlock with Starter",
@@ -1762,6 +1797,10 @@ const SKU_INFO={route:"sku-report",title:"SKU Profitability Report",plan:"Starte
   price:"₹199/month — unlock with Starter",
   desc:"See which products actually make money after fees, taxes and refunds — per SKU and per unit.",
   mock:PW_MOCKS.sku};
+const REC_INFO={route:"reconcile",title:"Reconciliation & SAFE-T Finder",plan:"Pro",needPro:true,
+  price:"₹499/month — unlock with Pro",
+  desc:"Find money Amazon may owe you: refunds where your referral fee wasn't returned, orders that netted negative, shipments with no payment line, and SAFE-T-eligible refunds — each with claim instructions.",
+  mock:PW_MOCKS.reconcile};
 
 function fmtDate(d){
   if(!d) return "—";
@@ -2249,6 +2288,12 @@ function renderHome(){
           <h3>SKU Profitability Report</h3>
           <p>See which products actually make money after fees, taxes and refunds — per SKU and per unit, from your settlement report.</p>
         </a>
+        <a class="tile" href="#/reconcile">
+          <span class="pill">Pro</span>
+          <div class="ico">🕵️</div>
+          <h3>Reconciliation &amp; SAFE-T Finder</h3>
+          <p>Cross-check settlements and your MTR to find missing referral-fee credits, SAFE-T-eligible refunds and unpaid shipments — with claim steps.</p>
+        </a>
         <a class="tile" href="#/link-builder">
           <span class="pill">New</span>
           <div class="ico">🔗</div>
@@ -2354,7 +2399,7 @@ function renderPricing(){
           <ul class="pr-feats">
             <li><span class="tick">✓</span> Everything in Starter</li>
             <li><span class="tick">✓</span> SKU P&amp;L with your product costs<span class="soon">coming soon</span></li>
-            <li><span class="tick">✓</span> Reconciliation &amp; SAFE-T finder<span class="soon">coming soon</span></li>
+            <li><span class="tick">✓</span> Reconciliation &amp; SAFE-T finder</li>
             <li><span class="tick">✓</span> Multi-month Trends<span class="soon">coming soon</span></li>
           </ul>
           ${paidBtn(pr," sec")}
@@ -3223,6 +3268,258 @@ function skuRenderResults(){
 }
 
 /* ============================================================
+   RECONCILIATION & SAFE-T FINDER (Pro)
+   Cross-checks settlement file(s) — parsed with the SAME
+   parseSettlement as the analyzer — plus an optional MTR, and
+   flags money worth chasing. Everything stays in the browser.
+   ============================================================ */
+let recFiles=[]; // {name, kind:"settlement"|"mtr", parsed?|rows?}
+const REC_DONE_KEY="rec_done";
+function loadRecDone(){try{return JSON.parse(localStorage.getItem(REC_DONE_KEY)||"{}")||{};}catch(e){return {};}}
+function saveRecDone(d){try{localStorage.setItem(REC_DONE_KEY,JSON.stringify(d));}catch(e){}}
+
+/* Minimal MTR reader (Merchant Tax Report B2C/B2B csv — headers use spaces,
+   e.g. "Order Id", unlike the settlement flat file's dashes). Returns null
+   if the file doesn't look like an MTR. */
+function parseMtr(text){
+  const rawLines=text.split(/\r\n|\r|\n/);
+  let hln=-1; for(let i=0;i<rawLines.length;i++){if(rawLines[i].trim()!==""){hln=i;break;}}
+  if(hln===-1) return null;
+  const headerLine=rawLines[hln];
+  const delim=headerLine.includes("\t")?"\t":",";
+  const cols=saSplit(headerLine,delim).map(h=>h.trim().toLowerCase());
+  const ix=n=>cols.indexOf(n);
+  const iOrder=ix("order id"),iType=ix("transaction type");
+  if(iOrder<0||iType<0) return null;
+  const iSku=ix("sku"),iQty=ix("quantity"),iAmt=ix("invoice amount"),
+        iShip=ix("shipment date"),iOd=ix("order date");
+  const rows=[],errors=[];
+  for(let i=hln+1;i<rawLines.length;i++){
+    const raw=rawLines[i]; if(raw.trim()==="")continue;
+    const f=saSplit(raw,delim);
+    if(f.length!==cols.length){errors.push({line:i+1,reason:`Expected ${cols.length} columns, got ${f.length}`});continue;}
+    const g=j=>j>=0?(f[j]??"").trim():"";
+    const amt=saParseAmount(g(iAmt));
+    rows.push({orderId:g(iOrder),type:g(iType),sku:g(iSku),
+      quantity:Number(g(iQty).replace(/,/g,""))||0,
+      amount:Number.isFinite(amt)?amt:0,
+      shipDate:g(iShip),orderDate:g(iOd)});
+  }
+  return {rows,errors};
+}
+window.parseMtr=parseMtr; // exposed for verification/debugging
+
+/* Pure cross-check over parsed settlements + MTR rows, so it is testable.
+   Returns {issues:{refundFee,safeT,shipped,negative}, ordersChecked,
+   refundsChecked, recovery}. Amounts follow the settlement sign convention
+   (each issue's `amount` is the positive ₹ at stake; null = unknown). */
+function recCompute(settlements,mtrRows){
+  const records=[]; for(const p of settlements) records.push(...p.records);
+  const ordersById=new Map(); let refundsChecked=0;
+  for(const rec of records){
+    if(rec.transactionType==="Order"&&rec.orderId){
+      const a=ordersById.get(rec.orderId)||[]; a.push(rec); ordersById.set(rec.orderId,a);
+    }
+  }
+  const refundFee=[],safeT=[],negative=[],shipped=[];
+  const referralOf=rec=>{let s=0;for(const l of rec.amounts){
+    if(/^principal$/i.test(l.amountDescription))continue;
+    if(saBucketOf(l.amountDescription||l.amountType,l.amount)==="referral")s+=l.amount;}return s;};
+  for(const rec of records){
+    const isRefund=/refund/i.test(rec.transactionType);
+    if(rec.transactionType==="Order"){
+      const total=rec.amounts.reduce((s,l)=>s+l.amount,0);
+      if(total<-0.005) negative.push({check:"negative",orderId:rec.orderId,sku:rec.sku,
+        date:rec.postedDate,amount:Math.round(Math.abs(total)*100)/100,
+        note:"Order netted "+"−₹"+Math.abs(total).toFixed(2)+" after fees"});
+      continue;
+    }
+    if(!isRefund) continue;
+    refundsChecked++;
+    if(rec.principal>=-0.005) continue; // nothing actually refunded to the buyer
+    const refunded=Math.round(Math.abs(rec.principal)*100)/100;
+    // Referral-fee credit missing entirely on this refund?
+    if(referralOf(rec)<=0.005){
+      let feePaid=null;
+      for(const o of (ordersById.get(rec.orderId)||[])){
+        if(rec.sku&&o.sku&&o.sku!==rec.sku) continue;
+        const rf=referralOf(o); if(rf<-0.005) feePaid=Math.round(Math.abs(rf)*100)/100;
+      }
+      refundFee.push({check:"refundFee",orderId:rec.orderId,sku:rec.sku,date:rec.postedDate,
+        amount:feePaid,note:feePaid===null?"Original order not in the loaded file(s) — fee amount unknown":"Referral fee paid on the original order"});
+    }
+    // Seller-fulfilled refund → SAFE-T candidate.
+    if(rec.fulfillmentId==="MFN"){
+      let days=null; const d=saParseDate(rec.postedDate);
+      if(d) days=Math.floor((Date.now()-new Date(d+"T00:00:00Z").getTime())/86400000);
+      safeT.push({check:"safeT",orderId:rec.orderId,sku:rec.sku,date:rec.postedDate,
+        amount:refunded,days,
+        note:days!==null&&days>60?"Refund is "+days+" days old — the 60-day SAFE-T window has likely closed":"Item value refunded (excl. tax)"});
+    }
+  }
+  // MTR shipments with no Order payment line in any loaded settlement.
+  const byOrder=new Map();
+  for(const m of (mtrRows||[])){
+    if(m.type!=="Shipment"||!m.orderId) continue;
+    if(ordersById.has(m.orderId)) continue;
+    const e=byOrder.get(m.orderId)||{check:"shipped",orderId:m.orderId,sku:m.sku,
+      date:m.shipDate||m.orderDate,amount:0,note:"Invoice value from the MTR"};
+    e.amount=Math.round((e.amount+Math.abs(m.amount))*100)/100;
+    if(m.sku&&e.sku&&m.sku!==e.sku)e.sku=e.sku+", "+m.sku;
+    byOrder.set(m.orderId,e);
+  }
+  for(const e of byOrder.values()) shipped.push(e);
+  const recovery=[...refundFee,...safeT,...shipped].reduce((s,x)=>s+(x.amount||0),0);
+  return {issues:{refundFee,safeT,shipped,negative},
+    ordersChecked:ordersById.size,refundsChecked,
+    recovery:Math.round(recovery*100)/100};
+}
+window.recCompute=recCompute; // exposed for verification/debugging
+
+const REC_CHECKS={
+  refundFee:{icon:"💸",title:"Refunds where the referral fee wasn't returned",
+    why:"When Amazon refunds a buyer it normally credits back most of the referral fee it charged you. These refunds have no referral-fee credit at all.",
+    claim:`<b>Seller Central → Help → Get Support → Selling on Amazon</b> → describe it as "Referral fee not credited back on refund" and quote the Order ID and refund date. Ask them to compare the refund's fee lines with the original order.`},
+  safeT:{icon:"🛡️",title:"SAFE-T-eligible refunds (seller-fulfilled)",
+    why:"Amazon refunded the buyer on these Easy Ship / Self Ship orders. If the item never came back, came back damaged or the refund was against policy, claim reimbursement through SAFE-T.",
+    claim:`<b>Seller Central → Help → Get Support → Selling on Amazon → search "SAFE-T"</b> → File a SAFE-T claim → enter the Order ID. File within <b>60 days</b> of the refund date — older rows are marked.`},
+  shipped:{icon:"📦",title:"Shipped but no payment line",
+    why:"These orders are shipments in your MTR but have no Order payment in any settlement you loaded. Most often the payment sits in the next statement — load it before raising a claim.",
+    claim:`First search the Order ID in <b>Payments → Transaction View</b>. If the shipment is over 30 days old and still unpaid: <b>Help → Get Support → Selling on Amazon → Payments</b>, quoting the Order ID and ship date.`},
+  negative:{icon:"🔻",title:"Orders that netted negative",
+    why:"Fees exceeded what the buyer paid — you shipped these at a loss. Not a claim, but fix the cause: weight slab, fee category, or a price below the fee floor.",
+    claim:`Re-check the maths with the <a href="#/profit">profit calculator</a> and <b>Reports → Fee Preview</b>. If the charged weight or category is wrong: <b>Help → Get Support</b> → ask for a fee correction with the Order ID.`},
+};
+const REC_ORDER=["refundFee","safeT","shipped","negative"];
+
+function renderReconcile(){
+  setMeta("Reconciliation & SAFE-T Finder — Seller Tools",
+    "Cross-check your Amazon settlement and MTR files to find missing referral-fee credits, SAFE-T-eligible refunds, unpaid shipments and loss-making orders — locally in your browser.");
+  backBtn.hidden=false;
+  gatePremium(REC_INFO, recBody);
+}
+function recBody(){
+  app.innerHTML=`
+    <div class="wrap page">
+      <h2>Reconciliation &amp; SAFE-T Finder</h2>
+      <p class="lede">Drop your settlement file(s) — and the matching MTR if you have it — and get a checklist of money worth chasing: missing referral-fee credits, SAFE-T-eligible refunds, unpaid shipments and orders that shipped at a loss, each with the exact Seller Central path to claim it.</p>
+      ${helpHtml("reconcile")}
+      <label class="sa-drop" id="rec-drop">
+        <div class="ico">🕵️</div>
+        <h3>Drop settlement + MTR files here</h3>
+        <p>or click to choose — several files at once is fine (.csv or .txt)</p>
+        <input type="file" id="rec-file" multiple accept=".csv,.txt,text/plain,text/csv">
+      </label>
+      <div class="sa-priv">🔒 Private by design — your files never leave your device. All cross-checking happens locally on this page.</div>
+      <div id="rec-out"></div>
+    </div>`;
+  const drop=document.getElementById("rec-drop"),file=document.getElementById("rec-file");
+  ["dragenter","dragover"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add("over");}));
+  ["dragleave","drop"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove("over");}));
+  drop.addEventListener("drop",ev=>{recAddFiles(ev.dataTransfer.files);});
+  file.addEventListener("change",()=>{recAddFiles(file.files);file.value="";});
+  if(recFiles.length) recRenderResults();
+}
+function recAddFiles(list){
+  const files=[...(list||[])]; if(!files.length) return;
+  let pending=files.length;
+  files.forEach(f=>{
+    const rd=new FileReader();
+    rd.onload=()=>{
+      const text=String(rd.result);
+      recFiles=recFiles.filter(x=>x.name!==f.name); // re-drop replaces
+      const mtr=parseMtr(text);
+      if(mtr){ recFiles.push({name:f.name,kind:"mtr",rows:mtr.rows,errors:mtr.errors}); }
+      else{
+        const p=parseSettlement(text);
+        if(p.records.length||p.summary){
+          const dup=p.summary&&recFiles.some(x=>x.kind==="settlement"&&x.parsed.summary&&x.parsed.summary.settlementId===p.summary.settlementId);
+          if(dup) recFiles.push({name:f.name,kind:"error",msg:"same settlement ID as a file already loaded — skipped to avoid double counting"});
+          else recFiles.push({name:f.name,kind:"settlement",parsed:p});
+        }
+        else recFiles.push({name:f.name,kind:"error",msg:"not recognised as a settlement flat file or MTR"});
+      }
+      if(--pending===0) recRenderResults();
+    };
+    rd.onerror=()=>{recFiles.push({name:f.name,kind:"error",msg:"could not read the file"});if(--pending===0)recRenderResults();};
+    rd.readAsText(f);
+  });
+}
+function recRenderResults(){
+  const out=document.getElementById("rec-out"); if(!out) return;
+  const kindLabel={settlement:"Settlement",mtr:"MTR",error:"Skipped"};
+  let h=`<div class="rec-files">${recFiles.map((f,i)=>`<span class="rec-file"${f.kind==="error"?` title="${esc(f.msg)}"`:""}><b>${esc(f.name)}</b><span class="rf-kind">${f.kind==="error"?"⚠ "+kindLabel[f.kind]:kindLabel[f.kind]}</span><button type="button" data-rm="${i}" aria-label="Remove ${esc(f.name)}">✕</button></span>`).join("")}</div>`;
+  const bad=recFiles.filter(f=>f.kind==="error");
+  if(bad.length) h+=`<div class="banner warn">${bad.map(f=>`<b>${esc(f.name)}</b>: ${esc(f.msg)}`).join("<br>")}</div>`;
+  const settlements=recFiles.filter(f=>f.kind==="settlement").map(f=>f.parsed);
+  const mtrRows=recFiles.filter(f=>f.kind==="mtr").flatMap(f=>f.rows);
+  if(!settlements.length){
+    if(recFiles.length) h+=`<div class="banner info">Add at least one <b>settlement flat file</b> (Payments → All Statements → Download Flat File V2) — that's the file the checks run against.</div>`;
+    out.innerHTML=h; recWire(out); return;
+  }
+  const res=recCompute(settlements,mtrRows);
+  const done=loadRecDone();
+  const allIssues=REC_ORDER.flatMap(k=>res.issues[k]);
+  const openCount=allIssues.filter(x=>!done[recKey(x)]).length;
+  h+=`<div class="stats">
+    <div class="stat blue"><div class="k">Checked</div><div class="v">${res.ordersChecked} orders · ${res.refundsChecked} refunds</div></div>
+    <div class="stat ${allIssues.length?"red":"green"}"><div class="k">Issues flagged</div><div class="v">${allIssues.length}</div></div>
+    <div class="stat green"><div class="k">Worth chasing (upper bound)</div><div class="v">${inr(res.recovery)}</div></div>
+    <div class="stat"><div class="k">Still to action</div><div class="v">${openCount}</div></div>
+  </div>`;
+  if(!mtrRows.length)
+    h+=`<div class="banner info">No MTR loaded — the <b>shipped-but-not-paid</b> check needs one. Get it from <b>Reports → Tax Document Library → Merchant Tax Reports → B2C</b> and drop it here too.</div>`;
+  if(!allIssues.length)
+    h+=`<div class="banner good">✅ Nothing to chase — every refund credited its referral fee, no negative orders${mtrRows.length?", and every MTR shipment has a payment line":""}.</div>`;
+  else
+    h+=`<div style="display:flex;justify-content:flex-end;margin:14px 0 2px"><button type="button" class="fbtn" id="rec-csv">⬇ Export checklist CSV</button></div>`;
+  for(const k of REC_ORDER){
+    const rows=res.issues[k]; if(!rows.length) continue;
+    const c=REC_CHECKS[k];
+    h+=`<div class="panel"><h4>${c.icon} ${esc(c.title)} <span class="sa-sub">(${rows.length})</span></h4>
+      <p class="sa-sub" style="margin:4px 0 10px">${esc(c.why)}</p>
+      <div class="tblwrap"><table class="sa">
+        <thead><tr><th style="width:36px">Done</th><th>Order</th><th>SKU</th><th>Date</th><th class="num">₹ at stake</th><th>Note</th></tr></thead>
+        <tbody>${rows.map(x=>{const key=recKey(x),dn=!!done[key];
+          return `<tr class="${dn?"rec-done":""}">
+            <td><input type="checkbox" data-done="${esc(key)}"${dn?" checked":""} aria-label="Mark ${esc(x.orderId||"row")} done"></td>
+            <td>${esc(x.orderId||"—")}</td><td>${esc(x.sku||"—")}</td>
+            <td>${esc(x.date||"—")}</td>
+            <td class="num">${x.amount===null?"—":inr(x.amount)}</td>
+            <td class="sa-sub">${esc(x.note||"")}</td></tr>`;}).join("")}
+        </tbody></table></div>
+      <div class="rec-claim"><b>How to claim:</b> ${c.claim}</div></div>`;
+  }
+  h+=`<div class="banner info">These are pointers computed from your files, not guarantees — Amazon decides each claim. Payments for recent shipments often arrive in the <b>next</b> settlement, so load consecutive statements before chasing anything. Ticks are saved only in your browser.</div>`;
+  out.innerHTML=h; recWire(out,settlements,mtrRows,res);
+}
+const recKey=x=>x.check+"|"+(x.orderId||"")+"|"+(x.sku||"")+"|"+(x.date||"");
+function recWire(out,settlements,mtrRows,res){
+  out.querySelectorAll("[data-rm]").forEach(b=>b.addEventListener("click",()=>{
+    recFiles.splice(Number(b.dataset.rm),1); recRenderResults();
+  }));
+  out.querySelectorAll("[data-done]").forEach(cb=>cb.addEventListener("change",()=>{
+    const d=loadRecDone();
+    if(cb.checked)d[cb.dataset.done]=1; else delete d[cb.dataset.done];
+    saveRecDone(d); recRenderResults();
+  }));
+  const csv=out.querySelector("#rec-csv");
+  if(csv&&res) csv.addEventListener("click",()=>{
+    const q=v=>`"${String(v??"").replace(/"/g,'""')}"`;
+    const done=loadRecDone();
+    const lines=[["Issue","Order ID","SKU","Date","Amount (INR)","Status","What to do"].map(q).join(",")];
+    for(const k of REC_ORDER) for(const x of res.issues[k])
+      lines.push([REC_CHECKS[k].title,x.orderId||"",x.sku||"",x.date||"",
+        x.amount===null?"":x.amount.toFixed(2),done[recKey(x)]?"Done":"To do",
+        REC_CHECKS[k].claim.replace(/<[^>]+>/g,"")].map(q).join(","));
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(new Blob([lines.join("\r\n")],{type:"text/csv"}));
+    a.download="reconciliation-checklist.csv";
+    document.body.appendChild(a); a.click(); a.remove();
+  });
+}
+
+/* ============================================================
    AMAZON LINK BUILDER
    Pure string-building from ASIN + keyword — no scraping, no
    network. The URL formats sellers use for ranking campaigns,
@@ -4039,6 +4336,7 @@ function route(){
   if(h==="settlement-analyzer"){renderSettlementAnalyzer();window.scrollTo(0,0);return;}
   if(h==="gst-report"){renderGstReport();window.scrollTo(0,0);return;}
   if(h==="sku-report"){renderSkuReport();window.scrollTo(0,0);return;}
+  if(h==="reconcile"){renderReconcile();window.scrollTo(0,0);return;}
   if(h==="link-builder"){renderLinkBuilder();window.scrollTo(0,0);return;}
   if(h==="keyword-combiner"){renderKeywordCombiner();window.scrollTo(0,0);return;}
   if(h==="label-cropper"){renderLabelCropper();window.scrollTo(0,0);return;}
@@ -4049,7 +4347,7 @@ function route(){
 window.addEventListener("hashchange",route);
 /* Premium tools re-check entitlement when the tab regains focus, so a session
    kicked on another device locks here within seconds of the user returning. */
-const PREMIUM_ROUTES=["settlement-analyzer","gst-report","sku-report"];
+const PREMIUM_ROUTES=["settlement-analyzer","gst-report","sku-report","reconcile"];
 window.addEventListener("focus",()=>{
   const h=location.hash.replace(/^#\/?/,"");
   if(!PREMIUM_ROUTES.includes(h) || saUnlocked() || !sessionUser()) return;
