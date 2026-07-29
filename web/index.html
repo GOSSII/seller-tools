@@ -1762,7 +1762,7 @@ function renderPaywall(info){
           ${feats?`<ul class="pw-feats">${feats}</ul>`:""}
           <div class="pw-price">${esc(info.price)}</div>
           ${info.priceAlt?`<div class="pw-price-alt">${esc(info.priceAlt)}</div>`:""}
-          <div class="pw-guarantee">7-day money-back guarantee on your first purchase · no auto-renewal, pay only when you choose to</div>
+          <div class="pw-guarantee">No auto-renewal — pay only when you choose to · access lasts until your period ends</div>
           <div class="pw-cta">
             <a class="lp-btn" href="#/pricing">See plans &amp; unlock</a>
           </div>
@@ -2289,7 +2289,7 @@ function renderHome(){
         <details><summary>Do you upload or store my files?</summary><p>No. Settlement reports and label PDFs are processed entirely in your browser — they are never uploaded to any server. That is our core promise and it will always be true.</p></details>
         <details><summary>Which marketplaces do you support?</summary><p>Amazon India (Amazon.in) only. Fees, GST and settlement formats are all specific to the India marketplace.</p></details>
         <details><summary>How do I get my settlement report?</summary><p>In Seller Central go to Payments → Reports Repository (or Date Range Reports) and download the transaction/settlement report, then paste or upload it into the Settlement Analyzer.</p></details>
-        <details><summary>What is your refund policy?</summary><p>Paid plans come with a 7-day money-back guarantee on your first purchase. See our <a href="/refunds.html">Refund Policy</a> for details.</p></details>
+        <details><summary>What is your refund policy?</summary><p>Plans don't auto-renew — you pay only when you choose to, and you keep access until your paid period ends. Payments are non-refundable once a plan is activated, except for duplicate or failed charges. See our <a href="/refunds.html">Refund Policy</a> for details.</p></details>
         <details><summary>How do I contact you?</summary><p>Email <a href="mailto:dipsgos7@gmail.com">dipsgos7@gmail.com</a> — see the <a href="/contact.html">Contact</a> page for expected reply times.</p></details>
       </section>
 
@@ -2446,7 +2446,7 @@ function renderPricing(){
           ${paidBtn(pr," sec")}
         </div>
       </div>
-      <p class="pr-note">Prices in INR, inclusive of applicable taxes. Paid plans include a 7-day money-back guarantee on your first purchase — see our <a href="/refunds.html">Refund Policy</a>. Tools are estimates; always verify against Seller Central and your CA.</p>
+      <p class="pr-note">Prices in INR, inclusive of applicable taxes. Plans never auto-renew — you pay only when you choose to. See our <a href="/refunds.html">Refund Policy</a>. Tools are estimates; always verify against Seller Central and your CA.</p>
     </div>`;
   const seg=document.getElementById("pr-seg");
   if(seg) seg.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{pricingPeriod=b.dataset.p;renderPricing();}));
