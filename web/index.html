@@ -486,6 +486,20 @@
   .pw-code-row input{flex:1}
   .pw-code-msg{font-size:12.5px;color:var(--red);margin-top:8px}
 
+  /* Pricing billing-period toggle + checkout states */
+  .pr-period{display:flex;justify-content:center;margin:2px 0 6px}
+  .pr-period .seg{max-width:240px;width:100%}
+  .pay-spin{width:34px;height:34px;border-radius:50%;margin:4px auto 2px;
+    border:3px solid var(--blue-soft);border-top-color:var(--blue);animation:pay-rot .8s linear infinite}
+  @keyframes pay-rot{to{transform:rotate(360deg)}}
+  @media(prefers-reduced-motion:reduce){.pay-spin{animation:none}}
+  .pay-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
+  .pay-table{width:100%;border-collapse:collapse;font-size:13px;min-width:440px}
+  .pay-table th,.pay-table td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+  .pay-table th{background:var(--bg);color:var(--muted);font-weight:700;font-size:12px}
+  .pay-table tr:last-child td{border-bottom:0}
+  .pay-table .pid{color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+
   footer{border-top:1px solid var(--line);background:#fff;padding:22px 0;font-size:12.5px;color:var(--faint);line-height:1.6}
   @media(min-width:600px){footer{padding:26px 0}}
 
@@ -1314,6 +1328,28 @@ async function sb(){
     {auth:{persistSession:true,autoRefreshToken:true,storageKey:SUPABASE_AUTH_KEY}});
   return _sbClient;
 }
+/* Current access token, refreshed via the library when possible so a stale
+   stored token doesn't break a paid request. Null when logged out. */
+async function accessToken(){
+  const s=storedSession();
+  if(!s) return null;
+  try{const c=await sb();const {data}=await c.auth.getSession();
+    if(data&&data.session&&data.session.access_token) return data.session.access_token;}catch(e){}
+  return s.access_token||null;
+}
+/* Razorpay Checkout, lazy-loaded only when a logged-in user starts a payment. */
+const RAZORPAY_JS_URL="https://checkout.razorpay.com/v1/checkout.js";
+let razorpayJsPromise=null;
+function loadRazorpay(){
+  if(window.Razorpay) return Promise.resolve();
+  if(!razorpayJsPromise) razorpayJsPromise=new Promise((res,rej)=>{
+    const s=document.createElement("script");
+    s.src=RAZORPAY_JS_URL; s.onload=()=>res();
+    s.onerror=()=>{razorpayJsPromise=null;rej(new Error("load failed"));};
+    document.head.appendChild(s);
+  });
+  return razorpayJsPromise;
+}
 /* Read the session supabase persisted, without loading the library. Handles
    the couple of shapes supabase-js has stored a session under. */
 function storedSession(){
@@ -1512,12 +1548,7 @@ async function getEntitlement(){
   const key=s.access_token||"anon";
   if(_entCache && _entCache.key===key) return _entCache.promise;
   const p=(async()=>{
-    let token=s.access_token||null;
-    // Refresh the token if the library is loadable, so a stale stored token
-    // doesn't wrongly downgrade a paid user. (Loads supabase-js only for a
-    // logged-in user hitting a gated tool.)
-    try{const c=await sb();const {data}=await c.auth.getSession();
-      if(data&&data.session&&data.session.access_token) token=data.session.access_token;}catch(e){}
+    const token=await accessToken();
     if(!token) return {plan:"free",expires_at:null};
     try{
       const r=await fetch("/api/entitlement",{headers:{Authorization:"Bearer "+token},cache:"no-store"});
@@ -1612,6 +1643,93 @@ function fmtDate(d){
   try{return new Date(d).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"});}
   catch(e){return "—";}
 }
+function daysLeft(exp){
+  if(!exp) return null;
+  const ms=new Date(exp).getTime()-Date.now();
+  return ms<=0?0:Math.ceil(ms/86400000);
+}
+
+/* ------------------------------------------------------------------
+   Razorpay checkout (Phase 4). create-order (server) → Checkout popup →
+   on success, poll /api/entitlement until the new plan shows, then a
+   celebration panel. Amounts are decided server-side; the client only
+   sends a plan key. */
+const inrPaise = p => "₹"+((p||0)/100).toLocaleString("en-IN",{minimumFractionDigits:(p%100?2:0),maximumFractionDigits:2});
+
+async function startCheckout(planKey){
+  const u=sessionUser();
+  if(!u){ location.hash="#/signup"; return; }
+  const token=await accessToken();
+  if(!token){ location.hash="#/login"; return; }
+  let order;
+  try{
+    const r=await fetch("/api/create-order",{method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":"Bearer "+token},
+      body:JSON.stringify({plan:planKey})});
+    if(!r.ok){ renderPaymentProblem("We couldn't start the payment. Please try again."); return; }
+    order=await r.json();
+  }catch(e){ renderPaymentProblem("Network issue starting the payment. Please try again."); return; }
+  try{ await loadRazorpay(); }
+  catch(e){ renderPaymentProblem("Couldn't load the payment window. Check your connection and retry."); return; }
+  const rzp=new window.Razorpay({
+    key:order.key_id, amount:order.amount, currency:order.currency||"INR",
+    order_id:order.order_id, name:"Amazon Seller Tools", description:order.label||"Plan",
+    prefill:{ email:order.email||u.email||"" },
+    theme:{ color:"#2f5af0" },
+    handler:function(){ renderPaymentPolling(order); },
+    modal:{ ondismiss:function(){ /* popup closed — leave the user where they were */ } }
+  });
+  try{ rzp.on("payment.failed",function(){ renderPaymentProblem("The payment didn't go through. No money was taken — you can try again."); }); }catch(e){}
+  rzp.open();
+}
+
+function payShell(inner){
+  backBtn.hidden=false;
+  app.innerHTML=`<div class="wrap page"><div class="auth"><div class="card" style="text-align:center">${inner}</div></div></div>`;
+}
+function renderPaymentPolling(order){
+  payShell(`<div class="pay-spin" aria-hidden="true"></div>
+    <h2 style="margin-top:6px">Confirming your payment…</h2>
+    <p class="lede">This usually takes a few seconds. Please don't close this tab.</p>`);
+  resetEntitlement();
+  const wantRank=order.plan==="pro"?2:1;
+  const started=Date.now();
+  const tick=async()=>{
+    resetEntitlement();
+    let ent={plan:"free"};
+    try{ ent=await getEntitlement(); }catch(e){}
+    const rank=ent.plan==="pro"?2:ent.plan==="starter"?1:0;
+    if(rank>=wantRank){ renderPaymentSuccess(ent, order); return; }
+    if(Date.now()-started>30000){ renderPaymentPending(order); return; }
+    setTimeout(tick,2000);
+  };
+  setTimeout(tick,1500);
+}
+function renderPaymentSuccess(ent, order){
+  renderAuthSlot();
+  const plan=(ent.plan||order.plan||"starter");
+  const nice=plan.charAt(0).toUpperCase()+plan.slice(1);
+  const till=ent.expires_at?fmtDate(ent.expires_at):null;
+  payShell(`<div style="font-size:40px;line-height:1">🎉</div>
+    <h2 style="margin-top:8px">${esc(nice)} unlocked${till?` till ${esc(till)}`:""}</h2>
+    <p class="lede">Payment received — thank you! Your premium tools are ready.</p>
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:6px">
+      <a class="lp-btn" href="#/settlement-analyzer">Open Settlement Analyzer</a>
+      <a class="lp-btn sec" href="#/account">Go to account</a>
+    </div>`);
+}
+function renderPaymentPending(order){
+  payShell(`<div style="font-size:36px;line-height:1">⏳</div>
+    <h2 style="margin-top:8px">Payment received — activating</h2>
+    <p class="lede">Your payment went through and your plan is being switched on. This can take a minute. Check your <a href="#/account">account</a> shortly, or refresh the tool.</p>
+    <div style="margin-top:6px"><a class="lp-btn sec" href="#/account">Go to account</a></div>`);
+}
+function renderPaymentProblem(msg){
+  payShell(`<div style="font-size:36px;line-height:1">⚠️</div>
+    <h2 style="margin-top:8px">Payment not completed</h2>
+    <p class="lede">${esc(msg)}</p>
+    <div style="margin-top:6px"><a class="lp-btn" href="#/pricing">Back to pricing</a></div>`);
+}
 
 function renderAccount(){
   if(!sessionUser()){location.hash="#/login";return;}
@@ -1628,10 +1746,12 @@ function renderAccount(){
       <div class="acct-row"><span class="k">Plan expires</span><span class="v" id="ac-exp">—</span></div>
     </div>
     <div id="ac-msg" class="auth-msg" hidden style="margin-top:14px"></div>
-    <div style="display:flex;gap:10px;margin-top:16px">
+    <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
       <button type="button" class="bigbtn" id="ac-save">Save name</button>
+      <a class="bigbtn sec" id="ac-renew" href="#/pricing">Renew / change plan</a>
       <button type="button" class="bigbtn sec" id="ac-logout">Logout</button>
-    </div>`);
+    </div>
+    <div id="ac-pay" style="margin-top:22px"></div>`);
   const msg=document.getElementById("ac-msg");
   document.getElementById("ac-logout").addEventListener("click",doLogout);
   document.getElementById("ac-save").addEventListener("click",async()=>{
@@ -1646,17 +1766,46 @@ function renderAccount(){
     }catch(err){authMsg(msg,"err",authFriendly(err.message));}
     finally{btn.disabled=false; btn.textContent="Save name";}
   });
-  /* Live plan from the server API (Free for everyone until payments). */
+  /* Live plan from the server API, plus days-left and payment history. */
   (async()=>{
     try{
       const ent=await getEntitlement();
-      const pl=document.getElementById("ac-plan"), ex=document.getElementById("ac-exp");
+      const pl=document.getElementById("ac-plan"), ex=document.getElementById("ac-exp"),
+            rn=document.getElementById("ac-renew");
       if(pl){
         if(ent.plan==="free") pl.innerHTML='<span class="plan-badge free">Free</span>';
         else pl.innerHTML='<span class="plan-badge">'+esc(ent.plan.charAt(0).toUpperCase()+ent.plan.slice(1))+'</span>';
       }
-      if(ex) ex.textContent=ent.expires_at?fmtDate(ent.expires_at):"—";
+      if(ex){
+        if(ent.expires_at){
+          const dl=daysLeft(ent.expires_at);
+          ex.textContent=fmtDate(ent.expires_at)+(dl!=null?` (${dl} day${dl===1?"":"s"} left)`:"");
+        } else ex.textContent="—";
+      }
+      if(rn) rn.textContent=ent.plan==="free"?"Upgrade":"Renew / change plan";
     }catch(e){}
+  })();
+  /* Payment history (reads the user's own rows via RLS). */
+  (async()=>{
+    const host=document.getElementById("ac-pay"); if(!host) return;
+    try{
+      const c=await sb();
+      const {data}=await c.from("payments")
+        .select("created_at,plan,period,amount_paise,razorpay_payment_id,status")
+        .order("created_at",{ascending:false}).limit(20);
+      const rows=(data||[]).filter(r=>r.status==="paid");
+      if(!rows.length){ host.innerHTML=""; return; }
+      host.innerHTML=`<h3 style="font-size:16px;margin:0 0 10px">Payment history</h3>
+        <div class="pay-wrap"><table class="pay-table">
+          <thead><tr><th>Date</th><th>Plan</th><th>Amount</th><th>Payment ID</th></tr></thead>
+          <tbody>${rows.map(r=>`<tr>
+            <td>${esc(fmtDate(r.created_at))}</td>
+            <td>${esc((r.plan||"").charAt(0).toUpperCase()+(r.plan||"").slice(1))}${r.period?` · ${esc(r.period)}`:""}</td>
+            <td>${esc(inrPaise(r.amount_paise))}</td>
+            <td class="pid">${esc(r.razorpay_payment_id||"—")}</td>
+          </tr>`).join("")}</tbody>
+        </table></div>`;
+    }catch(e){ host.innerHTML=""; }
   })();
 }
 
@@ -1805,23 +1954,39 @@ function renderHome(){
   });
 }
 
-/* Pricing page — plans/prices per docs/SAAS_PLAN.md section 1. Buttons stay in
-   "join waitlist" mode until the payments phase ships. */
+/* Pricing page — plans/prices per docs/SAAS_PLAN.md section 1. Logged-in
+   visitors buy via Razorpay Checkout; logged-out visitors are sent to sign up.
+   A Monthly/Yearly toggle picks which plan key the paid buttons purchase. */
+let pricingPeriod="monthly";
+const PR_PRICES={
+  starter:{monthly:{key:"starter_monthly",big:"₹199",per:"/ month",alt:"or ₹999 / year (save ~58%)"},
+           yearly:{key:"starter_yearly",big:"₹999",per:"/ year",alt:"₹199 / month billed monthly"}},
+  pro:{monthly:{key:"pro_monthly",big:"₹499",per:"/ month",alt:"or ₹2,499 / year (save ~58%)"},
+       yearly:{key:"pro_yearly",big:"₹2,499",per:"/ year",alt:"₹499 / month billed monthly"}}
+};
 function renderPricing(){
   setMeta("Pricing — Amazon Seller Tools",
     "Simple pricing for Amazon India sellers. Free calculators and tools, plus Starter (₹199/month) and Pro (₹499/month) plans for settlement, GST and SKU reports.");
   backBtn.hidden=false;
-  const waitlist='mailto:dipsgos7@gmail.com?subject=Waitlist';
-  /* Logged-out visitors are sent to sign up first; logged-in visitors join
-     the waitlist until the payments phase ships. */
   const loggedIn=!!sessionUser();
-  const paidHref=loggedIn?waitlist:"#/signup";
-  const paidLabel=loggedIn?"Coming soon — join waitlist":"Sign up to get started";
+  const per=pricingPeriod;
+  const st=PR_PRICES.starter[per], pr=PR_PRICES.pro[per];
+  const perWord=per==="monthly"?"monthly":"yearly";
+  // Paid CTA: logged-in → Razorpay checkout button; logged-out → sign up first.
+  const paidBtn=(price,cls)=> loggedIn
+    ? `<button type="button" class="lp-btn${cls}" data-checkout="${price.key}">Pay ${price.big} — ${perWord}</button>`
+    : `<a class="lp-btn${cls}" href="#/signup">Sign up to get started</a>`;
   app.innerHTML=`
     <div class="wrap page">
       <div class="pr-head">
         <h2>Simple pricing for Amazon India sellers</h2>
         <p>Start free. Upgrade when the paid reports save you more than they cost.</p>
+      </div>
+      <div class="pr-period">
+        <div class="seg" id="pr-seg" role="group" aria-label="Billing period">
+          <button type="button" data-p="monthly" class="${per==="monthly"?"on":""}" aria-pressed="${per==="monthly"}">Monthly</button>
+          <button type="button" data-p="yearly" class="${per==="yearly"?"on":""}" aria-pressed="${per==="yearly"}">Yearly</button>
+        </div>
       </div>
       <div class="pr-grid">
         <div class="pr-card">
@@ -1842,8 +2007,8 @@ function renderPricing(){
         <div class="pr-card pop">
           <span class="pr-badge">Most popular</span>
           <h3>Starter</h3>
-          <div class="pr-price">₹199 <small>/ month</small></div>
-          <div class="pr-alt">or ₹999 / year (save ~58%)</div>
+          <div class="pr-price">${st.big} <small>${st.per}</small></div>
+          <div class="pr-alt">${st.alt}</div>
           <ul class="pr-feats">
             <li><span class="tick">✓</span> Everything in Free</li>
             <li><span class="tick">✓</span> Settlement Analyzer — every rupee itemised</li>
@@ -1851,24 +2016,27 @@ function renderPricing(){
             <li><span class="tick">✓</span> SKU Profitability Report</li>
             <li><span class="tick">✓</span> One active login, kept simple</li>
           </ul>
-          <a class="lp-btn" href="${paidHref}">${paidLabel}</a>
+          ${paidBtn(st,"")}
         </div>
 
         <div class="pr-card">
           <h3>Pro</h3>
-          <div class="pr-price">₹499 <small>/ month</small></div>
-          <div class="pr-alt">or ₹2,499 / year (save ~58%)</div>
+          <div class="pr-price">${pr.big} <small>${pr.per}</small></div>
+          <div class="pr-alt">${pr.alt}</div>
           <ul class="pr-feats">
             <li><span class="tick">✓</span> Everything in Starter</li>
             <li><span class="tick">✓</span> SKU P&amp;L with your product costs<span class="soon">coming soon</span></li>
             <li><span class="tick">✓</span> Reconciliation &amp; SAFE-T finder<span class="soon">coming soon</span></li>
             <li><span class="tick">✓</span> Multi-month Trends<span class="soon">coming soon</span></li>
           </ul>
-          <a class="lp-btn sec" href="${paidHref}">${paidLabel}</a>
+          ${paidBtn(pr," sec")}
         </div>
       </div>
       <p class="pr-note">Prices in INR, inclusive of applicable taxes. Paid plans include a 7-day money-back guarantee on your first purchase — see our <a href="/refunds.html">Refund Policy</a>. Tools are estimates; always verify against Seller Central and your CA.</p>
     </div>`;
+  const seg=document.getElementById("pr-seg");
+  if(seg) seg.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{pricingPeriod=b.dataset.p;renderPricing();}));
+  app.querySelectorAll("[data-checkout]").forEach(b=>b.addEventListener("click",()=>startCheckout(b.dataset.checkout)));
 }
 
 /* Every control is explicitly labelled: `for`/`id` on the native inputs, and
@@ -2120,6 +2288,15 @@ function parseSettlement(text,opts={}){
 window.parseSettlement=parseSettlement; // exposed for verification/debugging
 
 /* ---- analyzer UI ---- */
+/* ======================================================================
+   LEGACY GATE (remove in Phase 8) — removeLegacyGate
+   The "2023" code + sessionStorage sa_unlocked is the owner bypass that
+   unlocks every premium tool without a paid plan. It is surfaced in the
+   paywall's "Have an access code?" field (see renderPaywall). Phase 8
+   deletes SA_PASSWORD, saUnlocked, the sa_unlocked handling in the paywall,
+   and the saUnlocked() short-circuit in gatePremium — leaving paid gating
+   as the only unlock. Search "sa_unlocked" and "removeLegacyGate".
+   ====================================================================== */
 const SA_PASSWORD="2023";
 let saParsed=null, saFilter="all", saLimit=100;
 const saUnlocked=()=>{try{return sessionStorage.getItem("sa_unlocked")==="1";}catch(e){return false;}};
