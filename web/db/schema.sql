@@ -159,3 +159,39 @@ insert into public.profiles (id, email, name)
 select u.id, u.email, coalesce(u.raw_user_meta_data->>'name', '')
 from auth.users u
 on conflict (id) do nothing;
+
+-- ============================================================================
+-- Phase 4b: auto-renewal via Razorpay Subscriptions
+-- (idempotent additions — re-run this whole file after pulling this change)
+-- ============================================================================
+
+-- One row per Razorpay subscription a user has started.
+create table if not exists public.subscriptions (
+  id                   uuid primary key default gen_random_uuid(),
+  user_id              uuid        not null references auth.users(id) on delete cascade,
+  rzp_subscription_id  text unique,
+  plan_key             text,                 -- 'starter_monthly' | ... (PRICES key)
+  plan                 text,                 -- 'starter' | 'pro'
+  period               text,                 -- 'monthly' | 'yearly'
+  status               text        not null default 'created',
+    -- created | active | cancel_requested | cancelled | halted | completed | paused
+  current_end          timestamptz,          -- end of the currently-paid cycle (≈ next charge)
+  created_at           timestamptz not null default now()
+);
+create index if not exists subscriptions_user_idx
+  on public.subscriptions (user_id, created_at desc);
+
+alter table public.subscriptions enable row level security;
+drop policy if exists subscriptions_select_own on public.subscriptions;
+create policy subscriptions_select_own on public.subscriptions
+  for select using (auth.uid() = user_id);
+
+-- Cache of Razorpay Plan ids created by the server (keyed per plan_key AND
+-- Razorpay key id, so test-mode and live-mode plan ids never mix).
+-- Service-role only: RLS on with no policies.
+create table if not exists public.rzp_plans (
+  key          text primary key,
+  rzp_plan_id  text not null,
+  created_at   timestamptz not null default now()
+);
+alter table public.rzp_plans enable row level security;

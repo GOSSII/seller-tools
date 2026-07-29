@@ -65,6 +65,65 @@ async function maybeSendEmail(price, expiresIso, pay) {
   });
 }
 
+// Shared by payment.captured and subscription.charged: dedupe by payment id,
+// record the payment row, and grant/extend the entitlement. `source` marks
+// where the money came from ('razorpay' one-time, 'razorpay_sub' auto-renew).
+async function recordPaidAndEntitle({ paymentId, orderId, userId, price, amountPaise, evt, pay, source }) {
+  // Idempotency: if we already recorded this payment as paid, stop. Both the
+  // payment.captured and subscription.charged events fire for one sub charge —
+  // whichever lands second is dropped here.
+  const dupRes = await rest('GET', '/payments?select=id,status&razorpay_payment_id=eq.'
+    + encodeURIComponent(paymentId) + '&limit=1');
+  if (dupRes.ok) {
+    const rows = await dupRes.json();
+    if (rows && rows[0] && rows[0].status === 'paid') return { duplicate: true };
+  }
+
+  // Mark the pending order row paid (or insert one if it's missing).
+  let updated = false;
+  if (orderId) {
+    const up = await rest('PATCH', '/payments?razorpay_order_id=eq.' + encodeURIComponent(orderId),
+      { razorpay_payment_id: paymentId, status: 'paid', raw: evt }, { Prefer: 'return=representation' });
+    if (up.ok) { const r = await up.json(); updated = Array.isArray(r) && r.length > 0; }
+  }
+  if (!updated) {
+    await rest('POST', '/payments', {
+      user_id: userId, razorpay_order_id: orderId, razorpay_payment_id: paymentId,
+      amount_paise: amountPaise, plan: price.plan, period: price.period, status: 'paid', raw: evt
+    });
+  }
+
+  // Entitlement dates: extend the newest active same-or-lower plan, else now.
+  const entRes = await rest('GET', '/entitlements?select=plan,expires_at&user_id=eq.'
+    + encodeURIComponent(userId) + '&order=created_at.desc&limit=10');
+  let existing = null;
+  if (entRes.ok) {
+    const rows = await entRes.json();
+    const now = Date.now();
+    existing = (rows || []).find(r => !r.expires_at || new Date(r.expires_at).getTime() > now) || null;
+  }
+  const dates = computeDates(existing, price.plan, price.days, Date.now());
+  await rest('POST', '/entitlements', {
+    user_id: userId, plan: price.plan, source: source || 'razorpay',
+    starts_at: dates.starts_at, expires_at: dates.expires_at, payment_id: paymentId
+  });
+
+  // Confirmation email is best-effort — never fail the webhook on it.
+  try { await maybeSendEmail(price, dates.expires_at, pay); } catch (e) { /* ignore */ }
+  return { duplicate: false };
+}
+
+// Subscription lifecycle events → our subscriptions-row status.
+const SUB_STATUS = {
+  'subscription.activated': 'active',
+  'subscription.charged': 'active',
+  'subscription.cancelled': 'cancelled',
+  'subscription.completed': 'completed',
+  'subscription.halted': 'halted',
+  'subscription.paused': 'paused',
+  'subscription.resumed': 'active',
+};
+
 async function handler(req, res) {
   try {
     if (req.method !== 'POST') return res.status(405).end();
@@ -76,7 +135,35 @@ async function handler(req, res) {
     if (!verifySignature(raw, sig, secret)) return res.status(400).json({ error: 'bad_signature' });
 
     let evt; try { evt = JSON.parse(raw); } catch (e) { return res.status(400).json({ error: 'bad_json' }); }
-    if (!evt || evt.event !== 'payment.captured') return res.status(200).json({ ok: true, ignored: true });
+    if (!evt) return res.status(200).json({ ok: true, ignored: true });
+
+    // ---- subscription lifecycle + renewal charges ----
+    if (SUB_STATUS[evt.event]) {
+      const sub = evt.payload && evt.payload.subscription && evt.payload.subscription.entity;
+      if (!sub || !sub.id) return res.status(200).json({ ok: true, ignored: true });
+
+      const patch = { status: SUB_STATUS[evt.event] };
+      if (sub.current_end) patch.current_end = new Date(sub.current_end * 1000).toISOString();
+      await rest('PATCH', '/subscriptions?rzp_subscription_id=eq.' + encodeURIComponent(sub.id), patch);
+
+      if (evt.event !== 'subscription.charged') return res.status(200).json({ ok: true });
+
+      const pay = evt.payload && evt.payload.payment && evt.payload.payment.entity;
+      const notes = (sub.notes && sub.notes.plan_key) ? sub.notes : ((pay && pay.notes) || {});
+      const price = PRICES[notes.plan_key];
+      const userId = notes.user_id;
+      if (!pay || !price || !userId) return res.status(200).json({ ok: true, ignored: 'no_notes' });
+
+      const r = await recordPaidAndEntitle({
+        paymentId: pay.id, orderId: pay.order_id || null, userId, price,
+        amountPaise: pay.amount, evt, pay, source: 'razorpay_sub'
+      });
+      return res.status(200).json({ ok: true, duplicate: !!r.duplicate });
+    }
+
+    // ---- one-time payments (and the payment.captured echo of sub charges,
+    //      which dedupes inside recordPaidAndEntitle) ----
+    if (evt.event !== 'payment.captured') return res.status(200).json({ ok: true, ignored: true });
 
     const pay = evt.payload && evt.payload.payment && evt.payload.payment.entity;
     if (!pay) return res.status(200).json({ ok: true, ignored: true });
@@ -86,47 +173,11 @@ async function handler(req, res) {
     const userId = notes.user_id;
     if (!price || !userId) return res.status(200).json({ ok: true, ignored: 'no_notes' });
 
-    // Idempotency: if we already recorded this payment as paid, stop.
-    const dupRes = await rest('GET', '/payments?select=id,status&razorpay_payment_id=eq.'
-      + encodeURIComponent(paymentId) + '&limit=1');
-    if (dupRes.ok) {
-      const rows = await dupRes.json();
-      if (rows && rows[0] && rows[0].status === 'paid') return res.status(200).json({ ok: true, duplicate: true });
-    }
-
-    // Mark the pending order row paid (or insert one if it's missing).
-    let updated = false;
-    if (orderId) {
-      const up = await rest('PATCH', '/payments?razorpay_order_id=eq.' + encodeURIComponent(orderId),
-        { razorpay_payment_id: paymentId, status: 'paid', raw: evt }, { Prefer: 'return=representation' });
-      if (up.ok) { const r = await up.json(); updated = Array.isArray(r) && r.length > 0; }
-    }
-    if (!updated) {
-      await rest('POST', '/payments', {
-        user_id: userId, razorpay_order_id: orderId, razorpay_payment_id: paymentId,
-        amount_paise: pay.amount, plan: price.plan, period: price.period, status: 'paid', raw: evt
-      });
-    }
-
-    // Entitlement dates: extend the newest active same-or-lower plan, else now.
-    const entRes = await rest('GET', '/entitlements?select=plan,expires_at&user_id=eq.'
-      + encodeURIComponent(userId) + '&order=created_at.desc&limit=10');
-    let existing = null;
-    if (entRes.ok) {
-      const rows = await entRes.json();
-      const now = Date.now();
-      existing = (rows || []).find(r => !r.expires_at || new Date(r.expires_at).getTime() > now) || null;
-    }
-    const dates = computeDates(existing, price.plan, price.days, Date.now());
-    await rest('POST', '/entitlements', {
-      user_id: userId, plan: price.plan, source: 'razorpay',
-      starts_at: dates.starts_at, expires_at: dates.expires_at, payment_id: paymentId
+    const r = await recordPaidAndEntitle({
+      paymentId, orderId, userId, price, amountPaise: pay.amount, evt, pay,
+      source: pay.invoice_id ? 'razorpay_sub' : 'razorpay'
     });
-
-    // Confirmation email is best-effort — never fail the webhook on it.
-    try { await maybeSendEmail(price, dates.expires_at, pay); } catch (e) { /* ignore */ }
-
-    return res.status(200).json({ ok: true });
+    return res.status(200).json({ ok: true, duplicate: !!r.duplicate });
   } catch (e) {
     return res.status(500).json({ error: 'server_error' });
   }
@@ -136,3 +187,4 @@ module.exports = handler;
 module.exports.config = { api: { bodyParser: false } };
 module.exports.verifySignature = verifySignature;
 module.exports.computeDates = computeDates;
+module.exports.SUB_STATUS = SUB_STATUS;
