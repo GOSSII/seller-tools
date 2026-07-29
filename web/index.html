@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#2f5af0">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f5af0'/%3E%3Ctext x='16' y='23' font-size='19' text-anchor='middle' fill='white' font-family='Arial' font-weight='bold'%3E%E2%82%B9%3C/text%3E%3C/svg%3E">
 <title>Seller Tools — Amazon India Profit &amp; Fee Calculators</title>
 <meta name="description" content="Free calculators for Amazon India sellers. Work out true profit per SKU, FBA fees, storage cost, break-even ACOS and PPC ROI. Updated for 2026 fee cards.">
 <meta property="og:title" content="Seller Tools — Amazon India Seller Calculators">
@@ -55,6 +56,9 @@
      middle-click, and carries a 44 px tap target. */
   .back{display:inline-flex;align-items:center;font-size:14px;color:var(--blue);font-weight:600;
         cursor:pointer;flex:none;min-height:44px;padding:0 2px 0 10px;white-space:nowrap}
+  /* The class sets display, which would otherwise beat the UA [hidden] rule and
+     leak the back link onto the home page where backBtn.hidden is set. */
+  .back[hidden]{display:none}
 
   /* Home */
   .hero{padding:26px 0 6px}
@@ -314,6 +318,96 @@
     #printhost .pmeta{font-size:12px;color:#444;margin-bottom:12px}
   }
 
+  /* ============================================================
+     LANDING PAGE (home route) — additive, does not affect tools
+     ============================================================ */
+  .lp-hero{padding:38px 0 20px}
+  @media(min-width:600px){.lp-hero{padding:56px 0 30px}}
+  .lp-hero h1{font-size:clamp(27px,7vw,44px);letter-spacing:-.03em;line-height:1.12;max-width:820px}
+  .lp-hero .sub{color:var(--muted);font-size:clamp(15px,2.4vw,18px);max-width:620px;margin-top:14px}
+  .lp-cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:22px}
+  .lp-btn{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:0 22px;
+    border-radius:12px;font-weight:700;font-size:15px;cursor:pointer;border:1px solid transparent;
+    background:var(--blue);color:#fff;transition:filter .15s,transform .15s}
+  @media(hover:hover){.lp-btn:hover{filter:brightness(1.06);transform:translateY(-1px)}}
+  .lp-btn.sec{background:#fff;color:var(--blue);border-color:var(--blue-line)}
+  .lp-trust{display:flex;flex-wrap:wrap;gap:10px 22px;margin-top:26px;padding:16px 0 0;
+    border-top:1px solid var(--line)}
+  .lp-trust span{display:inline-flex;align-items:center;gap:7px;font-size:13.5px;color:var(--muted);font-weight:600}
+  .lp-trust .tick{color:var(--green);font-weight:800}
+
+  .lp-features{padding:14px 0 8px}
+  .lp-feat{display:grid;grid-template-columns:1fr;gap:20px;align-items:center;padding:26px 0;
+    border-top:1px solid var(--line)}
+  @media(min-width:820px){
+    .lp-feat{grid-template-columns:1fr 1fr;gap:40px;padding:40px 0}
+    .lp-feat.rev .lp-feat-art{order:2}
+  }
+  .lp-feat h3{font-size:clamp(19px,3vw,24px);letter-spacing:-.02em;margin-bottom:8px}
+  .lp-feat p{color:var(--muted);font-size:15px;max-width:460px}
+  .lp-feat .lp-eyebrow{font-size:12.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;
+    color:var(--blue);margin-bottom:9px}
+  /* Pure-CSS product mockups — no external images */
+  .lp-mock{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;
+    box-shadow:0 10px 30px rgba(15,26,43,.06);overflow:hidden}
+  .lp-mock .bar{height:9px;border-radius:6px;background:var(--line);margin:9px 0}
+  .lp-mock .row{display:flex;justify-content:space-between;align-items:center;gap:12px;
+    padding:9px 0;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--muted)}
+  .lp-mock .row:last-child{border-bottom:0}
+  .lp-mock .row b{color:var(--ink)}
+  .lp-mock .amt.neg{color:var(--red)}
+  .lp-mock .amt.pos{color:var(--green)}
+  .lp-mock .chip{display:inline-block;font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;
+    background:var(--blue-soft);color:var(--blue)}
+  .lp-mock .label46{border:2px dashed var(--blue-line);border-radius:10px;padding:12px;
+    display:flex;flex-direction:column;gap:8px;background:var(--blue-soft)}
+  .lp-mock .barcode{height:34px;background:repeating-linear-gradient(90deg,#0f1a2b 0 2px,#fff 2px 5px);
+    border-radius:3px}
+  .lp-mock .kv{display:grid;grid-template-columns:1fr auto;gap:6px 12px;font-size:12.5px}
+  .lp-mock .kv b{color:var(--ink);font-weight:700}
+  .lp-mock .big{font-size:22px;font-weight:800;letter-spacing:-.02em}
+  .lp-mock .big.pos{color:var(--green)}
+
+  .lp-faq{padding:34px 0;border-top:1px solid var(--line)}
+  .lp-faq h2{font-size:clamp(21px,4vw,28px);letter-spacing:-.02em;margin-bottom:18px}
+  .lp-faq details{border:1px solid var(--line);border-radius:12px;padding:2px 16px;margin-bottom:10px;background:#fff}
+  .lp-faq summary{cursor:pointer;font-weight:700;font-size:15px;padding:14px 0;list-style:none;
+    display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:44px}
+  .lp-faq summary::-webkit-details-marker{display:none}
+  .lp-faq summary::after{content:"+";color:var(--blue);font-weight:800;font-size:20px;flex:none}
+  .lp-faq details[open] summary::after{content:"–"}
+  .lp-faq details p{color:var(--muted);font-size:14px;padding:0 0 16px}
+
+  /* ============================================================
+     PRICING PAGE
+     ============================================================ */
+  .pr-head{text-align:center;padding:34px 0 8px}
+  .pr-head h2{font-size:clamp(24px,5vw,32px);letter-spacing:-.02em}
+  .pr-head p{color:var(--muted);font-size:15px;margin-top:8px}
+  .pr-grid{display:grid;grid-template-columns:1fr;gap:16px;padding:24px 0 20px;align-items:start}
+  @media(min-width:760px){.pr-grid{grid-template-columns:repeat(3,1fr);gap:18px}}
+  .pr-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:22px;display:flex;
+    flex-direction:column;position:relative}
+  .pr-card.pop{border-color:var(--blue);box-shadow:0 10px 30px rgba(47,90,240,.12)}
+  .pr-card .pr-badge{position:absolute;top:-11px;left:22px;background:var(--blue);color:#fff;
+    font-size:11.5px;font-weight:700;padding:4px 12px;border-radius:999px}
+  .pr-card h3{font-size:19px;letter-spacing:-.01em}
+  .pr-price{margin:12px 0 4px;font-size:30px;font-weight:800;letter-spacing:-.02em}
+  .pr-price small{font-size:14px;font-weight:600;color:var(--muted)}
+  .pr-alt{font-size:13px;color:var(--muted)}
+  .pr-feats{list-style:none;margin:18px 0;padding:0;display:flex;flex-direction:column;gap:10px}
+  .pr-feats li{display:flex;gap:9px;font-size:13.5px;line-height:1.4;color:var(--ink)}
+  .pr-feats li .tick{color:var(--green);font-weight:800;flex:none}
+  .pr-feats li .soon{margin-left:6px;font-size:11px;font-weight:700;color:var(--orange);
+    background:var(--orange-soft);border:1px solid var(--orange-line);padding:1px 7px;border-radius:999px;white-space:nowrap}
+  .pr-card .lp-btn{width:100%;margin-top:auto}
+  .pr-note{text-align:center;color:var(--faint);font-size:12.5px;padding:0 0 30px;max-width:640px;margin:0 auto}
+
+  /* Footer navigation (SPA) */
+  .foot-nav{display:flex;flex-wrap:wrap;gap:8px 18px;margin-bottom:14px}
+  .foot-nav a{color:var(--blue);font-weight:600}
+  @media(hover:hover){.foot-nav a:hover{text-decoration:underline}}
+
   footer{border-top:1px solid var(--line);background:#fff;padding:22px 0;font-size:12.5px;color:var(--faint);line-height:1.6}
   @media(min-width:600px){footer{padding:26px 0}}
 
@@ -336,8 +430,15 @@
 
 <footer>
   <div class="wrap">
-    Fee rates reflect published 2026 marketplace rate cards and are estimates — always confirm against your own Seller Central rate card before pricing.
-    Seller Tools is an independent tool, not affiliated with, endorsed by, or sponsored by Amazon.com, Inc.
+    <nav class="foot-nav" aria-label="Footer">
+      <a href="#/pricing">Pricing</a>
+      <a href="/terms.html">Terms</a>
+      <a href="/privacy.html">Privacy</a>
+      <a href="/refunds.html">Refunds</a>
+      <a href="/contact.html">Contact</a>
+    </nav>
+    Fee rates reflect published 2026 marketplace rate cards and are estimates — always confirm against your own Seller Central rate card before pricing.<br>
+    &copy; <span id="foot-year">2026</span> Amazon Seller Tools. Not affiliated with Amazon.com, Inc. Amazon is a trademark of Amazon.com, Inc.
   </div>
 </footer>
 
@@ -1093,14 +1194,97 @@ let state={};
 
 function esc(s){return String(s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));}
 
+function setMeta(title,desc){
+  document.title=title;
+  const md=document.querySelector('meta[name="description"]');
+  if(md&&desc) md.setAttribute("content",desc);
+}
+
 function renderHome(){
-  document.title="Seller Tools — Amazon India Profit & Fee Calculators";
+  setMeta("Free Amazon India seller tools — profit, fees & settlement analyzer",
+    "Free calculators and tools for Amazon India sellers: true profit per SKU, FBA fees, settlement analyzer, GST report and 4×6 label cropper. Files never leave your browser.");
   backBtn.hidden=true;
   app.innerHTML=`
     <div class="wrap">
-      <section class="hero">
-        <h1>Seller Tools</h1>
-        <p>Free calculators for Amazon India sellers. Work out true profit per SKU, FBA fees, storage exposure, break-even ACOS and ad ROI — instantly, in your browser.</p>
+      <section class="lp-hero">
+        <h1>Free tools for Amazon India sellers — know your real munafa</h1>
+        <p class="sub">Cut through Amazon's fees, settlements and labels. Work out true profit per SKU, see where every rupee of your payout went, and print clean 4×6 labels — instantly, in your browser.</p>
+        <div class="lp-cta">
+          <button type="button" class="lp-btn" id="lp-usetools">Use free tools</button>
+          <a class="lp-btn sec" href="#/pricing">See pricing</a>
+        </div>
+        <div class="lp-trust">
+          <span><span class="tick">✓</span> Files never leave your browser</span>
+          <span><span class="tick">✓</span> Built for Amazon.in</span>
+          <span><span class="tick">✓</span> No login needed for free tools</span>
+        </div>
+      </section>
+
+      <section class="lp-features">
+        <div class="lp-feat">
+          <div class="lp-feat-txt">
+            <div class="lp-eyebrow">Settlement Analyzer</div>
+            <h3>Paste your settlement file, see where every rupee went</h3>
+            <p>Upload the settlement report from Seller Central and get every fee, tax, refund and deduction itemised — parsed locally, so your numbers stay on your machine.</p>
+          </div>
+          <div class="lp-feat-art">
+            <div class="lp-mock" aria-hidden="true">
+              <div class="row"><span>Product charges</span><b class="amt pos">+₹42,180.00</b></div>
+              <div class="row"><span>Referral + closing fees</span><b class="amt neg">−₹6,914.35</b></div>
+              <div class="row"><span>Shipping (Easy Ship)</span><b class="amt neg">−₹3,842.00</b></div>
+              <div class="row"><span>Refunds</span><b class="amt neg">−₹1,841.30</b></div>
+              <div class="row"><span>Net deposit</span><b class="big pos">₹29,582.35</b></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="lp-feat rev">
+          <div class="lp-feat-txt">
+            <div class="lp-eyebrow">Label Cropper</div>
+            <h3>Crop, sort by SKU, print 4×6 with the SKU on the label</h3>
+            <p>Turn Easy Ship A4 label PDFs into clean thermal-printer pages. Sort by SKU so picking is faster, and print with the SKU right on each 4×6 label — all in the browser.</p>
+          </div>
+          <div class="lp-feat-art">
+            <div class="lp-mock" aria-hidden="true">
+              <div class="label46">
+                <span class="chip">SKU: KURTA-RED-M</span>
+                <div class="barcode"></div>
+                <div class="kv"><span>To</span><b>Priya S.</b><span>Qty</span><b>1</b><span>Courier</span><b>Amazon</b></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="lp-feat">
+          <div class="lp-feat-txt">
+            <div class="lp-eyebrow">Calculators</div>
+            <h3>Profit, fees, GST and price bands — updated for 2026</h3>
+            <p>Know your true profit per SKU before you list. Referral, closing, FBA pick &amp; pack, storage, GST input credit and break-even ACOS — all with Amazon.in's current rate cards.</p>
+          </div>
+          <div class="lp-feat-art">
+            <div class="lp-mock" aria-hidden="true">
+              <div class="row"><span>Selling price</span><b>₹999.00</b></div>
+              <div class="row"><span>Amazon fees</span><b class="amt neg">−₹168.66</b></div>
+              <div class="row"><span>Settlement</span><b>₹830.34</b></div>
+              <div class="row"><span>Net profit / unit</span><b class="big pos">₹361.35</b></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="lp-faq" aria-label="Frequently asked questions">
+        <h2>Questions sellers ask</h2>
+        <details><summary>Is it really free?</summary><p>Yes — every calculator, the label cropper, order printer, link builder and keyword combiner are free with no login. Some advanced reports (Settlement Analyzer, GST report, SKU report) are moving to a low-cost paid plan; the free tools stay free.</p></details>
+        <details><summary>Do you upload or store my files?</summary><p>No. Settlement reports and label PDFs are processed entirely in your browser — they are never uploaded to any server. That is our core promise and it will always be true.</p></details>
+        <details><summary>Which marketplaces do you support?</summary><p>Amazon India (Amazon.in) only. Fees, GST and settlement formats are all specific to the India marketplace.</p></details>
+        <details><summary>How do I get my settlement report?</summary><p>In Seller Central go to Payments → Reports Repository (or Date Range Reports) and download the transaction/settlement report, then paste or upload it into the Settlement Analyzer.</p></details>
+        <details><summary>What is your refund policy?</summary><p>Paid plans come with a 7-day money-back guarantee on your first purchase. See our <a href="/refunds.html">Refund Policy</a> for details.</p></details>
+        <details><summary>How do I contact you?</summary><p>Email <a href="mailto:dipsgos7@gmail.com">dipsgos7@gmail.com</a> — see the <a href="/contact.html">Contact</a> page for expected reply times.</p></details>
+      </section>
+
+      <section class="hero" id="tools">
+        <h1 style="font-size:clamp(20px,4.5vw,26px)">All free tools</h1>
+        <p>No login, nothing uploaded. Pick a tool to get started.</p>
       </section>
       <div class="grid">
         ${CALCS.map(c=>`
@@ -1153,6 +1337,72 @@ function renderHome(){
           <p>Turn your unshipped-orders report into a printable picklist and per-order packing slips.</p>
         </a>
       </div>
+    </div>`;
+  const useBtn=document.getElementById("lp-usetools");
+  if(useBtn) useBtn.addEventListener("click",()=>{
+    const g=document.getElementById("tools");
+    if(g) g.scrollIntoView({behavior:"smooth",block:"start"});
+  });
+}
+
+/* Pricing page — plans/prices per docs/SAAS_PLAN.md section 1. Buttons stay in
+   "join waitlist" mode until the payments phase ships. */
+function renderPricing(){
+  setMeta("Pricing — Amazon Seller Tools",
+    "Simple pricing for Amazon India sellers. Free calculators and tools, plus Starter (₹199/month) and Pro (₹499/month) plans for settlement, GST and SKU reports.");
+  backBtn.hidden=false;
+  const waitlist='mailto:dipsgos7@gmail.com?subject=Waitlist';
+  app.innerHTML=`
+    <div class="wrap page">
+      <div class="pr-head">
+        <h2>Simple pricing for Amazon India sellers</h2>
+        <p>Start free. Upgrade when the paid reports save you more than they cost.</p>
+      </div>
+      <div class="pr-grid">
+        <div class="pr-card">
+          <h3>Free</h3>
+          <div class="pr-price">₹0</div>
+          <div class="pr-alt">Forever. No login needed.</div>
+          <ul class="pr-feats">
+            <li><span class="tick">✓</span> All calculators (profit, fees, ACOS, price bands)</li>
+            <li><span class="tick">✓</span> Label Cropper — 4×6 with SKU</li>
+            <li><span class="tick">✓</span> Order Printer</li>
+            <li><span class="tick">✓</span> Link Builder &amp; Keyword Combiner</li>
+            <li><span class="tick">✓</span> FBA Reimbursement helper</li>
+            <li><span class="tick">✓</span> Files never leave your browser</li>
+          </ul>
+          <a class="lp-btn sec" href="#/">Use free tools</a>
+        </div>
+
+        <div class="pr-card pop">
+          <span class="pr-badge">Most popular</span>
+          <h3>Starter</h3>
+          <div class="pr-price">₹199 <small>/ month</small></div>
+          <div class="pr-alt">or ₹999 / year (save ~58%)</div>
+          <ul class="pr-feats">
+            <li><span class="tick">✓</span> Everything in Free</li>
+            <li><span class="tick">✓</span> Settlement Analyzer — every rupee itemised</li>
+            <li><span class="tick">✓</span> GST &amp; TCS Report for filing</li>
+            <li><span class="tick">✓</span> SKU Profitability Report</li>
+            <li><span class="tick">✓</span> One active login, kept simple</li>
+          </ul>
+          <a class="lp-btn" href="${waitlist}">Coming soon — join waitlist</a>
+        </div>
+
+        <div class="pr-card">
+          <h3>Pro</h3>
+          <div class="pr-price">₹499 <small>/ month</small></div>
+          <div class="pr-alt">or ₹2,499 / year (save ~58%)</div>
+          <ul class="pr-feats">
+            <li><span class="tick">✓</span> Everything in Starter</li>
+            <li><span class="tick">✓</span> SKU P&amp;L with your product costs<span class="soon">coming soon</span></li>
+            <li><span class="tick">✓</span> Reconciliation &amp; SAFE-T finder<span class="soon">coming soon</span></li>
+            <li><span class="tick">✓</span> Multi-month Trends<span class="soon">coming soon</span></li>
+          </ul>
+          <a class="lp-btn sec" href="${waitlist}">Coming soon — join waitlist</a>
+        </div>
+      </div>
+      <p class="pr-note">Prices in INR, inclusive of applicable taxes. Paid plans include a 7-day money-back guarantee on your first purchase — see our <a href="/refunds.html">Refund Policy</a>. Tools are estimates; always verify against Seller Central and your CA.</p>
     </div>`;
 }
 
@@ -2751,6 +3001,7 @@ function opRender(){
 function route(){
   const h=location.hash.replace(/^#\/?/,"");
   if(!h){renderHome();window.scrollTo(0,0);return;}
+  if(h==="pricing"){renderPricing();window.scrollTo(0,0);return;}
   if(h==="settlement-analyzer"){renderSettlementAnalyzer();window.scrollTo(0,0);return;}
   if(h==="gst-report"){renderGstReport();window.scrollTo(0,0);return;}
   if(h==="sku-report"){renderSkuReport();window.scrollTo(0,0);return;}
@@ -2762,6 +3013,7 @@ function route(){
   window.scrollTo(0,0);
 }
 window.addEventListener("hashchange",route);
+(function(){const y=document.getElementById("foot-year");if(y)y.textContent=new Date().getFullYear();})();
 route();
 </script>
 </body>
