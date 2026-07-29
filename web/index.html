@@ -508,6 +508,15 @@
   .adm-row-inline{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
   .adm-row-inline .lp-btn{min-height:40px;padding:0 14px;font-size:13.5px}
   .adm-confirm{display:inline-flex;gap:8px;align-items:center;font-size:13px;color:var(--ink);flex-wrap:wrap}
+  /* SKU Advanced P&L */
+  .sku-costall{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:6px 0 12px;font-size:13px;color:var(--muted)}
+  .sku-cost-in{width:88px;min-height:34px;padding:0 8px;font-size:14px;text-align:right;border:1px solid #d6dce6;border-radius:8px}
+  .sku-exp{border:0;background:none;cursor:pointer;color:var(--blue);font-size:13px;padding:0 4px 0 0;min-height:auto;font-weight:800}
+  .sku-detail td{background:var(--bg);padding:0 !important}
+  .sku-bklist{padding:10px 14px}
+  .sku-bk{display:flex;justify-content:space-between;gap:14px;font-size:12.5px;color:var(--muted);padding:4px 0;border-bottom:1px dashed var(--line)}
+  .sku-bk:last-child{border-bottom:0}
+  .sku-bk b{color:var(--ink)}
 
   footer{border-top:1px solid var(--line);background:#fff;padding:22px 0;font-size:12.5px;color:var(--faint);line-height:1.6}
   @media(min-width:600px){footer{padding:26px 0}}
@@ -3023,16 +3032,22 @@ function gstRenderResults(){
    the parsed records — nothing estimated.
    ============================================================ */
 let skuSort="net";
+/* Advanced P&L (Phase 7a) — Pro-only overlay on the SKU report. */
+let skuAdvanced=false, skuIsPro=false, skuShowUpgrade=false;
+const skuExpanded=new Set();
+const SKU_COSTS_KEY="sku_costs";
+function loadSkuCosts(){try{return JSON.parse(localStorage.getItem(SKU_COSTS_KEY)||"{}")||{};}catch(e){return {};}}
+function saveSkuCosts(c){try{localStorage.setItem(SKU_COSTS_KEY,JSON.stringify(c));}catch(e){}}
 
 function skuCompute(r){
   const bySku={};
   for(const rec of r.records){
     const key=rec.sku||"(no SKU)";
-    const s=bySku[key]||(bySku[key]={sku:key,units:0,orders:0,refunds:0,sales:0,refundValue:0,fees:0,taxes:0,other:0,net:0,b:{}});
+    const s=bySku[key]||(bySku[key]={sku:key,units:0,orders:0,refunds:0,unitsReturned:0,sales:0,refundValue:0,fees:0,taxes:0,other:0,net:0,b:{}});
     const isOrder=rec.transactionType==="Order";
     const isRefund=/refund/i.test(rec.transactionType);
     if(isOrder){s.orders++;s.units+=rec.quantity||0;}
-    if(isRefund)s.refunds++;
+    if(isRefund){s.refunds++;s.unitsReturned+=Math.abs(rec.quantity||0);}
     for(const l of rec.amounts){
       s.net+=l.amount;
       if(/^principal$/i.test(l.amountDescription)){
@@ -3077,6 +3092,9 @@ function skuReportBody(){
   ["dragleave","drop"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove("over");}));
   drop.addEventListener("drop",ev=>{const f=ev.dataTransfer.files[0];if(f)skuRead(f);});
   file.addEventListener("change",()=>{const f=file.files[0];if(f)skuRead(f);});
+  // Advanced P&L is Pro-only. Owner bypass (sa_unlocked) counts as Pro.
+  skuAdvanced=false; skuShowUpgrade=false; skuIsPro=saUnlocked();
+  getEntitlement().then(e=>{ if(e&&e.plan==="pro") skuIsPro=true; }).catch(()=>{});
   if(saParsed) skuRenderResults();
 }
 
@@ -3102,23 +3120,70 @@ function skuRenderResults(){
   const feePct=totals.sales?Math.abs(totals.fees)/totals.sales*100:0;
   const refundPct=totals.sales?Math.abs(totals.refund)/totals.sales*100:0;
 
+  // Advanced P&L: attach product cost and true profit (Pro only).
+  const advOn=skuAdvanced&&skuIsPro;
+  const costs=loadSkuCosts();
+  const withPL=sorted.map(s=>{
+    const netUnits=Math.max(0,(s.units||0)-(s.unitsReturned||0));
+    const cpu=Number(costs[s.sku]||0);
+    const cost=cpu*netUnits;          // product cost on units sold net of returns
+    const truePL=s.net-cost;          // net settlement minus your product cost
+    return Object.assign({},s,{netUnits,cpu,cost,truePL});
+  });
+  const trueProfit=withPL.reduce((t,x)=>t+x.truePL,0);
+  const lossCount=withPL.filter(x=>x.truePL<0).length;
+
   let h=`<div class="stats">
     <div class="stat blue"><div class="k">SKUs · Units</div><div class="v">${skus.length} · ${totals.units}</div></div>
     <div class="stat green"><div class="k">Net across all SKUs</div><div class="v">${inr(totals.net)}</div></div>
     <div class="stat"><div class="k">Fees as % of sales</div><div class="v">${feePct.toFixed(1)}%</div></div>
     <div class="stat ${refundPct>10?'red':''}"><div class="k">Refunds as % of sales</div><div class="v">${refundPct.toFixed(1)}%</div></div>
+    ${advOn?`<div class="stat ${trueProfit<0?'red':'green'}"><div class="k">True profit after product cost</div><div class="v">${inr(trueProfit)}</div><div class="sa-sub" style="margin-top:3px">${lossCount} loss-making SKU${lossCount===1?"":"s"}</div></div>`:""}
   </div>`;
 
   if(skus.length>1)
     h+=`<div class="banner info">Best earner: <b>${esc(best.sku)}</b> (${inr(best.net)} net). Weakest: <b>${esc(worst.sku)}</b> (${inr(worst.net)} net).${worst.net<0?" A negative net means this SKU took money out of your settlement — check its price, weight slab and return rate.":""}</div>`;
+
+  if(skuShowUpgrade && !skuIsPro)
+    h+=`<div class="panel" style="border-color:var(--blue-line);background:var(--blue-soft)">
+      <h4>Advanced P&amp;L is a Pro feature</h4>
+      <p class="sa-sub">You're on Starter (₹199/month). Upgrade to <b>Pro (₹499/month — just ₹300 more)</b> to add your product costs and see <b>true profit per SKU after cost</b>, with loss-making SKUs flagged and a full per-SKU fee breakdown.</p>
+      <a class="lp-btn" href="#/pricing" style="margin-top:8px">See Pro pricing</a></div>`;
 
   h+=`<div class="panel"><h4>Per-SKU breakdown <span class="sa-sub">(${skus.length})</span></h4>
     <div class="filterbar">
       <button class="fbtn ${skuSort==='net'?'on':''}" data-sort="net">Sort by Net</button>
       <button class="fbtn ${skuSort==='sales'?'on':''}" data-sort="sales">Sort by Sales</button>
       <button class="fbtn ${skuSort==='refund'?'on':''}" data-sort="refund">Sort by Refund %</button>
-    </div>
+      <button class="fbtn ${advOn?'on':''}" data-adv="1" title="Add your product costs to see true profit">⚡ Advanced P&amp;L${skuIsPro?"":" · Pro"}</button>
+    </div>`;
+
+  if(advOn){
+    h+=`<div class="sku-costall">
+      <span>Product cost per unit —</span>
+      <input id="sku-cost-all" type="number" min="0" inputmode="decimal" placeholder="apply to all" style="max-width:150px">
+      <button class="fbtn" id="sku-apply-all">Apply to all SKUs</button>
+      <span class="sa-sub">saved in your browser</span></div>
     <div class="tblwrap"><table class="sa">
+      <thead><tr><th>SKU</th><th class="num">Units (net)</th><th class="num">Net</th><th class="num">Cost/unit ₹</th><th class="num">Product cost</th><th class="num">True P&amp;L</th></tr></thead>
+      <tbody>${withPL.map(s=>{
+        const exp=skuExpanded.has(s.sku);
+        const bucketRows=Object.keys(s.b||{}).filter(k=>Math.abs(s.b[k])>=0.005)
+          .map(k=>`<div class="sku-bk"><span>${esc(SA_BUCKET_NAMES[k]||k)}</span><span>${sv(s.b[k])}</span></div>`).join("")
+          || `<div class="sku-bk"><span>No itemised fees for this SKU.</span><span></span></div>`;
+        return `<tr>
+          <td><button type="button" class="sku-exp" data-expand="${esc(s.sku)}" aria-expanded="${exp}">${exp?"▾":"▸"}</button> ${esc(s.sku)}</td>
+          <td class="num">${s.netUnits}${s.unitsReturned?` <span class="sa-sub">(−${s.unitsReturned})</span>`:""}</td>
+          <td class="num">${sv(s.net)}</td>
+          <td class="num"><input type="number" min="0" inputmode="decimal" class="sku-cost-in" data-cost-sku="${esc(s.sku)}" value="${s.cpu?s.cpu:""}" placeholder="0"></td>
+          <td class="num">${s.cost?"-"+inr(s.cost):inr(0)}</td>
+          <td class="num"><b class="${s.truePL<0?'amt-neg':'amt-pos'}">${inr(s.truePL)}</b></td>
+        </tr>
+        ${exp?`<tr class="sku-detail"><td colspan="6"><div class="sku-bklist"><div class="sku-bk"><span><b>Fee &amp; charge breakdown</b></span><span></span></div>${bucketRows}</div></td></tr>`:""}`;}).join("")}
+      </tbody></table></div>
+    <div class="banner info">Product cost is applied to units <b>sold net of returns</b>. True P&amp;L = Net settlement − your product cost. Costs are stored only in your browser (never uploaded).</div></div>`;
+  } else {
+    h+=`<div class="tblwrap"><table class="sa">
       <thead><tr><th>SKU</th><th class="num">Units</th><th class="num">Gross sales</th><th class="num">Refunds</th><th class="num">Fees</th><th class="num">Taxes</th><th class="num">Net</th><th class="num">Net / unit</th><th class="num">Refund %</th></tr></thead>
       <tbody>${sorted.map(s=>{
         const rp=s.sales?Math.abs(s.refundValue)/s.sales*100:0;
@@ -3129,12 +3194,32 @@ function skuRenderResults(){
           <td class="num"><b>${sv(s.net)}</b></td>
           <td class="num">${s.units?inr(s.net/s.units):"—"}</td>
           <td class="num ${rp>10?'amt-neg':''}">${rp.toFixed(1)}%</td></tr>`;}).join("")}
-      </tbody></table></div></div>`;
+      </tbody></table></div>
+    <div class="banner info">"Net" is the sum of every settlement line for that SKU — principal, fees, taxes and refunds — i.e. what actually reached your bank for it this settlement. Service-level charges Amazon doesn't tie to a SKU (subscription, storage billed separately) appear under "(no SKU)".</div></div>`;
+  }
 
-  h+=`<div class="banner info">"Net" is the sum of every settlement line for that SKU — principal, fees, taxes and refunds — i.e. what actually reached your bank for it this settlement. Service-level charges Amazon doesn't tie to a SKU (subscription, storage billed separately) appear under "(no SKU)".</div>`;
   if(r.errors.length) h+=`<div class="banner warn"><b>${r.errors.length} row(s) could not be parsed</b> and are excluded — open the Settlement Analyzer for details.</div>`;
   out.innerHTML=h;
-  out.querySelectorAll(".fbtn").forEach(b=>b.addEventListener("click",()=>{skuSort=b.dataset.sort;skuRenderResults();}));
+  out.querySelectorAll(".fbtn[data-sort]").forEach(b=>b.addEventListener("click",()=>{skuSort=b.dataset.sort;skuRenderResults();}));
+  const adv=out.querySelector("[data-adv]");
+  if(adv) adv.addEventListener("click",()=>{
+    if(!skuIsPro){ skuShowUpgrade=true; skuRenderResults(); return; }
+    skuAdvanced=!skuAdvanced; skuShowUpgrade=false; skuRenderResults();
+  });
+  out.querySelectorAll(".sku-cost-in").forEach(inp=>inp.addEventListener("change",()=>{
+    const c=loadSkuCosts(); const v=inp.value.trim();
+    if(v===""||Number(v)===0){delete c[inp.dataset.costSku];} else c[inp.dataset.costSku]=Number(v)||0;
+    saveSkuCosts(c); skuRenderResults();
+  }));
+  const applyAll=out.querySelector("#sku-apply-all");
+  if(applyAll) applyAll.addEventListener("click",()=>{
+    const el=out.querySelector("#sku-cost-all"), v=el?el.value.trim():"";
+    const c=loadSkuCosts(); withPL.forEach(x=>{ if(v===""||Number(v)===0)delete c[x.sku]; else c[x.sku]=Number(v)||0; });
+    saveSkuCosts(c); skuRenderResults();
+  });
+  out.querySelectorAll("[data-expand]").forEach(el=>el.addEventListener("click",()=>{
+    const k=el.dataset.expand; if(skuExpanded.has(k))skuExpanded.delete(k); else skuExpanded.add(k); skuRenderResults();
+  }));
 }
 
 /* ============================================================
