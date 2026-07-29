@@ -511,6 +511,8 @@
   .pay-table th{background:var(--bg);color:var(--muted);font-weight:700;font-size:12px}
   .pay-table tr:last-child td{border-bottom:0}
   .pay-table .pid{color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+  .pr-auto{display:flex;gap:7px;align-items:center;justify-content:center;font-size:12.5px;color:var(--muted);margin-top:10px;cursor:pointer}
+  .pr-auto input{accent-color:var(--blue);width:15px;height:15px;cursor:pointer}
   /* Admin */
   .adm-row{cursor:pointer}
   @media(hover:hover){.adm-row:hover td{background:var(--bg)}}
@@ -1866,14 +1868,14 @@ function fmtDateTime(d){
    sends a plan key. */
 const inrPaise = p => "₹"+((p||0)/100).toLocaleString("en-IN",{minimumFractionDigits:(p%100?2:0),maximumFractionDigits:2});
 
-async function startCheckout(planKey){
+async function startCheckout(planKey, autoRenew){
   const u=sessionUser();
   if(!u){ location.hash="#/signup"; return; }
   const token=await accessToken();
   if(!token){ location.hash="#/login"; return; }
   let order;
   try{
-    const r=await fetch("/api/create-order",{method:"POST",
+    const r=await fetch(autoRenew?"/api/create-subscription":"/api/create-order",{method:"POST",
       headers:{"Content-Type":"application/json","Authorization":"Bearer "+token},
       body:JSON.stringify({plan:planKey})});
     if(!r.ok){ renderPaymentProblem("We couldn't start the payment. Please try again."); return; }
@@ -1881,14 +1883,17 @@ async function startCheckout(planKey){
   }catch(e){ renderPaymentProblem("Network issue starting the payment. Please try again."); return; }
   try{ await loadRazorpay(); }
   catch(e){ renderPaymentProblem("Couldn't load the payment window. Check your connection and retry."); return; }
-  const rzp=new window.Razorpay({
-    key:order.key_id, amount:order.amount, currency:order.currency||"INR",
-    order_id:order.order_id, name:"Amazon Seller Tools", description:order.label||"Plan",
+  const opts={
+    key:order.key_id, name:"Amazon Seller Tools",
+    description:(order.label||"Plan")+(autoRenew?" · auto-renew":""),
     prefill:{ email:order.email||u.email||"" },
     theme:{ color:"#2f5af0" },
     handler:function(){ renderPaymentPolling(order); },
     modal:{ ondismiss:function(){ /* popup closed — leave the user where they were */ } }
-  });
+  };
+  if(autoRenew){ opts.subscription_id=order.subscription_id; }
+  else{ opts.order_id=order.order_id; opts.amount=order.amount; opts.currency=order.currency||"INR"; }
+  const rzp=new window.Razorpay(opts);
   try{ rzp.on("payment.failed",function(){ renderPaymentProblem("The payment didn't go through. No money was taken — you can try again."); }); }catch(e){}
   rzp.open();
 }
@@ -1961,6 +1966,7 @@ function renderAccount(){
       <a class="bigbtn sec" id="ac-renew" href="#/pricing">Renew / change plan</a>
       <button type="button" class="bigbtn sec" id="ac-logout">Logout</button>
     </div>
+    <div id="ac-sub" style="margin-top:22px"></div>
     <div id="ac-pay" style="margin-top:22px"></div>
     <div id="ac-activity" style="margin-top:22px"></div>`);
   const msg=document.getElementById("ac-msg");
@@ -1995,6 +2001,49 @@ function renderAccount(){
       }
       if(rn) rn.textContent=ent.plan==="free"?"Upgrade":"Renew / change plan";
     }catch(e){}
+  })();
+  /* Auto-renewal status + cancel (reads own subscriptions rows via RLS). */
+  (async()=>{
+    const host=document.getElementById("ac-sub"); if(!host) return;
+    try{
+      const c=await sb();
+      const {data}=await c.from("subscriptions")
+        .select("plan,period,status,current_end,created_at")
+        .order("created_at",{ascending:false}).limit(5);
+      const live=["created","authenticated","active","pending","cancel_requested","halted","paused"];
+      const s=(data||[]).find(x=>live.includes(x.status));
+      if(!s){ host.innerHTML=""; return; }
+      const plan=(s.plan||"").charAt(0).toUpperCase()+(s.plan||"").slice(1);
+      const nice=`${plan} · ${s.period||""}`;
+      const nextDt=s.current_end?fmtDate(s.current_end):null;
+      const render=(status)=>{
+        let body="", btn="";
+        if(status==="cancel_requested")
+          body=`Auto-renewal is <b>ending</b>${nextDt?` — no charge after ${esc(nextDt)}`:""}. You keep access until the end of the period you've paid for.`;
+        else if(status==="halted"||status==="paused")
+          body=`Auto-renewal is <b>paused</b> — the last charge didn't go through. Renew from the <a href="#/pricing">pricing page</a> to continue.`;
+        else{
+          body=`Auto-renewal is <b>ON</b> for <b>${esc(nice)}</b>${nextDt?` — next charge around ${esc(nextDt)}`:""}. Cancel anytime; you keep access until the period ends.`;
+          btn=`<button type="button" class="bigbtn sec" id="ac-sub-cancel" style="margin-top:10px">Cancel auto-renewal</button>`;
+        }
+        host.innerHTML=`<h3 style="font-size:16px;margin:0 0 10px">Auto-renewal</h3>
+          <div class="card"><p style="font-size:14px;margin:0">🔁 ${body}</p>${btn}
+          <div id="ac-sub-msg" class="auth-msg" hidden style="margin-top:10px"></div></div>`;
+        const cb=document.getElementById("ac-sub-cancel");
+        if(cb) cb.addEventListener("click",async()=>{
+          cb.disabled=true; cb.textContent="Cancelling…";
+          const m=document.getElementById("ac-sub-msg");
+          try{
+            const token=await accessToken();
+            const r=await fetch("/api/subscription-cancel",{method:"POST",
+              headers:{"Content-Type":"application/json","Authorization":"Bearer "+token}});
+            if(r.ok){ render("cancel_requested"); }
+            else{ authMsg(m,"err","Couldn't cancel right now — please try again or email us."); cb.disabled=false; cb.textContent="Cancel auto-renewal"; }
+          }catch(e){ authMsg(m,"err","Network issue — please try again."); cb.disabled=false; cb.textContent="Cancel auto-renewal"; }
+        });
+      };
+      render(s.status);
+    }catch(e){ host.innerHTML=""; }
   })();
   /* Payment history (reads the user's own rows via RLS). */
   (async()=>{
@@ -2289,6 +2338,7 @@ function renderHome(){
         <details><summary>Do you upload or store my files?</summary><p>No. Settlement reports and label PDFs are processed entirely in your browser — they are never uploaded to any server. That is our core promise and it will always be true.</p></details>
         <details><summary>Which marketplaces do you support?</summary><p>Amazon India (Amazon.in) only. Fees, GST and settlement formats are all specific to the India marketplace.</p></details>
         <details><summary>How do I get my settlement report?</summary><p>In Seller Central go to Payments → Reports Repository (or Date Range Reports) and download the transaction/settlement report, then paste or upload it into the Settlement Analyzer.</p></details>
+        <details><summary>Do plans auto-renew?</summary><p>Only if you choose it. At checkout you can tick <b>auto-renew</b> (so you're not interrupted when the period ends) or untick it for a one-time purchase. Auto-renewal can be cancelled anytime from your account — you keep access until the end of the period you've paid for.</p></details>
         <details><summary>What is your refund policy?</summary><p>You keep access until your paid period ends. Payments are non-refundable once a plan is activated, except for duplicate or failed charges. See our <a href="/refunds.html">Refund Policy</a> for details.</p></details>
         <details><summary>How do I contact you?</summary><p>Email <a href="mailto:dipsgos7@gmail.com">dipsgos7@gmail.com</a> — see the <a href="/contact.html">Contact</a> page for expected reply times.</p></details>
       </section>
@@ -2386,9 +2436,11 @@ function renderPricing(){
   const per=pricingPeriod;
   const st=PR_PRICES.starter[per], pr=PR_PRICES.pro[per];
   const perWord=per==="monthly"?"monthly":"yearly";
-  // Paid CTA: logged-in → Razorpay checkout button; logged-out → sign up first.
+  // Paid CTA: logged-in → Razorpay checkout button + auto-renew choice;
+  // logged-out → sign up first.
   const paidBtn=(price,cls)=> loggedIn
-    ? `<button type="button" class="lp-btn${cls}" data-checkout="${price.key}">Pay ${price.big} — ${perWord}</button>`
+    ? `<button type="button" class="lp-btn${cls}" data-checkout="${price.key}">Pay ${price.big} — ${perWord}</button>
+       <label class="pr-auto"><input type="checkbox" data-auto="${price.key}" checked> Auto-renew ${perWord} — cancel anytime</label>`
     : `<a class="lp-btn${cls}" href="#/signup">Sign up to get started</a>`;
   app.innerHTML=`
     <div class="wrap page">
@@ -2446,11 +2498,14 @@ function renderPricing(){
           ${paidBtn(pr," sec")}
         </div>
       </div>
-      <p class="pr-note">Prices in INR, inclusive of applicable taxes. See our <a href="/refunds.html">Refund Policy</a>. Tools are estimates; always verify against Seller Central and your CA.</p>
+      <p class="pr-note">Prices in INR, inclusive of applicable taxes. Auto-renew is optional and can be cancelled anytime from your account. See our <a href="/refunds.html">Refund Policy</a>. Tools are estimates; always verify against Seller Central and your CA.</p>
     </div>`;
   const seg=document.getElementById("pr-seg");
   if(seg) seg.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{pricingPeriod=b.dataset.p;renderPricing();}));
-  app.querySelectorAll("[data-checkout]").forEach(b=>b.addEventListener("click",()=>startCheckout(b.dataset.checkout)));
+  app.querySelectorAll("[data-checkout]").forEach(b=>b.addEventListener("click",()=>{
+    const cb=app.querySelector('[data-auto="'+b.dataset.checkout+'"]');
+    startCheckout(b.dataset.checkout, !!(cb&&cb.checked));
+  }));
 }
 
 /* Every control is explicitly labelled: `for`/`id` on the native inputs, and
