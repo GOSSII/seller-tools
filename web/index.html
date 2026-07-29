@@ -112,6 +112,11 @@
      Height is 44 px to meet the minimum comfortable touch target. */
   input,select{width:100%;min-height:44px;padding:0 12px;font-size:16px;color:var(--ink);
     background:#fff;border:1px solid #d6dce6;border-radius:10px;outline:none;appearance:none;-webkit-appearance:none;font-family:inherit}
+  /* Checkboxes keep their native look — appearance:none above is meant for
+     text fields/selects and left checkboxes with no visible tick. */
+  input[type="checkbox"]{appearance:auto;-webkit-appearance:checkbox;width:auto;min-height:0;
+    padding:0;border:0;border-radius:0;background:none}
+  input[type="checkbox"]:focus{box-shadow:0 0 0 3px rgba(47,90,240,.18)}
   @media(min-width:900px){input,select{font-size:15px}}
   select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%235b6b82' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
           background-repeat:no-repeat;background-position:right 12px center;padding-right:34px;
