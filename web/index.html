@@ -1873,14 +1873,25 @@ async function startCheckout(planKey, autoRenew){
   if(!u){ location.hash="#/signup"; return; }
   const token=await accessToken();
   if(!token){ location.hash="#/login"; return; }
-  let order;
-  try{
-    const r=await fetch(autoRenew?"/api/create-subscription":"/api/create-order",{method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":"Bearer "+token},
-      body:JSON.stringify({plan:planKey})});
-    if(!r.ok){ renderPaymentProblem("We couldn't start the payment. Please try again."); return; }
-    order=await r.json();
-  }catch(e){ renderPaymentProblem("Network issue starting the payment. Please try again."); return; }
+  const post=url=>fetch(url,{method:"POST",
+    headers:{"Content-Type":"application/json","Authorization":"Bearer "+token},
+    body:JSON.stringify({plan:planKey})});
+  let order=null, usedAuto=false;
+  // Auto-renew first, but NEVER let it block a sale: if subscriptions aren't
+  // available on the payment account (or the call fails), fall back to the
+  // one-time flow and say so on the success screen.
+  if(autoRenew){
+    try{ const r=await post("/api/create-subscription"); if(r.ok){ order=await r.json(); usedAuto=true; } }catch(e){}
+  }
+  if(!order){
+    try{
+      const r=await post("/api/create-order");
+      if(!r.ok){ renderPaymentProblem("We couldn't start the payment. Please try again."); return; }
+      order=await r.json();
+      if(autoRenew) order.fellBack=true;
+    }catch(e){ renderPaymentProblem("Network issue starting the payment. Please try again."); return; }
+  }
+  autoRenew=usedAuto;
   try{ await loadRazorpay(); }
   catch(e){ renderPaymentProblem("Couldn't load the payment window. Check your connection and retry."); return; }
   const opts={
@@ -1928,6 +1939,7 @@ function renderPaymentSuccess(ent, order){
   payShell(`<div style="font-size:40px;line-height:1">🎉</div>
     <h2 style="margin-top:8px">${esc(nice)} unlocked${till?` till ${esc(till)}`:""}</h2>
     <p class="lede">Payment received — thank you! Your premium tools are ready.</p>
+    ${order&&order.fellBack?`<div class="banner info" style="text-align:left;margin:10px 0">Auto-renew isn't available on our payment account just yet, so this was a <b>one-time payment</b> — you won't be charged again automatically. We'll remind you to renew from your <a href="#/account">account</a> when the plan is close to expiry.</div>`:""}
     <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:6px">
       <a class="lp-btn" href="#/settlement-analyzer">Open Settlement Analyzer</a>
       <a class="lp-btn sec" href="#/account">Go to account</a>
@@ -1937,6 +1949,7 @@ function renderPaymentPending(order){
   payShell(`<div style="font-size:36px;line-height:1">⏳</div>
     <h2 style="margin-top:8px">Payment received — activating</h2>
     <p class="lede">Your payment went through and your plan is being switched on. This can take a minute. Check your <a href="#/account">account</a> shortly, or refresh the tool.</p>
+    ${order&&order.fellBack?`<div class="banner info" style="text-align:left;margin:10px 0">Auto-renew isn't available just yet, so this was a <b>one-time payment</b> — you won't be charged again automatically.</div>`:""}
     <div style="margin-top:6px"><a class="lp-btn sec" href="#/account">Go to account</a></div>`);
 }
 function renderPaymentProblem(msg){
