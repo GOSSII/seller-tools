@@ -1924,7 +1924,15 @@ async function startCheckout(planKey, autoRenew){
   if(autoRenew){ opts.subscription_id=order.subscription_id; }
   else{ opts.order_id=order.order_id; opts.amount=order.amount; opts.currency=order.currency||"INR"; }
   const rzp=new window.Razorpay(opts);
-  try{ rzp.on("payment.failed",function(){ renderPaymentProblem("The payment didn't go through. No money was taken — you can try again."); }); }catch(e){}
+  try{ rzp.on("payment.failed",function(){
+    if(autoRenew){
+      // Recurring can fail for reasons a normal payment won't (bank/card has
+      // no mandate support, UPI Autopay not available). Rescue the sale:
+      // offer the same plan as a one-time payment.
+      try{ rzp.close(); }catch(e2){}
+      renderPaymentProblem("The auto-renew payment didn't go through — some banks and payment methods don't support automatic payments yet. You can buy the same plan as a one-time payment instead.", planKey);
+    } else renderPaymentProblem("The payment didn't go through. No money was taken — you can try again.");
+  }); }catch(e){}
   rzp.open();
 }
 
@@ -1971,11 +1979,16 @@ function renderPaymentPending(order){
     ${order&&order.fellBack?`<div class="banner info" style="text-align:left;margin:10px 0">Auto-renew isn't available just yet, so this was a <b>one-time payment</b> — you won't be charged again automatically.</div>`:""}
     <div style="margin-top:6px"><a class="lp-btn sec" href="#/account">Go to account</a></div>`);
 }
-function renderPaymentProblem(msg){
+function renderPaymentProblem(msg, retryPlan){
   payShell(`<div style="font-size:36px;line-height:1">⚠️</div>
     <h2 style="margin-top:8px">Payment not completed</h2>
     <p class="lede">${esc(msg)}</p>
-    <div style="margin-top:6px"><a class="lp-btn" href="#/pricing">Back to pricing</a></div>`);
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:6px">
+      ${retryPlan?'<button type="button" class="lp-btn" id="pp-once">Pay once — no auto-renew</button>':""}
+      <a class="lp-btn ${retryPlan?"sec":""}" href="#/pricing">Back to pricing</a>
+    </div>`);
+  const b=document.getElementById("pp-once");
+  if(b) b.addEventListener("click",()=>{ b.disabled=true; b.textContent="Opening secure checkout…"; startCheckout(retryPlan,false); });
 }
 
 function renderAccount(){
@@ -2505,7 +2518,7 @@ function renderPricing(){
   // logged-out → sign up first.
   const paidBtn=(price,cls)=> loggedIn
     ? `<button type="button" class="lp-btn${cls}" data-checkout="${price.key}">Pay ${price.big} — ${perWord}</button>
-       <label class="pr-auto"><input type="checkbox" data-auto="${price.key}" checked> Auto-renew ${perWord} — cancel anytime</label>`
+       <label class="pr-auto"><input type="checkbox" data-auto="${price.key}"> Auto-renew ${perWord} — cancel anytime</label>`
     : `<a class="lp-btn${cls}" href="#/signup">Sign up to get started</a>`;
   app.innerHTML=`
     <div class="wrap page">
