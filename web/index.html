@@ -499,6 +499,15 @@
   .pay-table th{background:var(--bg);color:var(--muted);font-weight:700;font-size:12px}
   .pay-table tr:last-child td{border-bottom:0}
   .pay-table .pid{color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+  /* Admin */
+  .adm-row{cursor:pointer}
+  @media(hover:hover){.adm-row:hover td{background:var(--bg)}}
+  .adm-actions{display:grid;gap:14px}
+  @media(min-width:700px){.adm-actions{grid-template-columns:repeat(3,1fr)}}
+  .adm-act label{display:block;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);margin-bottom:6px}
+  .adm-row-inline{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .adm-row-inline .lp-btn{min-height:40px;padding:0 14px;font-size:13.5px}
+  .adm-confirm{display:inline-flex;gap:8px;align-items:center;font-size:13px;color:var(--ink);flex-wrap:wrap}
 
   footer{border-top:1px solid var(--line);background:#fff;padding:22px 0;font-size:12.5px;color:var(--faint);line-height:1.6}
   @media(min-width:600px){footer{padding:26px 0}}
@@ -1971,6 +1980,152 @@ function deviceLabelFromUAClient(ua){
   else if(/iPhone|iPad|iPod/.test(ua))o="iOS"; else if(/Mac OS X|Macintosh/.test(ua))o="macOS";
   else if(/Linux/.test(ua))o="Linux";
   return b+" on "+o;
+}
+
+/* ============================================================
+   ADMIN PANEL (#/admin) — Phase 6. Hidden from every menu. Non-admins get a
+   plain "Not found" with no hint the route exists. Admin status is decided
+   server-side by /api/admin (is_admin); the client only reflects it.
+   ============================================================ */
+const money0=paise=>"₹"+Math.round((paise||0)/100).toLocaleString("en-IN");
+async function adminCall(payload){
+  const token=await accessToken();
+  return fetch("/api/admin",{method:"POST",
+    headers:{"Content-Type":"application/json","Authorization":"Bearer "+(token||"")},
+    body:JSON.stringify(payload)});
+}
+function renderNotFound(){
+  backBtn.hidden=false;
+  document.title="Not found — Seller Tools";
+  app.innerHTML=`<div class="wrap page"><div class="auth" style="text-align:center">
+    <div style="font-size:34px;line-height:1">🔍</div>
+    <h2 style="margin-top:8px">Page not found</h2>
+    <p class="lede">The page you're looking for doesn't exist.</p>
+    <a class="lp-btn" href="#/">Go home</a></div></div>`;
+}
+async function renderAdmin(){
+  backBtn.hidden=false;
+  if(!sessionUser()){ renderNotFound(); return; }
+  document.title="Admin — Seller Tools";
+  app.innerHTML=`<div class="wrap page"><p class="lede">Loading…</p></div>`;
+  let r; try{ r=await adminCall({action:"stats"}); }catch(e){ renderNotFound(); return; }
+  if(location.hash.replace(/^#\/?/,"")!=="admin") return;
+  if(!r.ok){ renderNotFound(); return; }               // 401/403/anything → no hint
+  const stats=await r.json().catch(()=>null);
+  if(!stats){ renderNotFound(); return; }
+  const chart=saBarChart("Signups · last 30 days",(stats.signups||[]),"count","var(--blue)",n=>String(n));
+  app.innerHTML=`<div class="wrap page">
+    <h2>Admin</h2>
+    <div class="stats">
+      <div class="stat blue"><div class="k">Users</div><div class="v">${num(stats.users_total)}</div></div>
+      <div class="stat green"><div class="k">Paid · active</div><div class="v">${num(stats.paid_count)}</div></div>
+      <div class="stat"><div class="k">Revenue · this month</div><div class="v">${money0(stats.revenue_month_paise)}</div></div>
+      <div class="stat"><div class="k">Revenue · total</div><div class="v">${money0(stats.revenue_total_paise)}</div></div>
+    </div>
+    <div style="margin-bottom:16px">${chart||'<div class="viz"><div class="viz-title">Signups · last 30 days</div><p class="lede" style="margin-top:8px">No signups yet.</p></div>'}</div>
+    <div style="margin:6px 0 10px"><input id="adm-search" type="search" placeholder="Search users by email…" style="max-width:360px"></div>
+    <div id="adm-users"></div>
+    <div id="adm-detail" style="margin-top:18px"></div>
+  </div>`;
+  try{ saWireTips(app); }catch(e){}
+  const search=document.getElementById("adm-search");
+  let t=null;
+  search.addEventListener("input",()=>{ clearTimeout(t); t=setTimeout(()=>adminLoadUsers(search.value.trim()),250); });
+  adminLoadUsers("");
+}
+function adminPlanBadge(plan){
+  return plan==="free" ? '<span class="plan-badge free">Free</span>'
+    : '<span class="plan-badge">'+esc(plan.charAt(0).toUpperCase()+plan.slice(1))+'</span>';
+}
+async function adminLoadUsers(q){
+  const host=document.getElementById("adm-users"); if(!host) return;
+  host.innerHTML='<p class="lede">Loading…</p>';
+  let r; try{ r=await adminCall({action:"list_users",q}); }catch(e){ host.innerHTML='<p class="lede">Could not load users.</p>'; return; }
+  if(!r.ok){ host.innerHTML='<p class="lede">Could not load users.</p>'; return; }
+  const {users}=await r.json();
+  if(!users||!users.length){ host.innerHTML='<p class="lede">No users found.</p>'; return; }
+  host.innerHTML=`<div class="pay-wrap"><table class="pay-table">
+    <thead><tr><th>Email</th><th>Plan</th><th>Expires</th><th>Devices</th><th>Last login</th></tr></thead>
+    <tbody>${users.map(u=>`<tr class="adm-row" data-uid="${esc(u.id)}">
+      <td>${esc(u.email||"—")}${u.is_admin?' <span class="soon" style="color:var(--blue);background:var(--blue-soft);border-color:var(--blue-line)">admin</span>':""}</td>
+      <td>${adminPlanBadge(u.plan)}</td>
+      <td>${u.expires_at?esc(fmtDate(u.expires_at)):"—"}</td>
+      <td>${u.devices}/${u.device_limit}</td>
+      <td>${u.last_login?esc(fmtDate(u.last_login)):"—"}</td>
+    </tr>`).join("")}</tbody></table></div>`;
+  host.querySelectorAll(".adm-row").forEach(row=>row.addEventListener("click",()=>adminShowUser(row.dataset.uid)));
+}
+async function adminShowUser(uid,flash){
+  const host=document.getElementById("adm-detail"); if(!host) return;
+  host.innerHTML='<p class="lede">Loading…</p>';
+  let r; try{ r=await adminCall({action:"user_detail",user_id:uid}); }catch(e){ host.innerHTML=""; return; }
+  if(!r.ok){ host.innerHTML='<p class="lede">Could not load user.</p>'; return; }
+  const d=await r.json();
+  const p=d.profile||{};
+  const ents=(d.entitlements||[]).map(e=>`<tr><td>${adminPlanBadge(e.plan)}</td><td>${esc(e.source||"—")}</td><td>${esc(fmtDate(e.starts_at))}</td><td>${e.expires_at?esc(fmtDate(e.expires_at)):"—"}</td></tr>`).join("");
+  const pays=(d.payments||[]).map(x=>`<tr><td>${esc(fmtDate(x.created_at))}</td><td>${esc((x.plan||"")+(x.period?" · "+x.period:""))}</td><td>${esc(money0(x.amount_paise))}</td><td>${esc(x.status||"")}</td><td class="pid">${esc(x.razorpay_payment_id||"—")}</td></tr>`).join("");
+  const devs=(d.devices||[]).map(x=>`<tr><td>${esc(x.label||"Device")}</td><td>${esc(fmtDate(x.first_seen))}</td><td>${esc(fmtDate(x.last_seen))}</td></tr>`).join("");
+  host.innerHTML=`<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap">
+      <h3 style="font-size:17px">${esc(p.email||uid)}</h3>
+      <span class="pid">${esc(uid)}</span>
+    </div>
+    <div id="adm-act-msg" class="auth-msg" hidden style="margin:12px 0"></div>
+    <div class="adm-actions">
+      <div class="adm-act">
+        <label>Grant plan</label>
+        <div class="adm-row-inline">
+          <select id="adm-grant-plan"><option value="starter">Starter</option><option value="pro">Pro</option></select>
+          <input id="adm-grant-days" type="number" min="1" value="30" style="max-width:90px" aria-label="Days">
+          <button type="button" class="lp-btn" data-adm="grant">Grant</button>
+        </div>
+      </div>
+      <div class="adm-act">
+        <label>Devices (${(d.devices||[]).length} known · limit ${esc(String(p.device_limit||3))})</label>
+        <div class="adm-row-inline">
+          <input id="adm-limit" type="number" min="1" max="50" value="${esc(String(p.device_limit||3))}" style="max-width:90px" aria-label="Device limit">
+          <button type="button" class="lp-btn sec" data-adm="set_device_limit">Update limit</button>
+          <button type="button" class="lp-btn sec" data-adm="reset_devices">Reset devices</button>
+        </div>
+      </div>
+      <div class="adm-act">
+        <label>Danger</label>
+        <div class="adm-row-inline"><button type="button" class="lp-btn sec" data-adm="revoke" style="color:var(--red);border-color:var(--red-line)">Revoke plan now</button></div>
+      </div>
+    </div>
+    ${ents?`<h4 style="margin:18px 0 8px;font-size:14px">Entitlements</h4><div class="pay-wrap"><table class="pay-table"><thead><tr><th>Plan</th><th>Source</th><th>Starts</th><th>Expires</th></tr></thead><tbody>${ents}</tbody></table></div>`:""}
+    ${pays?`<h4 style="margin:18px 0 8px;font-size:14px">Payments</h4><div class="pay-wrap"><table class="pay-table"><thead><tr><th>Date</th><th>Plan</th><th>Amount</th><th>Status</th><th>ID</th></tr></thead><tbody>${pays}</tbody></table></div>`:""}
+    ${devs?`<h4 style="margin:18px 0 8px;font-size:14px">Devices</h4><div class="pay-wrap"><table class="pay-table"><thead><tr><th>Device</th><th>First seen</th><th>Last seen</th></tr></thead><tbody>${devs}</tbody></table></div>`:""}
+  </div>`;
+  const msg=document.getElementById("adm-act-msg");
+  if(flash) authMsg(msg,"ok",flash);
+  const run=async(action,payload)=>{
+    msg.hidden=true;
+    let rr; try{ rr=await adminCall(Object.assign({action,user_id:uid},payload)); }catch(e){ authMsg(msg,"err","Network error."); return; }
+    const j=await rr.json().catch(()=>({}));
+    if(rr.ok && j.ok!==false){ const s=document.getElementById("adm-search"); adminLoadUsers(s?s.value.trim():""); adminShowUser(uid,"Done."); }
+    else authMsg(msg,"err","Action failed"+(j.error?": "+j.error:"")+".");
+  };
+  host.querySelectorAll("[data-adm]").forEach(btn=>btn.addEventListener("click",()=>{
+    const a=btn.dataset.adm;
+    if(a==="grant") run("grant",{plan:document.getElementById("adm-grant-plan").value,days:parseInt(document.getElementById("adm-grant-days").value,10)});
+    else if(a==="set_device_limit") run("set_device_limit",{limit:parseInt(document.getElementById("adm-limit").value,10)});
+    else if(a==="reset_devices") adminConfirmThen(btn,"Reset all devices for this user?",()=>run("reset_devices",{}));
+    else if(a==="revoke") adminConfirmThen(btn,"Revoke this user's plan now?",()=>run("revoke",{}));
+  }));
+}
+/* Inline confirm: turns a button into a Yes/Cancel pair (no blocking dialog). */
+function adminConfirmThen(btn,text,fn){
+  const holder=btn.parentNode;
+  const span=document.createElement("span");
+  span.className="adm-confirm";
+  span.innerHTML=`<span>${esc(text)}</span> <button type="button" class="lp-btn" style="min-height:38px;padding:0 12px">Yes</button> <button type="button" class="lp-btn sec" style="min-height:38px;padding:0 12px">Cancel</button>`;
+  btn.style.display="none";
+  holder.appendChild(span);
+  const [yes,no]=span.querySelectorAll("button");
+  const cleanup=()=>{ span.remove(); btn.style.display=""; };
+  yes.addEventListener("click",()=>{ cleanup(); fn(); });
+  no.addEventListener("click",cleanup);
 }
 
 function renderHome(){
@@ -3795,6 +3950,7 @@ function route(){
   if(h==="signup"){renderSignup();window.scrollTo(0,0);return;}
   if(h==="reset"){renderReset();window.scrollTo(0,0);return;}
   if(h==="account"){renderAccount();window.scrollTo(0,0);return;}
+  if(h==="admin"){renderAdmin();window.scrollTo(0,0);return;}
   if(h==="settlement-analyzer"){renderSettlementAnalyzer();window.scrollTo(0,0);return;}
   if(h==="gst-report"){renderGstReport();window.scrollTo(0,0);return;}
   if(h==="sku-report"){renderSkuReport();window.scrollTo(0,0);return;}
