@@ -1419,7 +1419,7 @@ document.addEventListener("click",()=>{
 async function doLogout(){
   try{ const c=await sb(); await c.auth.signOut(); }catch(e){}
   try{ localStorage.removeItem(SUPABASE_AUTH_KEY); }catch(e){}
-  _sbClient=null; hdrMenuOpen=false; resetEntitlement();
+  _sbClient=null; hdrMenuOpen=false; resetEntitlement(); setStoredSessionId("");
   renderAuthSlot();
   location.hash="#/";
 }
@@ -1461,7 +1461,9 @@ function renderLogin(){
       const c=await sb();
       const {error}=await c.auth.signInWithPassword({email,password:pass});
       if(error){authMsg(msg,"err",authFriendly(error.message));return;}
-      resetEntitlement(); renderAuthSlot(); location.hash="#/account";
+      resetEntitlement(); setStoredSessionId(""); renderAuthSlot();
+      try{ const cr=await claimSession(); if(cr.error==="device_limit"){ renderDeviceLimit(cr.limit); return; } }catch(e){}
+      location.hash="#/account";
     }catch(err){authMsg(msg,"err",authFriendly(err.message));}
     finally{submit.disabled=false; submit.textContent="Log in";}
   });
@@ -1501,7 +1503,7 @@ function renderSignup(){
       const c=await sb();
       const {data,error}=await c.auth.signUp({email,password:pass,options:{data:{name}}});
       if(error){authMsg(msg,"err",authFriendly(error.message));return;}
-      if(data&&data.session){ resetEntitlement(); renderAuthSlot(); location.hash="#/account"; }
+      if(data&&data.session){ resetEntitlement(); setStoredSessionId(""); renderAuthSlot(); try{ const cr=await claimSession(); if(cr.error==="device_limit"){ renderDeviceLimit(cr.limit); return; } }catch(e){} location.hash="#/account"; }
       else { authMsg(msg,"ok","Ho gaya! Apne email ka confirmation link kholein, phir login karein."); form.reset(); }
     }catch(err){authMsg(msg,"err",authFriendly(err.message));}
     finally{submit.disabled=false; submit.textContent="Create account";}
@@ -1540,18 +1542,118 @@ function renderReset(){
    verifies the Supabase JWT and answers {plan, expires_at}. Logged-out
    users are "free" without any network call. Memoised per access token;
    resetEntitlement() clears it on login/logout. */
+/* ------------------------------------------------------------------
+   One active session + device history (Phase 5). All of this is disclosed
+   in /privacy.html. device_hash is a one-way hash of this browser's
+   characteristics + a random per-browser salt in localStorage — used only
+   to recognise your own devices, never for cross-site tracking. */
+const SESSION_ID_KEY="sa_session_id";
+const DEVICE_SALT_KEY="sa_devsalt";
+function storedSessionId(){try{return localStorage.getItem(SESSION_ID_KEY)||"";}catch(e){return "";}}
+function setStoredSessionId(id){try{id?localStorage.setItem(SESSION_ID_KEY,id):localStorage.removeItem(SESSION_ID_KEY);}catch(e){}}
+let _deviceHash=null;
+async function deviceHash(){
+  if(_deviceHash) return _deviceHash;
+  let salt="";
+  try{
+    salt=localStorage.getItem(DEVICE_SALT_KEY)||"";
+    if(!salt){ salt=[...crypto.getRandomValues(new Uint8Array(16))].map(b=>b.toString(16).padStart(2,"0")).join(""); localStorage.setItem(DEVICE_SALT_KEY,salt); }
+  }catch(e){}
+  const raw=[navigator.userAgent,navigator.platform||"",(screen.width+"x"+screen.height),
+    (Intl.DateTimeFormat().resolvedOptions().timeZone||""),salt].join("|");
+  try{
+    const buf=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(raw));
+    _deviceHash=[...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("");
+  }catch(e){ _deviceHash="nohash-"+(salt||"x"); }
+  return _deviceHash;
+}
+/* Claim the single active session for this browser. Returns a result object
+   {ok, session_id?, error?, limit?} and never renders — the caller decides
+   whether to show the device-limit panel, so free-tool use is never blocked. */
+async function claimSession(){
+  const token=await accessToken(); if(!token) return {ok:false};
+  let dh=""; try{ dh=await deviceHash(); }catch(e){}
+  let r;
+  try{ r=await fetch("/api/session-claim",{method:"POST",
+    headers:{"Content-Type":"application/json","Authorization":"Bearer "+token},
+    body:JSON.stringify({device_hash:dh})}); }
+  catch(e){ return {ok:false}; }
+  if(r.status===403){ const j=await r.json().catch(()=>({})); return {ok:false,error:j.error||"forbidden",limit:j.limit}; }
+  if(!r.ok) return {ok:false};
+  const j=await r.json().catch(()=>({}));
+  if(j.session_id){ setStoredSessionId(j.session_id); resetEntitlement(); }
+  return {ok:!!j.session_id, session_id:j.session_id||null};
+}
+/* Called on app load: if a Supabase session exists but this browser hasn't
+   claimed yet, claim once (silently — never blocks free tools). Existing
+   claimants are validated via the 409 path instead. */
+async function maybeClaimOnLoad(){
+  if(!sessionUser()) return;
+  if(storedSessionId()) return;
+  try{ await claimSession(); }catch(e){}
+}
+/* Ensure this browser holds a session before using a premium tool; returns
+   true if usable, false if the device limit was hit (panel shown). */
+async function ensureSessionForPremium(){
+  if(!sessionUser() || storedSessionId()) return true;
+  const cr=await claimSession();
+  if(cr.error==="device_limit"){ renderDeviceLimit(cr.limit); return false; }
+  return true;
+}
+async function logoutEverywhere(){
+  const token=await accessToken();
+  if(token){ try{ await fetch("/api/session-claim",{method:"POST",
+    headers:{"Content-Type":"application/json","Authorization":"Bearer "+token},
+    body:JSON.stringify({action:"logout_all"})}); }catch(e){} }
+  setStoredSessionId("");
+  doLogout();
+}
+
+let _sessionTakenShown=false;
+function handleSessionTaken(){
+  if(_sessionTakenShown) return;
+  _sessionTakenShown=true;
+  backBtn.hidden=false;
+  app.innerHTML=`<div class="wrap page"><div class="auth"><div class="card" style="text-align:center">
+    <div style="font-size:34px;line-height:1">👋</div>
+    <h2 style="margin-top:8px">Signed out here</h2>
+    <p class="lede">You logged in on another device, so this session was signed out. One login at a time is part of keeping prices low.</p>
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:6px">
+      <button type="button" class="lp-btn" id="st-here">Use here instead</button>
+      <a class="lp-btn sec" href="#/account">Go to account</a>
+    </div></div></div></div>`;
+  const btn=document.getElementById("st-here");
+  if(btn) btn.addEventListener("click",async()=>{
+    btn.disabled=true; btn.textContent="Switching…";
+    const cr=await claimSession();
+    _sessionTakenShown=false;
+    if(cr.error==="device_limit"){ renderDeviceLimit(cr.limit); return; }
+    if(cr.session_id){ resetEntitlement(); route(); } else { btn.disabled=false; btn.textContent="Use here instead"; }
+  });
+}
+function renderDeviceLimit(limit){
+  backBtn.hidden=false;
+  app.innerHTML=`<div class="wrap page"><div class="auth"><div class="card" style="text-align:center">
+    <div style="font-size:34px;line-height:1">🔐</div>
+    <h2 style="margin-top:8px">Device limit reached</h2>
+    <p class="lede">Your account is set up for up to ${esc(String(limit||3))} devices, and this is a new one. To keep prices low we limit how many devices share one account. Email <a href="mailto:dipsgos7@gmail.com?subject=Reset%20devices">dipsgos7@gmail.com</a> and we'll reset your devices.</p>
+    <div style="margin-top:6px"><a class="lp-btn sec" href="#/account">Go to account</a></div>
+  </div></div></div>`;
+}
+
 let _entCache=null; // {key, promise}
 function resetEntitlement(){_entCache=null;}
 async function getEntitlement(){
   const s=storedSession();
   if(!s) return {plan:"free",expires_at:null};
-  const key=s.access_token||"anon";
+  const key=(s.access_token||"anon")+"|"+storedSessionId();
   if(_entCache && _entCache.key===key) return _entCache.promise;
   const p=(async()=>{
     const token=await accessToken();
     if(!token) return {plan:"free",expires_at:null};
     try{
-      const r=await fetch("/api/entitlement",{headers:{Authorization:"Bearer "+token},cache:"no-store"});
+      const r=await fetch("/api/entitlement",{headers:{Authorization:"Bearer "+token,"X-Session-Id":storedSessionId()},cache:"no-store"});
+      if(r.status===409){ handleSessionTaken(); return {plan:"free",expires_at:null,taken:true}; }
       if(!r.ok) return {plan:"free",expires_at:null};
       const j=await r.json();
       return {plan:(j&&j.plan)||"free",expires_at:(j&&j.expires_at)||null};
@@ -1566,8 +1668,13 @@ async function getEntitlement(){
 async function gatePremium(info, body){
   if(saUnlocked()){ body(); return; }
   app.innerHTML=`<div class="wrap page"><h2>${esc(info.title)}</h2><p class="lede">Checking your access…</p></div>`;
+  // Make sure this browser holds the active session first (device-limit aware).
+  const okDev=await ensureSessionForPremium();
+  if(!okDev) return; // device-limit panel shown
+  if(location.hash.replace(/^#\/?/,"")!==info.route) return;
   let ent={plan:"free"};
   try{ ent=await getEntitlement(); }catch(e){}
+  if(ent.taken) return; // session-taken panel already shown
   if(location.hash.replace(/^#\/?/,"")!==info.route) return; // user navigated away
   if(saUnlocked()){ body(); return; }
   if(ent.plan==="starter"||ent.plan==="pro"){ body(); return; }
@@ -1647,6 +1754,17 @@ function daysLeft(exp){
   if(!exp) return null;
   const ms=new Date(exp).getTime()-Date.now();
   return ms<=0?0:Math.ceil(ms/86400000);
+}
+/* Mask an IP for display: 103.44.x.x (v4) or a shortened v6. */
+function maskIp(ip){
+  ip=String(ip||"").trim(); if(!ip) return "—";
+  if(ip.indexOf(":")>=0){ const p=ip.split(":").filter(Boolean); return (p.slice(0,2).join(":"))+":…"; }
+  const p=ip.split("."); return p.length===4?`${p[0]}.${p[1]}.x.x`:"—";
+}
+function fmtDateTime(d){
+  if(!d) return "—";
+  try{return new Date(d).toLocaleString("en-IN",{day:"numeric",month:"short",hour:"numeric",minute:"2-digit"});}
+  catch(e){return "—";}
 }
 
 /* ------------------------------------------------------------------
@@ -1751,7 +1869,8 @@ function renderAccount(){
       <a class="bigbtn sec" id="ac-renew" href="#/pricing">Renew / change plan</a>
       <button type="button" class="bigbtn sec" id="ac-logout">Logout</button>
     </div>
-    <div id="ac-pay" style="margin-top:22px"></div>`);
+    <div id="ac-pay" style="margin-top:22px"></div>
+    <div id="ac-activity" style="margin-top:22px"></div>`);
   const msg=document.getElementById("ac-msg");
   document.getElementById("ac-logout").addEventListener("click",doLogout);
   document.getElementById("ac-save").addEventListener("click",async()=>{
@@ -1807,6 +1926,51 @@ function renderAccount(){
         </table></div>`;
     }catch(e){ host.innerHTML=""; }
   })();
+  /* Login activity + known devices, and "Log out everywhere". */
+  (async()=>{
+    const host=document.getElementById("ac-activity"); if(!host) return;
+    try{
+      const c=await sb();
+      const [ev,dv]=await Promise.all([
+        c.from("login_events").select("at,device_hash,ip,user_agent,kicked_previous").order("at",{ascending:false}).limit(10),
+        c.from("devices").select("label,first_seen,last_seen").order("last_seen",{ascending:false})
+      ]);
+      const events=(ev&&ev.data)||[], devices=(dv&&dv.data)||[];
+      const devHtml=devices.length?`<div class="pay-wrap" style="margin-bottom:14px"><table class="pay-table">
+        <thead><tr><th>Device</th><th>First seen</th><th>Last seen</th></tr></thead>
+        <tbody>${devices.map(d=>`<tr><td>${esc(d.label||"Device")}</td><td>${esc(fmtDate(d.first_seen))}</td><td>${esc(fmtDate(d.last_seen))}</td></tr>`).join("")}</tbody>
+        </table></div>`:"";
+      const evHtml=events.length?`<div class="pay-wrap"><table class="pay-table">
+        <thead><tr><th>When</th><th>Device</th><th>IP</th></tr></thead>
+        <tbody>${events.map(e=>`<tr>
+          <td>${esc(fmtDateTime(e.at))}${e.kicked_previous?' <span class="soon" style="color:var(--muted);background:var(--bg);border-color:var(--line)">replaced a session</span>':""}</td>
+          <td>${esc(deviceLabelFromUAClient(e.user_agent))}</td>
+          <td class="pid">${esc(maskIp(e.ip))}</td>
+        </tr>`).join("")}</tbody>
+        </table></div>`:"";
+      if(!devHtml && !evHtml){ host.innerHTML=""; return; }
+      host.innerHTML=`<h3 style="font-size:16px;margin:0 0 10px">Login activity &amp; devices</h3>
+        ${devHtml}${evHtml}
+        <p style="font-size:12.5px;color:var(--faint);margin-top:10px">We record login time, IP, browser/OS and a device identifier to enforce one active login and the device limit — see our <a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</p>
+        <button type="button" class="bigbtn sec" id="ac-logout-all" style="margin-top:8px">Log out everywhere</button>`;
+      const lo=document.getElementById("ac-logout-all");
+      if(lo) lo.addEventListener("click",()=>{ lo.disabled=true; lo.textContent="Signing out…"; logoutEverywhere(); });
+    }catch(e){ host.innerHTML=""; }
+  })();
+}
+/* Browser/OS label from a user-agent string (client mirror of the server's
+   deviceLabelFromUA, used for the login-activity table). */
+function deviceLabelFromUAClient(ua){
+  ua=String(ua||"");
+  let b="Browser";
+  if(/Edg\//.test(ua))b="Edge"; else if(/OPR\/|Opera/.test(ua))b="Opera";
+  else if(/Chrome\//.test(ua))b="Chrome"; else if(/Firefox\//.test(ua))b="Firefox";
+  else if(/Safari\//.test(ua))b="Safari";
+  let o="device";
+  if(/Windows/.test(ua))o="Windows"; else if(/Android/.test(ua))o="Android";
+  else if(/iPhone|iPad|iPod/.test(ua))o="iOS"; else if(/Mac OS X|Macintosh/.test(ua))o="macOS";
+  else if(/Linux/.test(ua))o="Linux";
+  return b+" on "+o;
 }
 
 function renderHome(){
@@ -3642,8 +3806,21 @@ function route(){
   window.scrollTo(0,0);
 }
 window.addEventListener("hashchange",route);
+/* Premium tools re-check entitlement when the tab regains focus, so a session
+   kicked on another device locks here within seconds of the user returning. */
+const PREMIUM_ROUTES=["settlement-analyzer","gst-report","sku-report"];
+window.addEventListener("focus",()=>{
+  const h=location.hash.replace(/^#\/?/,"");
+  if(!PREMIUM_ROUTES.includes(h) || saUnlocked() || !sessionUser()) return;
+  resetEntitlement();
+  getEntitlement().then(ent=>{
+    if(ent.taken) return;               // session-taken panel already shown
+    if(ent.plan==="free") route();      // downgraded/expired → re-gate
+  }).catch(()=>{});
+});
 (function(){const y=document.getElementById("foot-year");if(y)y.textContent=new Date().getFullYear();})();
 renderAuthSlot();
+maybeClaimOnLoad();
 route();
 </script>
 </body>

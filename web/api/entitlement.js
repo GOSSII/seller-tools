@@ -1,44 +1,43 @@
-// Vercel serverless function — resolves the caller's current plan.
+// Vercel serverless function — resolves the caller's current plan, and
+// enforces the one-active-session rule (Phase 5).
 //
-// Flow: verify the Supabase JWT from the Authorization header (by asking
-// Supabase who it belongs to), then read that user's newest non-expired
-// entitlement using the service_role key (which bypasses RLS). The browser
-// can never mint a plan for itself — this is server-authoritative.
+// Flow: verify the Supabase JWT (→ user), then:
+//  - if an X-Session-Id header is sent and the profile has a DIFFERENT active
+//    session, answer 409 {error:"session_taken"} (this browser was kicked);
+//  - otherwise read the newest non-expired entitlement with the service role
+//    (bypasses RLS) and answer {plan, expires_at}.
+// Anything unauthenticated/invalid/errored resolves to {plan:"free"}.
 //
-// Always answers 200 with {plan, expires_at}; anything unauthenticated,
-// invalid or errored resolves to the safe default {plan:"free"}.
-//
-// Env (server only, set in Vercel): SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
+// Env (server only): SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
+const { userFromToken, rest, bearer } = require('./_lib/supa');
 
 const FREE = { plan: 'free', expires_at: null };
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   try {
-    const auth = req.headers.authorization || req.headers.Authorization || '';
-    const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
+    const token = bearer(req);
     if (!token) return res.status(200).json(FREE);
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return res.status(500).json({ error: 'server_misconfigured' });
+    }
 
-    const base = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
-    const service = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-    if (!base || !service) return res.status(500).json({ error: 'server_misconfigured' });
+    const user = await userFromToken(token);
+    if (!user) return res.status(200).json(FREE);
 
-    // 1) Validate the token and get the user it belongs to.
-    const ur = await fetch(base + '/auth/v1/user', {
-      headers: { apikey: service, Authorization: 'Bearer ' + token }
-    });
-    if (!ur.ok) return res.status(200).json(FREE);
-    const user = await ur.json();
-    if (!user || !user.id) return res.status(200).json(FREE);
+    // One-active-session check (only when the client supplies its session id).
+    const sid = (req.headers['x-session-id'] || req.headers['X-Session-Id'] || '').toString();
+    if (sid) {
+      const pr = await rest('GET', '/profiles?select=active_session_id&id=eq.' + encodeURIComponent(user.id) + '&limit=1');
+      if (pr.ok) {
+        const rows = await pr.json();
+        const active = rows && rows[0] && rows[0].active_session_id;
+        if (active && active !== sid) return res.status(409).json({ error: 'session_taken' });
+      }
+    }
 
-    // 2) Read this user's entitlements with the service role (bypasses RLS).
-    const q = base + '/rest/v1/entitlements'
-      + '?select=plan,starts_at,expires_at,created_at'
-      + '&user_id=eq.' + encodeURIComponent(user.id)
-      + '&order=created_at.desc&limit=10';
-    const er = await fetch(q, {
-      headers: { apikey: service, Authorization: 'Bearer ' + service }
-    });
+    const er = await rest('GET', '/entitlements?select=plan,starts_at,expires_at,created_at&user_id=eq.'
+      + encodeURIComponent(user.id) + '&order=created_at.desc&limit=10');
     if (!er.ok) return res.status(200).json(FREE);
     const rows = await er.json();
 
