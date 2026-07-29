@@ -1300,6 +1300,8 @@ const HELP={
     steps:["Drop the settlement file.","Sort by Net to see which products actually make money after fees, taxes and refunds.","Sort by Refund % to spot problem products. Units ÷ days gives the daily sales rate for the Restock Planner."]},
   "reconcile":{input:`Settlement file(s): <b>Payments → All Statements → Download Flat File V2</b> — drop every statement for the period you're checking. Optional but recommended: the matching MTR — <b>Reports → Tax Document Library → Merchant Tax Reports → B2C</b> (.csv) — so shipped-but-unpaid orders can be caught too.`,
     steps:["Drop your settlement file(s), and the MTR for the same months if you have it.","Work through each issue list — every row shows the order, the amount at stake and the exact Seller Central path to claim it.","Tick rows off as you raise them (ticks are saved in your browser), and export the checklist as CSV to track claims."]},
+  "trends":{input:`Several settlement files: <b>Payments → All Statements → Download Flat File V2</b> for each statement — the more months you drop, the better the picture.`,
+    steps:["Drop all your settlement files at once (or add them one by one — duplicates are skipped).","Read the month-by-month charts: sales, fees as % of sales, refund rate and net payout.","Pick a SKU to see its own monthly units, sales and net — is it growing, and is it still worth the fees?"]},
 };
 function helpHtml(id){
   const e=HELP[id];
@@ -1783,7 +1785,11 @@ const PW_MOCKS={
   reconcile:`<div class="row"><span>Referral fee not returned</span><b class="amt pos">+₹1,242</b></div>
     <div class="row"><span>SAFE-T-eligible refunds</span><b class="amt pos">+₹3,940</b></div>
     <div class="row"><span>Shipped but not paid</span><b class="amt pos">+₹2,118</b></div>
-    <div class="row"><span>Worth chasing</span><b class="big">₹7,300</b></div>`
+    <div class="row"><span>Worth chasing</span><b class="big">₹7,300</b></div>`,
+  trends:`<div class="row"><span>Apr net payout</span><b class="amt pos">₹41,210</b></div>
+    <div class="row"><span>May net payout</span><b class="amt pos">₹48,760</b></div>
+    <div class="row"><span>Jun net payout</span><b class="amt pos">₹55,390</b></div>
+    <div class="row"><span>Fees % of sales</span><b class="big">21.4% ↓</b></div>`
 };
 const SA_INFO={route:"settlement-analyzer",title:"Amazon Settlement Analyzer",plan:"Starter",
   price:"₹199/month — unlock with Starter",
@@ -1801,6 +1807,10 @@ const REC_INFO={route:"reconcile",title:"Reconciliation & SAFE-T Finder",plan:"P
   price:"₹499/month — unlock with Pro",
   desc:"Find money Amazon may owe you: refunds where your referral fee wasn't returned, orders that netted negative, shipments with no payment line, and SAFE-T-eligible refunds — each with claim instructions.",
   mock:PW_MOCKS.reconcile};
+const TREND_INFO={route:"trends",title:"Multi-Month Trends",plan:"Pro",needPro:true,
+  price:"₹499/month — unlock with Pro",
+  desc:"Drop several settlement files and see your business month by month: sales, fees as % of sales, refund rate and net payout — overall and per SKU.",
+  mock:PW_MOCKS.trends};
 
 function fmtDate(d){
   if(!d) return "—";
@@ -2294,6 +2304,12 @@ function renderHome(){
           <h3>Reconciliation &amp; SAFE-T Finder</h3>
           <p>Cross-check settlements and your MTR to find missing referral-fee credits, SAFE-T-eligible refunds and unpaid shipments — with claim steps.</p>
         </a>
+        <a class="tile" href="#/trends">
+          <span class="pill">Pro</span>
+          <div class="ico">📈</div>
+          <h3>Multi-Month Trends</h3>
+          <p>Drop several settlement files and see your business month by month: sales, fees %, refund rate and net payout — overall and per SKU.</p>
+        </a>
         <a class="tile" href="#/link-builder">
           <span class="pill">New</span>
           <div class="ico">🔗</div>
@@ -2398,9 +2414,9 @@ function renderPricing(){
           <div class="pr-alt">${pr.alt}</div>
           <ul class="pr-feats">
             <li><span class="tick">✓</span> Everything in Starter</li>
-            <li><span class="tick">✓</span> SKU P&amp;L with your product costs<span class="soon">coming soon</span></li>
+            <li><span class="tick">✓</span> SKU P&amp;L with your product costs</li>
             <li><span class="tick">✓</span> Reconciliation &amp; SAFE-T finder</li>
-            <li><span class="tick">✓</span> Multi-month Trends<span class="soon">coming soon</span></li>
+            <li><span class="tick">✓</span> Multi-month Trends</li>
           </ul>
           ${paidBtn(pr," sec")}
         </div>
@@ -2763,19 +2779,21 @@ function saTrend(records){
   }
   return out;
 }
-function saBarChart(title,days,key,color,fmt){
+function saBarChart(title,days,key,color,fmt,opts){
+  const lbl=(opts&&opts.lbl)||saFmtDay, unit=(opts&&opts.unit)||`daily · ${days.length} days`,
+        xk=(opts&&opts.x)||"d";
   const max=Math.max(...days.map(x=>x[key]));
   if(max<=0) return "";
   const maxIdx=days.findIndex(x=>x[key]===max);
   const bars=days.map((x,i)=>{
     const h=Math.max(x[key]>0?1.5:0,x[key]/max*100);
-    return `<div class="viz-bar" data-tip="${esc(saFmtDay(x.d))} · ${esc(fmt(x[key]))}">`+
+    return `<div class="viz-bar" data-tip="${esc(lbl(x[xk]))} · ${esc(fmt(x[key]))}">`+
       (i===maxIdx?`<span class="viz-lbl">${esc(fmt(max))}</span>`:"")+
       `<i style="height:${h.toFixed(1)}%;background:${color}"></i></div>`;
   }).join("");
-  return `<div class="viz"><div class="viz-head"><span class="viz-title">${esc(title)}</span><span class="viz-max">daily · ${days.length} days</span></div>
+  return `<div class="viz"><div class="viz-head"><span class="viz-title">${esc(title)}</span><span class="viz-max">${esc(unit)}</span></div>
     <div class="viz-plot${days.length>40?" dense":""}">${bars}</div>
-    <div class="viz-x"><span>${esc(saFmtDay(days[0].d))}</span><span>${esc(saFmtDay(days[days.length-1].d))}</span></div></div>`;
+    <div class="viz-x"><span>${esc(lbl(days[0][xk]))}</span><span>${esc(lbl(days[days.length-1][xk]))}</span></div></div>`;
 }
 function saWireTips(root){
   let tip=document.getElementById("viz-tip");
@@ -3517,6 +3535,208 @@ function recWire(out,settlements,mtrRows,res){
     a.download="reconciliation-checklist.csv";
     document.body.appendChild(a); a.click(); a.remove();
   });
+}
+
+/* ============================================================
+   MULTI-MONTH TRENDS (Pro)
+   Several settlement files (same parseSettlement) combined into
+   month-by-month figures, drawn with the existing viz helpers.
+   Everything stays in the browser.
+   ============================================================ */
+let trFiles=[], trSku="";
+const trFmtMonth=m=>new Date(m+"-01T00:00:00Z").toLocaleDateString("en-IN",{month:"short",year:"numeric",timeZone:"UTC"});
+
+/* Pure: parsed settlements -> {months, skus, skipped}. Each record lands in
+   the month of its posted-date, falling back to the statement's start month;
+   lines with no usable date at all are counted in `skipped`, never guessed. */
+function trendCompute(settlements){
+  const zeros=()=>({gross:0,refunded:0,fees:0,taxes:0,credits:0,net:0,orders:0,units:0,refunds:0});
+  const months=new Map(), skus=new Map(); let skipped=0;
+  for(const p of settlements){
+    const fd=p.summary?(saParseDate(p.summary.settlementStartDate)||saParseDate(p.summary.depositDate)):null;
+    const fileMonth=fd?fd.slice(0,7):null;
+    for(const rec of p.records){
+      const d=saParseDate(rec.postedDate);
+      const m=d?d.slice(0,7):fileMonth;
+      if(!m){skipped++;continue;}
+      let e=months.get(m); if(!e){e=Object.assign({m},zeros());months.set(m,e);}
+      const isOrder=rec.transactionType==="Order", isRefund=/refund/i.test(rec.transactionType);
+      if(isOrder){e.orders++;e.units+=rec.quantity||0;}
+      if(isRefund)e.refunds++;
+      let sm=null;
+      if(rec.sku){
+        let se=skus.get(rec.sku); if(!se){se={sku:rec.sku,byMonth:new Map()};skus.set(rec.sku,se);}
+        sm=se.byMonth.get(m); if(!sm){sm={units:0,sales:0,net:0};se.byMonth.set(m,sm);}
+        if(isOrder)sm.units+=rec.quantity||0;
+      }
+      for(const l of rec.amounts){
+        e.net+=l.amount; if(sm)sm.net+=l.amount;
+        if(/^principal$/i.test(l.amountDescription)){
+          if(isOrder){e.gross+=l.amount;if(sm)sm.sales+=l.amount;}
+          else if(isRefund)e.refunded+=l.amount;
+          else e.credits+=l.amount;
+        }else{
+          const label=l.amountDescription||l.amountType||"";
+          if(saIsTax(label))e.taxes+=l.amount;
+          else if(l.amount<0)e.fees+=l.amount;
+          else e.credits+=l.amount;
+        }
+      }
+    }
+  }
+  // Continuous month axis (gaps become zero months), capped as a safety net
+  // against a garbage date stretching the axis across decades.
+  const keys=[...months.keys()].sort(), out=[];
+  if(keys.length){
+    let [y,mo]=keys[0].split("-").map(Number);
+    const last=keys[keys.length-1];
+    for(;;){
+      const k=y+"-"+String(mo).padStart(2,"0");
+      out.push(months.get(k)||Object.assign({m:k},zeros()));
+      if(k===last||out.length>=120)break;
+      mo++; if(mo>12){mo=1;y++;}
+    }
+  }
+  for(const e of out){
+    e.feePct=e.gross?Math.abs(e.fees)/e.gross*100:0;
+    e.refundPct=e.gross?Math.abs(e.refunded)/e.gross*100:0;
+  }
+  const skuList=[...skus.values()].map(s=>({
+    sku:s.sku,
+    sales:[...s.byMonth.values()].reduce((t,x)=>t+x.sales,0),
+    months:out.map(e=>{const x=s.byMonth.get(e.m);
+      return {m:e.m,units:x?x.units:0,sales:x?x.sales:0,net:x?x.net:0};}),
+  })).sort((a,b)=>b.sales-a.sales);
+  return {months:out,skus:skuList,skipped};
+}
+window.trendCompute=trendCompute; // exposed for verification/debugging
+
+function renderTrends(){
+  setMeta("Multi-Month Trends — Seller Tools",
+    "Drop several Amazon settlement files and see your business month by month: sales, fees as a percentage of sales, refund rate and net payout — computed locally in your browser.");
+  backBtn.hidden=false;
+  gatePremium(TREND_INFO, trendsBody);
+}
+function trendsBody(){
+  app.innerHTML=`
+    <div class="wrap page">
+      <h2>Multi-Month Trends</h2>
+      <p class="lede">Drop every settlement file you have — they're combined into month-by-month charts of sales, fees, refund rate and net payout, overall and per SKU. The more statements, the better the picture.</p>
+      ${helpHtml("trends")}
+      <label class="sa-drop" id="tr-drop">
+        <div class="ico">📈</div>
+        <h3>Drop your settlement files here</h3>
+        <p>or click to choose — several files at once is fine (.csv or .txt)</p>
+        <input type="file" id="tr-file" multiple accept=".csv,.txt,text/plain,text/csv">
+      </label>
+      <div class="sa-priv">🔒 Private by design — your files never leave your device. All charts are computed locally on this page.</div>
+      <div id="tr-out"></div>
+    </div>`;
+  const drop=document.getElementById("tr-drop"),file=document.getElementById("tr-file");
+  ["dragenter","dragover"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add("over");}));
+  ["dragleave","drop"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove("over");}));
+  drop.addEventListener("drop",ev=>{trAddFiles(ev.dataTransfer.files);});
+  file.addEventListener("change",()=>{trAddFiles(file.files);file.value="";});
+  if(trFiles.length) trRenderResults();
+}
+function trAddFiles(list){
+  const files=[...(list||[])]; if(!files.length) return;
+  let pending=files.length;
+  files.forEach(f=>{
+    const rd=new FileReader();
+    rd.onload=()=>{
+      const p=parseSettlement(String(rd.result));
+      trFiles=trFiles.filter(x=>x.name!==f.name); // re-drop replaces
+      if(p.records.length||p.summary){
+        const dup=p.summary&&trFiles.some(x=>x.kind==="settlement"&&x.parsed.summary&&x.parsed.summary.settlementId===p.summary.settlementId);
+        if(dup) trFiles.push({name:f.name,kind:"error",msg:"same settlement ID as a file already loaded — skipped to avoid double counting"});
+        else trFiles.push({name:f.name,kind:"settlement",parsed:p});
+      } else trFiles.push({name:f.name,kind:"error",msg:"not recognised as a settlement flat file"});
+      if(--pending===0) trRenderResults();
+    };
+    rd.onerror=()=>{trFiles.push({name:f.name,kind:"error",msg:"could not read the file"});if(--pending===0)trRenderResults();};
+    rd.readAsText(f);
+  });
+}
+function trRenderResults(){
+  const out=document.getElementById("tr-out"); if(!out) return;
+  let h=`<div class="rec-files">${trFiles.map((f,i)=>`<span class="rec-file"${f.kind==="error"?` title="${esc(f.msg)}"`:""}><b>${esc(f.name)}</b><span class="rf-kind">${f.kind==="error"?"⚠ Skipped":"Settlement"}</span><button type="button" data-rm="${i}" aria-label="Remove ${esc(f.name)}">✕</button></span>`).join("")}</div>`;
+  const bad=trFiles.filter(f=>f.kind==="error");
+  if(bad.length) h+=`<div class="banner warn">${bad.map(f=>`<b>${esc(f.name)}</b>: ${esc(f.msg)}`).join("<br>")}</div>`;
+  const settlements=trFiles.filter(f=>f.kind==="settlement").map(f=>f.parsed);
+  if(!settlements.length){
+    if(trFiles.length) h+=`<div class="banner info">Add at least one <b>settlement flat file</b> (Payments → All Statements → Download Flat File V2).</div>`;
+    out.innerHTML=h; trWire(out); return;
+  }
+  const t=trendCompute(settlements);
+  const M=t.months;
+  const totGross=M.reduce((s,e)=>s+e.gross,0), totNet=M.reduce((s,e)=>s+e.net,0),
+        totFees=M.reduce((s,e)=>s+e.fees,0), totRef=M.reduce((s,e)=>s+e.refunded,0);
+  const sv=n=>`<span class="${n<0?'amt-neg':(n>0?'amt-pos':'')}">${inr(n)}</span>`;
+  const mo={lbl:trFmtMonth,unit:`monthly · ${M.length} month${M.length===1?"":"s"}`,x:"m"};
+  h+=`<div class="stats">
+    <div class="stat blue"><div class="k">Months covered</div><div class="v">${M.length}</div></div>
+    <div class="stat green"><div class="k">Gross sales</div><div class="v">${inr(totGross)}</div></div>
+    <div class="stat"><div class="k">Fees as % of sales</div><div class="v">${totGross?(Math.abs(totFees)/totGross*100).toFixed(1)+"%":"—"}</div></div>
+    <div class="stat ${totGross&&Math.abs(totRef)/totGross>0.1?"red":""}"><div class="k">Refund rate (by value)</div><div class="v">${totGross?(Math.abs(totRef)/totGross*100).toFixed(1)+"%":"—"}</div></div>
+    <div class="stat ${totNet<0?"red":"green"}"><div class="k">Net payout</div><div class="v">${inr(totNet)}</div></div>
+  </div>`;
+  if(settlements.length===1)
+    h+=`<div class="banner info">Only one settlement loaded — drop more statements to see a real trend.</div>`;
+  h+=`<div class="panel"><h4>Month by month <span class="sa-sub">— hover a bar for the exact figure</span></h4><div class="vizgrid">${
+      saBarChart("Product sales",M,"gross","#16a34a",v=>inr(v),mo)
+    }${
+      saBarChart("Net payout",M,"net","#2f5af0",v=>inr(v),mo)
+    }${
+      saBarChart("Fees as % of sales",M,"feePct","#e5484d",v=>v.toFixed(1)+"%",mo)
+    }${
+      saBarChart("Refund rate (by value)",M,"refundPct","#f5872b",v=>v.toFixed(1)+"%",mo)
+    }</div>
+    <div class="tblwrap" style="margin-top:12px"><table class="sa">
+      <thead><tr><th>Month</th><th class="num">Orders</th><th class="num">Units</th><th class="num">Gross sales</th><th class="num">Refunds</th><th class="num">Fees</th><th class="num">Fee %</th><th class="num">Refund %</th><th class="num">Net payout</th></tr></thead>
+      <tbody>${M.map(e=>`<tr>
+        <td>${esc(trFmtMonth(e.m))}</td><td class="num">${e.orders}</td><td class="num">${e.units}</td>
+        <td class="num">${inr(e.gross)}</td><td class="num">${sv(e.refunded)}</td><td class="num">${sv(e.fees)}</td>
+        <td class="num">${e.feePct.toFixed(1)}%</td><td class="num ${e.refundPct>10?'amt-neg':''}">${e.refundPct.toFixed(1)}%</td>
+        <td class="num"><b>${sv(e.net)}</b></td></tr>`).join("")}
+      </tbody></table></div></div>`;
+  // Per-SKU trend picker.
+  if(t.skus.length){
+    const sel=t.skus.some(s=>s.sku===trSku)?trSku:"";
+    h+=`<div class="panel"><h4>Per-SKU trend</h4>
+      <div class="filterbar" style="margin-bottom:10px"><select id="tr-sku" style="max-width:340px">
+        <option value="">— pick a SKU (${t.skus.length}, by sales) —</option>
+        ${t.skus.map(s=>`<option value="${esc(s.sku)}"${s.sku===sel?" selected":""}>${esc(s.sku)} · ${inr(s.sales)}</option>`).join("")}
+      </select></div>`;
+    if(sel){
+      const s=t.skus.find(x=>x.sku===sel);
+      h+=`<div class="vizgrid">${
+          saBarChart("Units sold",s.months,"units","#2f5af0",v=>v+(v===1?" unit":" units"),mo)
+        }${
+          saBarChart("Gross sales",s.months,"sales","#16a34a",v=>inr(v),mo)
+        }</div>
+        <div class="tblwrap" style="margin-top:12px"><table class="sa">
+          <thead><tr><th>Month</th><th class="num">Units</th><th class="num">Gross sales</th><th class="num">Net</th><th class="num">Net / unit</th></tr></thead>
+          <tbody>${s.months.map(x=>`<tr><td>${esc(trFmtMonth(x.m))}</td><td class="num">${x.units}</td>
+            <td class="num">${inr(x.sales)}</td><td class="num"><b>${sv(x.net)}</b></td>
+            <td class="num">${x.units?inr(x.net/x.units):"—"}</td></tr>`).join("")}
+          </tbody></table></div>`;
+    } else h+=`<p class="sa-sub">Pick a SKU to see its own monthly units, sales and net.</p>`;
+    h+=`</div>`;
+  }
+  if(t.skipped) h+=`<div class="banner warn">${t.skipped} line(s) had no usable date and are not shown in any month.</div>`;
+  const errs=settlements.reduce((s,p)=>s+p.errors.length,0);
+  if(errs) h+=`<div class="banner warn"><b>${errs} row(s) could not be parsed</b> and are excluded — open the Settlement Analyzer for details.</div>`;
+  h+=`<div class="banner info">A settlement can start or end mid-month, so the first and last months may be partial — drop consecutive statements for accurate months. "Net payout" per month is the sum of every settlement line posted that month.</div>`;
+  out.innerHTML=h; trWire(out);
+}
+function trWire(out){
+  saWireTips(out);
+  out.querySelectorAll("[data-rm]").forEach(b=>b.addEventListener("click",()=>{
+    trFiles.splice(Number(b.dataset.rm),1); trRenderResults();
+  }));
+  const sel=out.querySelector("#tr-sku");
+  if(sel) sel.addEventListener("change",()=>{trSku=sel.value;trRenderResults();});
 }
 
 /* ============================================================
@@ -4337,6 +4557,7 @@ function route(){
   if(h==="gst-report"){renderGstReport();window.scrollTo(0,0);return;}
   if(h==="sku-report"){renderSkuReport();window.scrollTo(0,0);return;}
   if(h==="reconcile"){renderReconcile();window.scrollTo(0,0);return;}
+  if(h==="trends"){renderTrends();window.scrollTo(0,0);return;}
   if(h==="link-builder"){renderLinkBuilder();window.scrollTo(0,0);return;}
   if(h==="keyword-combiner"){renderKeywordCombiner();window.scrollTo(0,0);return;}
   if(h==="label-cropper"){renderLabelCropper();window.scrollTo(0,0);return;}
@@ -4347,7 +4568,7 @@ function route(){
 window.addEventListener("hashchange",route);
 /* Premium tools re-check entitlement when the tab regains focus, so a session
    kicked on another device locks here within seconds of the user returning. */
-const PREMIUM_ROUTES=["settlement-analyzer","gst-report","sku-report","reconcile"];
+const PREMIUM_ROUTES=["settlement-analyzer","gst-report","sku-report","reconcile","trends"];
 window.addEventListener("focus",()=>{
   const h=location.hash.replace(/^#\/?/,"");
   if(!PREMIUM_ROUTES.includes(h) || saUnlocked() || !sessionUser()) return;
