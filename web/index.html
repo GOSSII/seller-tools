@@ -32,7 +32,11 @@
     /* Long category names, fee labels and banner copy must never push the
        page sideways — wrap them instead. */
     overflow-wrap:break-word;
+    /* Sticky footer: short pages (login, paywalls) keep the footer at the
+       bottom instead of leaving a bare strip of page background under it. */
+    min-height:100vh;display:flex;flex-direction:column;
   }
+  main#app{flex:1}
   a{color:inherit;text-decoration:none}
   img,svg{max-width:100%}
   .wrap{width:100%;max-width:1180px;margin:0 auto;padding:0 16px}
@@ -495,13 +499,20 @@
   @media(hover:hover){.hdr-dd a:hover,.hdr-dd button:hover{background:var(--bg)}}
   .hdr-dd button.danger{color:var(--red)}
 
-  .auth{max-width:420px;margin:0 auto}
-  .auth h2{font-size:clamp(21px,4.5vw,26px);letter-spacing:-.02em;margin-bottom:4px}
-  .auth .lede{color:var(--muted);font-size:14px;margin-bottom:18px}
+  .auth{max-width:420px;margin:0 auto;padding:22px 0 36px}
+  .auth h2{font-size:clamp(22px,4.5vw,27px);letter-spacing:-.02em;margin-bottom:4px;text-align:center}
+  .auth .lede{color:var(--muted);font-size:14px;margin-bottom:20px;text-align:center}
   .auth .card{display:flex;flex-direction:column;gap:14px}
   .auth .agree{display:flex;gap:10px;align-items:flex-start;font-size:13px;color:var(--muted);line-height:1.45}
   .auth .agree input{width:18px;height:18px;min-height:18px;margin-top:1px;flex:none;accent-color:var(--blue)}
   .auth .agree a{color:var(--blue);font-weight:600}
+  .oauth-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:48px;
+    border:1px solid var(--line);border-radius:12px;background:#fff;font-weight:700;font-size:14.5px;
+    color:var(--ink);cursor:pointer;transition:background .15s}
+  .oauth-btn:hover{background:var(--bg)}
+  .oauth-btn svg{flex:none}
+  .auth-or{display:flex;align-items:center;gap:12px;color:var(--faint);font-size:12px}
+  .auth-or::before,.auth-or::after{content:"";flex:1;height:1px;background:var(--line)}
   .showpass{display:flex;gap:7px;align-items:center;font-size:12.5px;color:var(--muted);margin-top:7px;cursor:pointer}
   .showpass input{width:14px;height:14px;cursor:pointer;accent-color:var(--blue)}
   .auth-msg{font-size:13.5px;padding:11px 13px;border-radius:10px;line-height:1.45}
@@ -534,8 +545,9 @@
      ============================================================ */
   .paywall{display:grid;grid-template-columns:1fr;gap:20px;align-items:center;
     background:#fff;border:1px solid var(--line);border-radius:16px;padding:20px;
-    box-shadow:0 10px 30px rgba(15,26,43,.05)}
-  @media(min-width:760px){.paywall{grid-template-columns:1fr 1fr;gap:34px;padding:28px}}
+    box-shadow:0 10px 30px rgba(15,26,43,.05);max-width:1000px;margin:0 auto}
+  @media(min-width:760px){.paywall{grid-template-columns:1fr 1.1fr;gap:38px;padding:30px 34px}}
+  .pw-title{text-align:center;margin:10px 0 18px;font-size:clamp(21px,4vw,27px);letter-spacing:-.02em}
   .pw-left{order:2;display:flex;flex-direction:column;gap:10px}
   @media(min-width:760px){.pw-left{order:0}}
   .pw-mock-label{font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
@@ -1554,6 +1566,33 @@ function wireShowPass(){
     cb.dataset.showpass.split(" ").forEach(id=>{const t=document.getElementById(id);if(t)t.type=cb.checked?"text":"password";});
   }));
 }
+/* "Continue with Google" (Supabase OAuth). The whole page redirects to
+   Google and comes back to the app root, where handleAuthRedirect() picks
+   the session up. If the provider isn't enabled yet in Supabase, we show a
+   friendly fallback instead of breaking. */
+const GOOGLE_G=`<svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>`;
+function googleBtnHtml(id){
+  return `<button type="button" class="oauth-btn" id="${id}">${GOOGLE_G} Continue with Google</button>
+    <div class="auth-or"><span>or</span></div>`;
+}
+function wireGoogleBtn(id,msgEl){
+  const btn=document.getElementById(id); if(!btn) return;
+  btn.addEventListener("click",async()=>{
+    btn.disabled=true; const old=btn.innerHTML; btn.innerHTML="Redirecting to Google…";
+    try{
+      const c=await sb();
+      const {error}=await c.auth.signInWithOAuth({provider:"google",options:{redirectTo:location.origin+"/"}});
+      if(error){
+        const m=String(error.message||"");
+        authMsg(msgEl,"err",/not enabled|unsupported/i.test(m)
+          ?"Google login abhi available nahi hai — email/password se login karein."
+          :authFriendly(m));
+        btn.disabled=false; btn.innerHTML=old;
+      }
+      // On success the browser navigates away to Google.
+    }catch(e){ authMsg(msgEl,"err",authFriendly(e.message)); btn.disabled=false; btn.innerHTML=old; }
+  });
+}
 /* Resend the signup confirmation email (used from login + signup). */
 async function resendConfirm(email,msgEl,btn){
   btn.disabled=true; btn.textContent="Sending…";
@@ -1589,6 +1628,7 @@ function renderLogin(){
   authShell("Welcome back","Log in to your account.",`
     <form class="card" id="login-form" novalidate>
       <div id="login-msg" class="auth-msg err" hidden></div>
+      ${googleBtnHtml("lg-google")}
       <div><label for="lg-email">Email</label>
         <input id="lg-email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com"></div>
       <div><label for="lg-pass">Password</label>
@@ -1603,6 +1643,7 @@ function renderLogin(){
   const form=document.getElementById("login-form"), msg=document.getElementById("login-msg"),
         submit=document.getElementById("lg-submit");
   wireShowPass();
+  wireGoogleBtn("lg-google",msg);
   try{ document.getElementById("lg-email").focus(); }catch(e){}
   form.addEventListener("submit",async e=>{
     e.preventDefault(); msg.hidden=true;
@@ -1632,6 +1673,7 @@ function renderSignup(){
   authShell("Create your account","Free to start. No card needed.",`
     <form class="card" id="signup-form" novalidate>
       <div id="signup-msg" class="auth-msg" hidden></div>
+      ${googleBtnHtml("su-google")}
       <div><label for="su-name">Name</label>
         <input id="su-name" type="text" autocomplete="name" placeholder="Your name"></div>
       <div><label for="su-email">Email</label>
@@ -1642,11 +1684,13 @@ function renderSignup(){
       <label class="agree"><input type="checkbox" id="su-agree">
         <span>I agree to the <a href="/terms.html" target="_blank" rel="noopener">Terms</a> and <a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</span></label>
       <button type="submit" class="bigbtn" id="su-submit">Create account</button>
+      <p class="sa-sub" style="margin:0;font-size:12px">Continuing with Google also means you agree to the <a href="/terms.html" target="_blank" rel="noopener">Terms</a> and <a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</p>
     </form>
     <div class="auth-links">Already have an account? <a href="#/login">Log in</a></div>`);
   const form=document.getElementById("signup-form"), msg=document.getElementById("signup-msg"),
         submit=document.getElementById("su-submit");
   wireShowPass();
+  wireGoogleBtn("su-google",msg);
   try{ document.getElementById("su-name").focus(); }catch(e){}
   form.addEventListener("submit",async e=>{
     e.preventDefault(); msg.hidden=true;
@@ -1777,8 +1821,12 @@ async function handleAuthRedirect(){
   if(storedSession()){
     resetEntitlement(); setStoredSessionId("");
     try{ const cr=await claimSession(); if(cr.error==="device_limit"){ renderDeviceLimit(cr.limit); return true; } }catch(e){}
+    // If a paywall sent the user off to log in (email link or Google OAuth),
+    // take them straight back to that tool.
+    let next=""; try{ next=sessionStorage.getItem("auth_next")||""; sessionStorage.removeItem("auth_next"); }catch(e){}
+    if(/^#\//.test(next)){ location.hash=next; return true; }
     payShell(`<div style="font-size:40px;line-height:1">✅</div>
-      <h2 style="margin-top:8px">Email confirmed — you're logged in</h2>
+      <h2 style="margin-top:8px">${linkType==="signup"?"Email confirmed — you're logged in":"You're logged in"}</h2>
       <p class="lede">Welcome to Seller Tools! Your account is ready.</p>
       <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:6px">
         <a class="lp-btn" href="#/">Explore the tools</a>
@@ -1959,7 +2007,7 @@ function renderPaywall(info){
   const feats=(info.feats||[]).map(f=>`<li><span class="tick">✓</span><span>${esc(f)}</span></li>`).join("");
   app.innerHTML=`
     <div class="wrap page">
-      <h2>${esc(info.title)}</h2>
+      <h2 class="pw-title">${esc(info.title)}</h2>
       <div class="paywall">
         <div class="pw-left">
           <div class="pw-mock-label">Sample — what you'll see</div>
