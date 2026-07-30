@@ -1552,6 +1552,7 @@ async function doLogout(){
   try{ sessionStorage.removeItem("auth_next"); }catch(e){}
   _sbClient=null; hdrMenuOpen=false; resetEntitlement(); setStoredSessionId("");
   renderAuthSlot();
+  pingNow(); // flip this tab's presence row back to anonymous right away
   location.hash="#/";
 }
 /* Where to land after a successful login: the tool whose paywall sent the
@@ -1661,6 +1662,7 @@ function renderLogin(){
       }
       resetEntitlement(); setStoredSessionId(""); renderAuthSlot();
       try{ const cr=await claimSession(); if(cr.error==="device_limit"){ renderDeviceLimit(cr.limit); return; } }catch(e){}
+      pingNow(); // attribute this tab's presence row to the account right away
       location.hash=authNextRoute();
     }catch(err){authMsg(msg,"err",authFriendly(err.message));}
     finally{submit.disabled=false; submit.textContent="Log in";}
@@ -5019,6 +5021,9 @@ function presenceSid(){
   }catch(e){ return null; }
 }
 let _lastPing=0;
+/* Skip the throttle — used right after login/logout so the online list
+   reflects the change within seconds instead of a minute. */
+function pingNow(){ _lastPing=0; try{ sendPing(); }catch(e){} }
 function sendPing(){
   const sid=presenceSid(); if(!sid) return;
   if(document.visibilityState!=="visible") return;
