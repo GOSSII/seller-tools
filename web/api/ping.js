@@ -22,8 +22,10 @@ module.exports = async (req, res) => {
     if (token) { try { const u = await userFromToken(token); if (u) userId = u.id; } catch (e) { /* anonymous */ } }
 
     const nowIso = new Date().toISOString();
-    const patchBody = { last_seen_at: nowIso, route };
-    if (userId) patchBody.user_id = userId;
+    // user_id always reflects the CURRENT login state of the tab: a logout
+    // must clear the attribution on the next heartbeat, not keep showing the
+    // old account as online.
+    const patchBody = { last_seen_at: nowIso, route, user_id: userId };
     const up = await rest('PATCH', '/presence?sid=eq.' + encodeURIComponent(sid),
       patchBody, { Prefer: 'return=representation' });
     let updated = false;
