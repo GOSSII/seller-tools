@@ -502,6 +502,8 @@
   .auth .agree{display:flex;gap:10px;align-items:flex-start;font-size:13px;color:var(--muted);line-height:1.45}
   .auth .agree input{width:18px;height:18px;min-height:18px;margin-top:1px;flex:none;accent-color:var(--blue)}
   .auth .agree a{color:var(--blue);font-weight:600}
+  .showpass{display:flex;gap:7px;align-items:center;font-size:12.5px;color:var(--muted);margin-top:7px;cursor:pointer}
+  .showpass input{width:14px;height:14px;cursor:pointer;accent-color:var(--blue)}
   .auth-msg{font-size:13.5px;padding:11px 13px;border-radius:10px;line-height:1.45}
   .auth-msg.err{background:var(--red-soft);border:1px solid var(--red-line);color:#b42318}
   .auth-msg.ok{background:var(--green-soft);border:1px solid var(--green-line);color:#087443}
@@ -1535,9 +1537,41 @@ document.addEventListener("click",()=>{
 async function doLogout(){
   try{ const c=await sb(); await c.auth.signOut(); }catch(e){}
   try{ localStorage.removeItem(SUPABASE_AUTH_KEY); }catch(e){}
+  try{ sessionStorage.removeItem("auth_next"); }catch(e){}
   _sbClient=null; hdrMenuOpen=false; resetEntitlement(); setStoredSessionId("");
   renderAuthSlot();
   location.hash="#/";
+}
+/* Where to land after a successful login: the tool whose paywall sent the
+   user here (stored by renderPaywall), else the account page. */
+function authNextRoute(){
+  let n=""; try{ n=sessionStorage.getItem("auth_next")||""; sessionStorage.removeItem("auth_next"); }catch(e){}
+  return /^#\//.test(n)?n:"#/account";
+}
+/* Toggle password fields' visibility. data-showpass="id1 id2" */
+function wireShowPass(){
+  document.querySelectorAll("[data-showpass]").forEach(cb=>cb.addEventListener("change",()=>{
+    cb.dataset.showpass.split(" ").forEach(id=>{const t=document.getElementById(id);if(t)t.type=cb.checked?"text":"password";});
+  }));
+}
+/* Resend the signup confirmation email (used from login + signup). */
+async function resendConfirm(email,msgEl,btn){
+  btn.disabled=true; btn.textContent="Sending…";
+  try{
+    const c=await sb();
+    const {error}=await c.auth.resend({type:"signup",email});
+    if(error) authMsg(msgEl,"err",authFriendly(error.message));
+    else authMsg(msgEl,"ok","Confirmation email dobara bhej diya gaya — inbox aur spam dono check karein.");
+  }catch(e){ authMsg(msgEl,"err",authFriendly(e.message)); }
+  finally{ btn.disabled=false; btn.textContent="Resend confirmation email"; }
+}
+function addResendButton(id,msgEl,email){
+  if(document.getElementById(id)) return;
+  const b=document.createElement("button");
+  b.type="button"; b.id=id; b.className="lp-btn sec"; b.style.marginTop="10px";
+  b.textContent="Resend confirmation email";
+  b.addEventListener("click",()=>resendConfirm(email,msgEl,b));
+  msgEl.insertAdjacentElement("afterend",b);
 }
 
 function authShell(title,lede,inner){
@@ -1558,7 +1592,8 @@ function renderLogin(){
       <div><label for="lg-email">Email</label>
         <input id="lg-email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com"></div>
       <div><label for="lg-pass">Password</label>
-        <input id="lg-pass" type="password" autocomplete="current-password" placeholder="Your password"></div>
+        <input id="lg-pass" type="password" autocomplete="current-password" placeholder="Your password">
+        <label class="showpass"><input type="checkbox" data-showpass="lg-pass"> Show password</label></div>
       <button type="submit" class="bigbtn" id="lg-submit">Log in</button>
     </form>
     <div class="auth-links">
@@ -1567,6 +1602,8 @@ function renderLogin(){
     </div>`);
   const form=document.getElementById("login-form"), msg=document.getElementById("login-msg"),
         submit=document.getElementById("lg-submit");
+  wireShowPass();
+  try{ document.getElementById("lg-email").focus(); }catch(e){}
   form.addEventListener("submit",async e=>{
     e.preventDefault(); msg.hidden=true;
     const email=document.getElementById("lg-email").value.trim();
@@ -1576,10 +1613,14 @@ function renderLogin(){
     try{
       const c=await sb();
       const {error}=await c.auth.signInWithPassword({email,password:pass});
-      if(error){authMsg(msg,"err",authFriendly(error.message));return;}
+      if(error){
+        authMsg(msg,"err",authFriendly(error.message));
+        if(/not confirmed/i.test(String(error.message||""))) addResendButton("lg-resend",msg,email);
+        return;
+      }
       resetEntitlement(); setStoredSessionId(""); renderAuthSlot();
       try{ const cr=await claimSession(); if(cr.error==="device_limit"){ renderDeviceLimit(cr.limit); return; } }catch(e){}
-      location.hash="#/account";
+      location.hash=authNextRoute();
     }catch(err){authMsg(msg,"err",authFriendly(err.message));}
     finally{submit.disabled=false; submit.textContent="Log in";}
   });
@@ -1596,7 +1637,8 @@ function renderSignup(){
       <div><label for="su-email">Email</label>
         <input id="su-email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com"></div>
       <div><label for="su-pass">Password</label>
-        <input id="su-pass" type="password" autocomplete="new-password" placeholder="At least 6 characters"></div>
+        <input id="su-pass" type="password" autocomplete="new-password" placeholder="At least 6 characters">
+        <label class="showpass"><input type="checkbox" data-showpass="su-pass"> Show password</label></div>
       <label class="agree"><input type="checkbox" id="su-agree">
         <span>I agree to the <a href="/terms.html" target="_blank" rel="noopener">Terms</a> and <a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</span></label>
       <button type="submit" class="bigbtn" id="su-submit">Create account</button>
@@ -1604,6 +1646,8 @@ function renderSignup(){
     <div class="auth-links">Already have an account? <a href="#/login">Log in</a></div>`);
   const form=document.getElementById("signup-form"), msg=document.getElementById("signup-msg"),
         submit=document.getElementById("su-submit");
+  wireShowPass();
+  try{ document.getElementById("su-name").focus(); }catch(e){}
   form.addEventListener("submit",async e=>{
     e.preventDefault(); msg.hidden=true;
     const name=document.getElementById("su-name").value.trim();
@@ -1619,8 +1663,8 @@ function renderSignup(){
       const c=await sb();
       const {data,error}=await c.auth.signUp({email,password:pass,options:{data:{name}}});
       if(error){authMsg(msg,"err",authFriendly(error.message));return;}
-      if(data&&data.session){ resetEntitlement(); setStoredSessionId(""); renderAuthSlot(); try{ const cr=await claimSession(); if(cr.error==="device_limit"){ renderDeviceLimit(cr.limit); return; } }catch(e){} location.hash="#/account"; }
-      else { authMsg(msg,"ok","Ho gaya! Apne email ka confirmation link kholein, phir login karein."); form.reset(); }
+      if(data&&data.session){ resetEntitlement(); setStoredSessionId(""); renderAuthSlot(); try{ const cr=await claimSession(); if(cr.error==="device_limit"){ renderDeviceLimit(cr.limit); return; } }catch(e){} location.hash=authNextRoute(); }
+      else { authMsg(msg,"ok","Ho gaya! Apne email ka confirmation link kholein — us link se aap seedha login ho jayenge."); form.reset(); addResendButton("su-resend",msg,email); }
     }catch(err){authMsg(msg,"err",authFriendly(err.message));}
     finally{submit.disabled=false; submit.textContent="Create account";}
   });
@@ -1638,6 +1682,7 @@ function renderReset(){
     <div class="auth-links"><a href="#/login">Back to login</a></div>`);
   const form=document.getElementById("reset-form"), msg=document.getElementById("reset-msg"),
         submit=document.getElementById("rs-submit");
+  try{ document.getElementById("rs-email").focus(); }catch(e){}
   form.addEventListener("submit",async e=>{
     e.preventDefault(); msg.hidden=true;
     const email=document.getElementById("rs-email").value.trim();
@@ -1645,12 +1690,102 @@ function renderReset(){
     submit.disabled=true; submit.textContent="Sending…";
     try{
       const c=await sb();
-      const {error}=await c.auth.resetPasswordForEmail(email,{redirectTo:location.origin+"/#/login"});
+      // Land on the app root: handleAuthRedirect() consumes the tokens there
+      // and routes to the set-new-password screen.
+      const {error}=await c.auth.resetPasswordForEmail(email,{redirectTo:location.origin+"/"});
       if(error){authMsg(msg,"err",authFriendly(error.message));return;}
       authMsg(msg,"ok","Agar yeh email registered hai, reset link bhej diya gaya hai. Apna inbox check karein.");
     }catch(err){authMsg(msg,"err",authFriendly(err.message));}
     finally{submit.disabled=false; submit.textContent="Send reset link";}
   });
+}
+
+/* Set-new-password screen — where the password-recovery email link lands
+   (via handleAuthRedirect). Needs the recovery session Supabase created. */
+function renderNewPassword(){
+  setMeta("Set a new password — Seller Tools","Choose a new password for your account.");
+  if(!sessionUser()){
+    authShell("Link expired","This password link is invalid or has already been used.",`
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <a class="lp-btn" href="#/reset">Request a new link</a>
+        <a class="lp-btn sec" href="#/login">Back to login</a></div>`);
+    return;
+  }
+  authShell("Set a new password","You're verified — choose a new password.",`
+    <form class="card" id="np-form" novalidate>
+      <div id="np-msg" class="auth-msg" hidden></div>
+      <div><label for="np-pass">New password</label>
+        <input id="np-pass" type="password" autocomplete="new-password" placeholder="At least 6 characters"></div>
+      <div><label for="np-pass2">Confirm new password</label>
+        <input id="np-pass2" type="password" autocomplete="new-password" placeholder="Type it again">
+        <label class="showpass"><input type="checkbox" data-showpass="np-pass np-pass2"> Show passwords</label></div>
+      <button type="submit" class="bigbtn" id="np-submit">Save new password</button>
+    </form>`);
+  const form=document.getElementById("np-form"), msg=document.getElementById("np-msg"),
+        submit=document.getElementById("np-submit");
+  wireShowPass();
+  try{ document.getElementById("np-pass").focus(); }catch(e){}
+  form.addEventListener("submit",async e=>{
+    e.preventDefault(); msg.hidden=true;
+    const p1=document.getElementById("np-pass").value, p2=document.getElementById("np-pass2").value;
+    if(p1.length<6){authMsg(msg,"err","Password kam se kam 6 characters ka hona chahiye.");return;}
+    if(p1!==p2){authMsg(msg,"err","Dono passwords same nahi hain.");return;}
+    submit.disabled=true; submit.textContent="Saving…";
+    try{
+      const c=await sb();
+      const {error}=await c.auth.updateUser({password:p1});
+      if(error){authMsg(msg,"err",authFriendly(error.message));return;}
+      authMsg(msg,"ok","Password badal gaya! Le ja rahe hain aapke account par…");
+      resetEntitlement(); setStoredSessionId(""); renderAuthSlot();
+      try{ const cr=await claimSession(); if(cr.error==="device_limit"){ renderDeviceLimit(cr.limit); return; } }catch(e2){}
+      setTimeout(()=>{ location.hash="#/account"; },1200);
+    }catch(err){authMsg(msg,"err",authFriendly(err.message));}
+    finally{submit.disabled=false; submit.textContent="Save new password";}
+  });
+}
+
+/* ------------------------------------------------------------------
+   Email-link landing. Supabase's password-recovery and email-confirmation
+   links come back with tokens in the URL fragment (#access_token=…&type=…),
+   which our hash router would otherwise discard. On boot we let supabase-js
+   consume them (it writes the session and cleans the URL) and then route:
+   recovery → set-new-password screen; confirmation → logged in + welcome. */
+function authTokensInUrl(){
+  return /access_token=|error_description=|type=recovery/.test(location.hash||"")
+      || /[?&]code=/.test(location.search||"");
+}
+async function handleAuthRedirect(){
+  if(!authTokensInUrl()) return false;
+  const h=location.hash||"";
+  const linkType=(h.match(/[#&?]type=([a-z_]+)/)||[])[1]||"";
+  const errRaw=(h.match(/error_description=([^&]+)/)||[])[1]||"";
+  const errDesc=errRaw?decodeURIComponent(errRaw.replace(/\+/g," ")):"";
+  try{ await sb(); }catch(e){}
+  for(let i=0;i<25 && !storedSession() && !errDesc;i++) await new Promise(r=>setTimeout(r,120));
+  try{ if(/access_token=|error=|code=/.test(location.hash+location.search)) history.replaceState(null,"",location.pathname); }catch(e){}
+  renderAuthSlot();
+  if(errDesc){
+    payShell(`<div style="font-size:36px;line-height:1">⚠️</div>
+      <h2 style="margin-top:8px">That link didn't work</h2>
+      <p class="lede">${esc(errDesc)}. Links expire quickly — please request a fresh one.</p>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:6px">
+        <a class="lp-btn" href="#/reset">Request a new link</a>
+        <a class="lp-btn sec" href="#/login">Back to login</a></div>`);
+    return true;
+  }
+  if(linkType==="recovery"){ location.hash="#/new-password"; return true; }
+  if(storedSession()){
+    resetEntitlement(); setStoredSessionId("");
+    try{ const cr=await claimSession(); if(cr.error==="device_limit"){ renderDeviceLimit(cr.limit); return true; } }catch(e){}
+    payShell(`<div style="font-size:40px;line-height:1">✅</div>
+      <h2 style="margin-top:8px">Email confirmed — you're logged in</h2>
+      <p class="lede">Welcome to Seller Tools! Your account is ready.</p>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:6px">
+        <a class="lp-btn" href="#/">Explore the tools</a>
+        <a class="lp-btn sec" href="#/account">Go to account</a></div>`);
+    return true;
+  }
+  return false;
 }
 
 /* ------------------------------------------------------------------
@@ -1818,6 +1953,9 @@ function renderProUpgrade(info){
 function renderPaywall(info){
   backBtn.hidden=false;
   const loggedIn=!!sessionUser();
+  // Remember which tool sent the user to login, so a successful login
+  // returns them here instead of the account page.
+  try{ sessionStorage.setItem("auth_next","#/"+info.route); }catch(e){}
   const feats=(info.feats||[]).map(f=>`<li><span class="tick">✓</span><span>${esc(f)}</span></li>`).join("");
   app.innerHTML=`
     <div class="wrap page">
@@ -4750,6 +4888,7 @@ function route(){
   if(h==="login"){renderLogin();window.scrollTo(0,0);return;}
   if(h==="signup"){renderSignup();window.scrollTo(0,0);return;}
   if(h==="reset"){renderReset();window.scrollTo(0,0);return;}
+  if(h==="new-password"){renderNewPassword();window.scrollTo(0,0);return;}
   if(h==="account"){renderAccount();window.scrollTo(0,0);return;}
   if(h==="admin"){renderAdmin();window.scrollTo(0,0);return;}
   if(h==="settlement-analyzer"){renderSettlementAnalyzer();window.scrollTo(0,0);return;}
@@ -4778,9 +4917,13 @@ window.addEventListener("focus",()=>{
   }).catch(()=>{});
 });
 (function(){const y=document.getElementById("foot-year");if(y)y.textContent=new Date().getFullYear();})();
-renderAuthSlot();
-maybeClaimOnLoad();
-route();
+(async()=>{
+  let handled=false;
+  try{ handled=await handleAuthRedirect(); }catch(e){}
+  renderAuthSlot();
+  maybeClaimOnLoad();
+  if(!handled) route();
+})();
 </script>
 </body>
 </html>
