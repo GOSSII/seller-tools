@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#2f5af0">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f5af0'/%3E%3Ctext x='16' y='23' font-size='19' text-anchor='middle' fill='white' font-family='Arial' font-weight='bold'%3E%E2%82%B9%3C/text%3E%3C/svg%3E">
-<title>Seller Tools — Amazon India Profit &amp; Fee Calculators</title>
+<title>Seller Tools India — Amazon India Profit &amp; Fee Calculators</title>
 <meta name="description" content="Free calculators for Amazon India sellers. Work out true profit per SKU, FBA fees, storage cost, break-even ACOS and PPC ROI. Updated for 2026 fee cards.">
-<meta property="og:title" content="Seller Tools — Amazon India Seller Calculators">
+<meta property="og:title" content="Seller Tools India — Amazon India Seller Calculators">
 <meta property="og:description" content="Nine free calculators for Amazon India sellers. Profit, FBA fees, ACOS and ad ROI.">
 <meta property="og:type" content="website">
 <style>
@@ -638,7 +638,7 @@
 
 <header>
   <div class="wrap mast">
-    <a class="brand" href="#/"><span class="logo" aria-hidden="true">₹</span><span class="txt">Seller Tools</span></a>
+    <a class="brand" href="#/"><span class="logo" aria-hidden="true">₹</span><span class="txt">Seller Tools India</span></a>
     <div class="mast-right">
       <a class="back" id="back" href="#/" hidden>← All calculators</a>
       <span id="authslot" class="authslot"></span>
@@ -659,7 +659,7 @@
       <a href="/contact.html">Contact</a>
     </nav>
     Fee rates reflect published 2026 marketplace rate cards and are estimates — always confirm against your own Seller Central rate card before pricing.<br>
-    &copy; <span id="foot-year">2026</span> Amazon Seller Tools. Not affiliated with Amazon.com, Inc. Amazon is a trademark of Amazon.com, Inc.
+    &copy; <span id="foot-year">2026</span> Seller Tools India. Not affiliated with Amazon.com, Inc. Amazon is a trademark of Amazon.com, Inc.
   </div>
 </footer>
 
@@ -1625,7 +1625,7 @@ function authMsg(el,type,text){
 
 function renderLogin(){
   if(sessionUser()){location.hash="#/account";return;}
-  setMeta("Login — Seller Tools","Log in to your Seller Tools account.");
+  setMeta("Login — Seller Tools India","Log in to your Seller Tools India account.");
   authShell("Welcome back","Log in to your account.",`
     <form class="card" id="login-form" novalidate>
       <div id="login-msg" class="auth-msg err" hidden></div>
@@ -1671,7 +1671,7 @@ function renderLogin(){
 
 function renderSignup(){
   if(sessionUser()){location.hash="#/account";return;}
-  setMeta("Sign up — Seller Tools","Create your free Seller Tools account.");
+  setMeta("Sign up — Seller Tools India","Create your free Seller Tools India account.");
   authShell("Create your account","Free to start. No card needed.",`
     <form class="card" id="signup-form" novalidate>
       <div id="signup-msg" class="auth-msg" hidden></div>
@@ -1717,7 +1717,7 @@ function renderSignup(){
 }
 
 function renderReset(){
-  setMeta("Reset password — Seller Tools","Reset your Seller Tools password.");
+  setMeta("Reset password — Seller Tools India","Reset your Seller Tools India password.");
   authShell("Reset your password","We'll email you a reset link.",`
     <form class="card" id="reset-form" novalidate>
       <div id="reset-msg" class="auth-msg" hidden></div>
@@ -1749,7 +1749,7 @@ function renderReset(){
 /* Set-new-password screen — where the password-recovery email link lands
    (via handleAuthRedirect). Needs the recovery session Supabase created. */
 function renderNewPassword(){
-  setMeta("Set a new password — Seller Tools","Choose a new password for your account.");
+  setMeta("Set a new password — Seller Tools India","Choose a new password for your account.");
   if(!sessionUser()){
     authShell("Link expired","This password link is invalid or has already been used.",`
       <div style="display:flex;gap:10px;flex-wrap:wrap">
@@ -1829,7 +1829,7 @@ async function handleAuthRedirect(){
     if(/^#\//.test(next)){ location.hash=next; return true; }
     payShell(`<div style="font-size:40px;line-height:1">✅</div>
       <h2 style="margin-top:8px">${linkType==="signup"?"Email confirmed — you're logged in":"You're logged in"}</h2>
-      <p class="lede">Welcome to Seller Tools! Your account is ready.</p>
+      <p class="lede">Welcome to Seller Tools India! Your account is ready.</p>
       <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:6px">
         <a class="lp-btn" href="#/">Explore the tools</a>
         <a class="lp-btn sec" href="#/account">Go to account</a></div>`);
@@ -1937,9 +1937,34 @@ function renderDeviceLimit(limit){
   app.innerHTML=`<div class="wrap page"><div class="auth"><div class="card" style="text-align:center">
     <div style="font-size:34px;line-height:1">🔐</div>
     <h2 style="margin-top:8px">Device limit reached</h2>
-    <p class="lede">Your account is set up for up to ${esc(String(limit||3))} devices, and this is a new one. To keep prices low we limit how many devices share one account. Email <a href="mailto:dipsgos7@gmail.com?subject=Reset%20devices">dipsgos7@gmail.com</a> and we'll reset your devices.</p>
-    <div style="margin-top:6px"><a class="lp-btn sec" href="#/account">Go to account</a></div>
+    <p class="lede">Your account is set up for up to ${esc(String(limit||3))} devices, and this is a new one. To keep prices low we limit how many devices share one account. You can reset your devices yourself — every other device is signed out and this one becomes your first device.</p>
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:6px">
+      <button type="button" class="lp-btn" id="dl-reset">Log out other devices &amp; use here</button>
+      <a class="lp-btn sec" href="#/account">Go to account</a>
+    </div>
+    <p class="lede" style="margin-top:10px;font-size:13px">Trouble? Email <a href="mailto:gossiistudio@gmail.com?subject=Reset%20devices">gossiistudio@gmail.com</a> and we'll reset them for you.</p>
   </div></div></div>`;
+  const btn=document.getElementById("dl-reset");
+  if(btn) btn.addEventListener("click",async()=>{
+    btn.disabled=true; btn.textContent="Resetting…";
+    const cr=await resetDevicesAndClaim();
+    if(cr.session_id){ resetEntitlement(); route(); return; }
+    btn.disabled=false; btn.textContent="Log out other devices & use here";
+    if(!document.getElementById("dl-reset-err"))
+      btn.insertAdjacentHTML("afterend",`<p id="dl-reset-err" class="lede" style="color:#b42318;font-size:13px;margin-top:8px">Couldn't reset — please try again or email us.</p>`);
+  });
+}
+/* Self-service unblock for the device-limit screen: forget all devices on the
+   server, then claim this browser as the first device again. */
+async function resetDevicesAndClaim(){
+  const token=await accessToken(); if(!token) return {ok:false};
+  try{
+    const r=await fetch("/api/session-claim",{method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":"Bearer "+token},
+      body:JSON.stringify({action:"reset_devices"})});
+    if(!r.ok) return {ok:false};
+  }catch(e){ return {ok:false}; }
+  return claimSession();
 }
 
 let _entCache=null; // {key, promise}
@@ -2156,7 +2181,7 @@ async function startCheckout(planKey, autoRenew){
   try{ await rzpLoad; }
   catch(e){ renderPaymentProblem("Couldn't load the payment window. Check your connection and retry."); return; }
   const opts={
-    key:order.key_id, name:"Amazon Seller Tools",
+    key:order.key_id, name:"Seller Tools India",
     description:(order.label||"Plan")+(autoRenew?" · auto-renew":""),
     prefill:{ email:order.email||u.email||"" },
     theme:{ color:"#2f5af0" },
@@ -2235,7 +2260,7 @@ function renderPaymentProblem(msg, retryPlan){
 
 function renderAccount(){
   if(!sessionUser()){location.hash="#/login";return;}
-  setMeta("Account — Seller Tools","Your Seller Tools account and plan.");
+  setMeta("Account — Seller Tools India","Your Seller Tools India account and plan.");
   const u0=sessionUser();
   backBtn.hidden=false;
   app.innerHTML=`<div class="wrap page">
@@ -2476,7 +2501,7 @@ async function adminCall(payload){
 }
 function renderNotFound(){
   backBtn.hidden=false;
-  document.title="Not found — Seller Tools";
+  document.title="Not found — Seller Tools India";
   app.innerHTML=`<div class="wrap page"><div class="auth" style="text-align:center">
     <div style="font-size:34px;line-height:1">🔍</div>
     <h2 style="margin-top:8px">Page not found</h2>
@@ -2486,7 +2511,7 @@ function renderNotFound(){
 async function renderAdmin(){
   backBtn.hidden=false;
   if(!sessionUser()){ renderNotFound(); return; }
-  document.title="Admin — Seller Tools";
+  document.title="Admin — Seller Tools India";
   app.innerHTML=`<div class="wrap page"><p class="lede">Loading…</p></div>`;
   let r; try{ r=await adminCall({action:"stats"}); }catch(e){ renderNotFound(); return; }
   if(location.hash.replace(/^#\/?/,"")!=="admin") return;
@@ -2687,6 +2712,20 @@ function renderHome(){
         <div class="lp2-step"><div class="n">3</div><div class="ico">📊</div><b>Read your real numbers</b><p>Every fee itemised, profit per SKU, GST figures ready for your CA.</p></div>
       </div>
 
+      <section class="lp2-sec">
+        <h2>What does label time cost you?</h2>
+        <p>Cropping, sorting and matching invoices by hand takes about 90 seconds per order. See what that adds up to.</p>
+      </section>
+      <div class="card" style="max-width:620px;margin:16px auto 0">
+        <label for="sv-orders">Orders you ship per day</label>
+        <input id="sv-orders" inputmode="numeric" value="30">
+        <div class="lp-mock" style="margin-top:12px">
+          <div class="row"><span>Time saved every month</span><b id="sv-hours">—</b></div>
+          <div class="row"><span>Worth per year (at ₹150/hour)</span><b class="amt pos" id="sv-value">—</b></div>
+        </div>
+        <div class="note" style="margin-top:10px">The <a href="#/label-cropper">Label Cropper</a> and <a href="#/order-printer">Order Printer</a> do all of it in one click — free, with your files never leaving your browser.</div>
+      </div>
+
       <section class="lp2-sec" id="tools">
         <h2>Every tool an Amazon.in seller needs</h2>
         <p>Start free, no login. Upgrade only when the paid reports save you more than they cost.</p>
@@ -2733,12 +2772,12 @@ function renderHome(){
       <section class="lp-faq" aria-label="Frequently asked questions">
         <h2>Questions sellers ask</h2>
         <details><summary>Is it really free?</summary><p>Yes — every calculator, the label cropper, order printer, link builder and keyword combiner are free with no login. Some advanced reports (Settlement Analyzer, GST report, SKU report) are moving to a low-cost paid plan; the free tools stay free.</p></details>
-        <details><summary>Do you upload or store my files?</summary><p>No. Settlement reports and label PDFs are processed entirely in your browser — they are never uploaded to any server. That is our core promise and it will always be true.</p></details>
+        <details><summary>Do you upload or store my files?</summary><p>No. Settlement reports and label PDFs are processed entirely in your browser — they are never uploaded to any server. That is our core promise and it will always be true. Most other label-cropping sites upload your PDFs — including your customers' names and addresses — to their servers and promise to delete them later; we never receive them in the first place.</p></details>
         <details><summary>Which marketplaces do you support?</summary><p>Amazon India (Amazon.in) only. Fees, GST and settlement formats are all specific to the India marketplace.</p></details>
         <details><summary>How do I get my settlement report?</summary><p>In Seller Central go to Payments → Reports Repository (or Date Range Reports) and download the transaction/settlement report, then paste or upload it into the Settlement Analyzer.</p></details>
         <details><summary>Do plans auto-renew?</summary><p>Only if you choose it. At checkout you can tick <b>auto-renew</b> (so you're not interrupted when the period ends) or untick it for a one-time purchase. Auto-renewal can be cancelled anytime from your account — you keep access until the end of the period you've paid for.</p></details>
         <details><summary>What is your refund policy?</summary><p>You keep access until your paid period ends. Payments are non-refundable once a plan is activated, except for duplicate or failed charges. See our <a href="/refunds.html">Refund Policy</a> for details.</p></details>
-        <details><summary>How do I contact you?</summary><p>Email <a href="mailto:dipsgos7@gmail.com">dipsgos7@gmail.com</a> — see the <a href="/contact.html">Contact</a> page for expected reply times.</p></details>
+        <details><summary>How do I contact you?</summary><p>Email <a href="mailto:gossiistudio@gmail.com">gossiistudio@gmail.com</a> — see the <a href="/contact.html">Contact</a> page for expected reply times.</p></details>
       </section>
 
       <div class="lp2-cta">
@@ -2755,6 +2794,19 @@ function renderHome(){
     const g=document.getElementById(b.dataset.scroll);
     if(g) g.scrollIntoView({behavior:"smooth",block:"start"});
   }));
+  // Savings calculator: 90 sec of manual crop/sort work per order, 26
+  // shipping days a month, valued at ₹150/hour.
+  const svo=document.getElementById("sv-orders");
+  if(svo){
+    const svCalc=()=>{
+      const n=Math.max(0,parseInt(svo.value,10)||0);
+      const hrsMo=n*1.5*26/60;
+      document.getElementById("sv-hours").textContent=n?hrsMo.toFixed(1).replace(/\.0$/,"")+" hours":"—";
+      document.getElementById("sv-value").textContent=n?"₹"+Math.round(hrsMo*12*150).toLocaleString("en-IN")+" / year":"—";
+    };
+    svo.addEventListener("input",svCalc);
+    svCalc();
+  }
 }
 
 /* Pricing page — plans/prices per docs/SAAS_PLAN.md section 1. Logged-in
@@ -2768,7 +2820,7 @@ const PR_PRICES={
        yearly:{key:"pro_yearly",big:"₹2,499",per:"/ year",alt:"₹499 / month billed monthly"}}
 };
 function renderPricing(){
-  setMeta("Pricing — Amazon Seller Tools",
+  setMeta("Pricing — Seller Tools India",
     "Simple pricing for Amazon India sellers. Free calculators and tools, plus Starter (₹199/month) and Pro (₹499/month) plans for settlement, GST and SKU reports.");
   backBtn.hidden=false;
   const loggedIn=!!sessionUser();
@@ -2875,7 +2927,7 @@ function fieldHtml(f,val){
 function renderCalc(id){
   const c=CALCMAP[id];
   if(!c){location.hash="#/";return;}
-  document.title=c.name+" — Seller Tools";
+  document.title=c.name+" — Seller Tools India";
   const md=document.querySelector('meta[name="description"]');
   if(md) md.setAttribute("content",c.desc);
   backBtn.hidden=false;
@@ -3117,7 +3169,7 @@ const saUnlocked=()=>{try{return sessionStorage.getItem("sa_unlocked")==="1";}ca
 const saIsTax=l=>/(^|[^a-z])(cgst|sgst|igst|tcs|tds)([^a-z]|$)|(cgst|sgst|igst)$|tax|194/i.test(l||"");
 
 function renderSettlementAnalyzer(){
-  document.title="Amazon Settlement Analyzer — Seller Tools";
+  document.title="Amazon Settlement Analyzer — Seller Tools India";
   const md=document.querySelector('meta[name="description"]');
   if(md) md.setAttribute("content","Upload your Amazon settlement report and see every fee, tax and deduction itemised. Runs fully in your browser.");
   backBtn.hidden=false;
@@ -3429,7 +3481,7 @@ function gstCompute(r){
 }
 
 function renderGstReport(){
-  document.title="GST & TCS Report — Seller Tools";
+  document.title="GST & TCS Report — Seller Tools India";
   const md=document.querySelector('meta[name="description"]');
   if(md) md.setAttribute("content","Upload your Amazon settlement report and get the GST, TCS and TDS numbers you need for monthly filing — computed locally in your browser.");
   backBtn.hidden=false;
@@ -3554,7 +3606,7 @@ function skuCompute(r){
 }
 
 function renderSkuReport(){
-  document.title="SKU Profitability Report — Seller Tools";
+  document.title="SKU Profitability Report — Seller Tools India";
   const md=document.querySelector('meta[name="description"]');
   if(md) md.setAttribute("content","Upload your Amazon settlement report and see which SKUs actually make money after fees, taxes and refunds — computed locally in your browser.");
   backBtn.hidden=false;
@@ -3836,7 +3888,7 @@ const REC_CHECKS={
 const REC_ORDER=["refundFee","safeT","shipped","negative"];
 
 function renderReconcile(){
-  setMeta("Reconciliation & SAFE-T Finder — Seller Tools",
+  setMeta("Reconciliation & SAFE-T Finder — Seller Tools India",
     "Cross-check your Amazon settlement and MTR files to find missing referral-fee credits, SAFE-T-eligible refunds, unpaid shipments and loss-making orders — locally in your browser.");
   backBtn.hidden=false;
   gatePremium(REC_INFO, recBody);
@@ -4037,7 +4089,7 @@ function trendCompute(settlements){
 window.trendCompute=trendCompute; // exposed for verification/debugging
 
 function renderTrends(){
-  setMeta("Multi-Month Trends — Seller Tools",
+  setMeta("Multi-Month Trends — Seller Tools India",
     "Drop several Amazon settlement files and see your business month by month: sales, fees as a percentage of sales, refund rate and net payout — computed locally in your browser.");
   backBtn.hidden=false;
   gatePremium(TREND_INFO, trendsBody);
@@ -4193,7 +4245,7 @@ function wireCopyButtons(root){
 }
 
 function renderLinkBuilder(){
-  document.title="Amazon Link Builder — Seller Tools";
+  document.title="Amazon Link Builder — Seller Tools India";
   const md=document.querySelector('meta[name="description"]');
   if(md) md.setAttribute("content","Generate Amazon India 2-step URLs, canonical URLs and add-to-cart links from an ASIN and keyword — free, in your browser.");
   backBtn.hidden=false;
@@ -4248,7 +4300,7 @@ function renderLinkBuilder(){
    terms, with match-type wrapping. Pure text, no network.
    ============================================================ */
 function renderKeywordCombiner(){
-  document.title="Amazon Keyword Combiner — Seller Tools";
+  document.title="Amazon Keyword Combiner — Seller Tools India";
   const md=document.querySelector('meta[name="description"]');
   if(md) md.setAttribute("content","Combine word lists into every long-tail keyword permutation for Amazon PPC campaigns — broad, phrase and exact match, free in your browser.");
   backBtn.hidden=false;
@@ -4349,7 +4401,7 @@ const CROP_PRESETS={
 let lcFiles=[], lcBusy=false, lcPageInfo=[];
 
 function renderLabelCropper(){
-  document.title="Amazon Label Cropper — Seller Tools";
+  document.title="Amazon Label Cropper — Seller Tools India";
   const md=document.querySelector('meta[name="description"]');
   if(md) md.setAttribute("content","Crop Amazon India Easy Ship A4 label PDFs to clean 4×6 thermal-printer pages — free, fully in your browser.");
   backBtn.hidden=false;
@@ -4368,7 +4420,7 @@ function renderLabelCropper(){
         <p>or click to choose — you can select multiple files</p>
         <input type="file" id="lc-file" accept="application/pdf,.pdf" multiple>
       </label>
-      <div class="sa-priv">🔒 Private by design — PDFs are processed entirely in your browser and never uploaded.</div>
+      <div class="sa-priv">🔒 Private by design — PDFs are processed entirely in your browser and never uploaded. Most label-cropping sites send your PDFs (with your customers' names and addresses) to their servers; this one can't, even in principle.</div>
       <div class="card" style="margin-top:14px">
         <label for="lc-preset">Label position on the page</label>
         <select id="lc-preset">${Object.entries(CROP_PRESETS).map(([k,p])=>`<option value="${k}"${k===preset?" selected":""}>${esc(p.name)}</option>`).join("")}</select>
@@ -4413,6 +4465,16 @@ function renderLabelCropper(){
               <option value="auto"${(saved.split||"auto")==="auto"?" selected":""}>Auto detect</option>
               <option value="1"${saved.split==="1"?" selected":""}>1</option>
               <option value="2"${saved.split==="2"?" selected":""}>2 — stacked</option>
+            </select></div>
+          <div><label for="lc-datetime">Date/time on label</label>
+            <select id="lc-datetime">
+              <option value="no"${(saved.dt||"no")==="no"?" selected":""}>No</option>
+              <option value="yes"${saved.dt==="yes"?" selected":""}>Yes — in top strip</option>
+            </select></div>
+          <div><label for="lc-blank">Blank pages</label>
+            <select id="lc-blank">
+              <option value="skip"${(saved.blank||"skip")==="skip"?" selected":""}>Skip automatically</option>
+              <option value="keep"${saved.blank==="keep"?" selected":""}>Keep</option>
             </select></div>
         </div>
         <div class="optrow" style="margin-bottom:0">
@@ -4470,7 +4532,11 @@ function renderLabelCropper(){
       const skuPrint=document.getElementById("lc-skuprint").value==="yes";
       const olist=document.getElementById("lc-olist").value; // no | first | last
       const splitSel=document.getElementById("lc-split").value; // auto | 1 | 2
-      try{localStorage.setItem("lc_crop",JSON.stringify({preset:presetKey,custom:crop,fmt,invMode,invPos,skuPrint:skuPrint?"yes":"no",olist,split:splitSel}));}catch(e){}
+      const dtPrint=document.getElementById("lc-datetime").value==="yes";
+      const blankSkip=document.getElementById("lc-blank").value!=="keep";
+      // One stamp for the whole batch, e.g. "30 Jul 2026, 6:45 am".
+      const dtStamp=new Date().toLocaleString("en-IN",{day:"numeric",month:"short",year:"numeric",hour:"numeric",minute:"2-digit",hour12:true});
+      try{localStorage.setItem("lc_crop",JSON.stringify({preset:presetKey,custom:crop,fmt,invMode,invPos,skuPrint:skuPrint?"yes":"no",olist,split:splitSel,dt:dtPrint?"yes":"no",blank:blankSkip?"skip":"keep"}));}catch(e){}
       const A4W=595.28,A4H=841.89;
       const white=()=>PDFLib.rgb(1,1,1);
 
@@ -4484,6 +4550,16 @@ function renderLabelCropper(){
       let detectFailed=false;
       lcPageInfo=[];
       srcDocs.forEach((d,fi)=>d.getPageIndices().forEach(pi=>lcPageInfo.push({f:fi,i:pi,sku:"",oid:"",qty:0,inv:false,invs:[]})));
+      // Pages with no Contents stream at all can't be embedded by pdf-lib —
+      // they're blank by definition, so drop them regardless of the option.
+      srcDocs.forEach((d,fi)=>d.getPages().forEach((pg,pi)=>{
+        try{
+          if(!pg.node.Contents()){
+            const inf=lcPageInfo.find(x=>x.f===fi&&x.i===pi);
+            if(inf) inf.blank=true;
+          }
+        }catch(e){}
+      }));
       status("Reading labels…");
       try{
         await loadPdfJs();
@@ -4503,6 +4579,20 @@ function renderLabelCropper(){
             const text=items.join(" ");
             const info=lcPageInfo.find(x=>x.f===fi&&x.i===p-1);
             if(!info) continue;
+            // Blank pages (Amazon sometimes pads the PDF): a page with no
+            // text is only "blank" if it also draws no images or shapes —
+            // the operator check keeps image-only labels safe.
+            if(blankSkip&&!posItems.some(t=>t.s.trim())){
+              try{
+                const ol=await pageObj.getOperatorList();
+                const O=pdfjsLib.OPS;
+                const contentOps=new Set(["showText","showSpacedText","nextLineShowText","nextLineSetSpacingShowText",
+                  "paintImageXObject","paintInlineImageXObject","paintImageMaskXObject",
+                  "fill","eoFill","stroke","fillStroke","eoFillStroke","shadingFill"]
+                  .map(n=>O[n]).filter(v=>v!==undefined));
+                info.blank=!ol.fnArray.some(fn=>contentOps.has(fn));
+              }catch(e){}
+            }
             info.inv=invRe.test(text);
             // Caption overlays ("Name | Qty - 1", "Name ( Qty : 1 )") are
             // single text items — match them item-by-item first, anchored
@@ -4558,6 +4648,9 @@ function renderLabelCropper(){
           if(pdoc.destroy) pdoc.destroy();
         }
       }catch(e){ detectFailed=true; }
+      // Drop detected blank pages before any pairing or sorting.
+      const blanksSkipped=lcPageInfo.filter(x=>x.blank).length;
+      if(blanksSkipped) lcPageInfo=lcPageInfo.filter(x=>!x.blank);
       // If EVERY page carries invoice markers, this is the combined
       // label+invoice-on-one-page format — treat all pages as labels.
       if(!lcPageInfo.some(x=>!x.inv)) lcPageInfo.forEach(x=>{x.inv=false;});
@@ -4632,11 +4725,29 @@ function renderLabelCropper(){
       status("Cropping…");
       const labelDoc=await PDFLib.PDFDocument.create();
       const invDoc=invMode==="none"?null:await PDFLib.PDFDocument.create();
-      const skuFont=skuPrint?await labelDoc.embedFont(PDFLib.StandardFonts.HelveticaBold):null;
+      const skuFont=(skuPrint||dtPrint)?await labelDoc.embedFont(PDFLib.StandardFonts.HelveticaBold):null;
+      // Embed only the pages we will actually draw (labels + their linked
+      // invoice pages). Skipped blanks stay out — pdf-lib can't even embed
+      // a page whose Contents stream is missing entirely.
+      const needed=srcDocs.map(()=>new Set());
+      for(const x of orderList){
+        needed[x.f].add(x.i);
+        for(const iv of x.invs||[]) needed[iv.f].add(iv.i);
+      }
       const labelEmb=[],invEmb=[];
       for(let fi=0;fi<filesBytes.length;fi++){
-        labelEmb.push(await labelDoc.embedPdf(filesBytes[fi],srcDocs[fi].getPageIndices()));
-        invEmb.push(invDoc?await invDoc.embedPdf(filesBytes[fi],srcDocs[fi].getPageIndices()):null);
+        const idxs=[...needed[fi]].sort((a,b)=>a-b);
+        const map={},map2={};
+        if(idxs.length){
+          const e1=await labelDoc.embedPdf(filesBytes[fi],idxs);
+          idxs.forEach((pi,k)=>map[pi]=e1[k]);
+          if(invDoc){
+            const e2=await invDoc.embedPdf(filesBytes[fi],idxs);
+            idxs.forEach((pi,k)=>map2[pi]=e2[k]);
+          }
+        }
+        labelEmb.push(map);
+        invEmb.push(invDoc?map2:null);
       }
       let labels=0;
       const invCounts=[];
@@ -4658,12 +4769,17 @@ function renderLabelCropper(){
           page.drawRectangle({x:288-dx,y:0,width:dx,height:432,color:white()});}
         if(dy>0.1){page.drawRectangle({x:0,y:0,width:288,height:dy,color:white()});
           page.drawRectangle({x:0,y:432-dy,width:288,height:dy,color:white()});}
-        if(skuPrint){
+        if(skuPrint||dtPrint){
           page.drawRectangle({x:0,y:416,width:288,height:16,color:white()});
-          const strip="#"+(labels+1)+"/"+orderList.length
+          const parts=[];
+          if(skuPrint) parts.push("#"+(labels+1)+"/"+orderList.length
             +(info.sku?"  "+info.sku:"")
-            +(info.qty?" | Qty: "+info.qty:"");
-          page.drawText(strip.slice(0,60),{x:8,y:420.5,size:9,font:skuFont,color:PDFLib.rgb(0,0,0)});
+            +(info.qty?" | Qty: "+info.qty:""));
+          if(dtPrint) parts.push(dtStamp);
+          const strip=parts.join("  ·  ");
+          // Shrink the type when SKU + date both need to fit the 4" strip.
+          const size=strip.length>56?7.5:9;
+          page.drawText(strip.slice(0,size===9?60:74),{x:8,y:size===9?420.5:421.5,size,font:skuFont,color:PDFLib.rgb(0,0,0)});
         }
         labels++;
         if(invDoc){
@@ -4774,7 +4890,7 @@ function renderLabelCropper(){
           pageO=mkPage(inserted);inserted++;
           let ty=A4H-46;
           pageO.drawText("Order List",{x:TL,y:ty,size:14,font:fontB});
-          pageO.drawText(`${labels} labels — Seller Tools`,{x:TR-160,y:ty+1,size:9,font,color:grey});
+          pageO.drawText(`${labels} labels — Seller Tools India`,{x:TR-160,y:ty+1,size:9,font,color:grey});
           tableTop=ty-12;
           const hb=tableTop-HEAD;
           pageO.drawText("ORD",{x:TL+12,y:hb+10,size:13,font:fontB});
@@ -4831,8 +4947,9 @@ function renderLabelCropper(){
         </div>`:"";
       }
 
-      status(`Done — ${labels} label(s)${split===2?` (2 per page detected${autoLeft?", labels column auto-cropped":""})`:""}${skippedInv?`, ${invMode==="none"?"skipped":"paired"} ${skippedInv} invoice page(s)`:""}, ${outDoc.getPageCount()} output page(s), sorted by SKU. Check the preview, then download.`);
+      status(`Done — ${labels} label(s)${split===2?` (2 per page detected${autoLeft?", labels column auto-cropped":""})`:""}${skippedInv?`, ${invMode==="none"?"skipped":"paired"} ${skippedInv} invoice page(s)`:""}${blanksSkipped?`, ${blanksSkipped} blank page(s) removed`:""}, ${outDoc.getPageCount()} output page(s), sorted by SKU. Check the preview, then download.`);
     }catch(e){
+      try{console.error("Label cropper:",e);}catch(_){}
       status("Could not process that PDF"+(String(e).includes("load failed")?" — the PDF engine failed to load (check your connection) and nothing was uploaded anywhere.":" — it may be corrupted or password-protected."));
     }
     btn.disabled=false;lcBusy=false;
@@ -4880,7 +4997,7 @@ function parseOrdersReport(text){
 
 let opParsed=null;
 function renderOrderPrinter(){
-  document.title="Amazon Order Printer — Picklist & Packing Slips — Seller Tools";
+  document.title="Amazon Order Printer — Picklist & Packing Slips — Seller Tools India";
   const md=document.querySelector('meta[name="description"]');
   if(md) md.setAttribute("content","Turn your Amazon unshipped-orders report into a printable picklist and packing slips — free, fully in your browser.");
   backBtn.hidden=false;
@@ -4950,7 +5067,7 @@ function opRender(){
   document.getElementById("op-pick").addEventListener("click",()=>{
     document.getElementById("printhost").innerHTML=`
       <h2>Picklist — ${orders.length} orders, ${totalUnits} units</h2>
-      <div class="pmeta">Generated ${esc(today)} · Seller Tools</div>
+      <div class="pmeta">Generated ${esc(today)} · Seller Tools India</div>
       <table class="pick-table"><thead><tr><th>✓</th><th>SKU</th><th>Product</th><th>Orders</th><th>Units</th></tr></thead>
       <tbody>${pickRows.map(p=>`<tr><td style="width:28px"></td><td>${esc(p.sku)}</td><td>${esc(p.name||"")}</td><td>${p.orders}</td><td><b>${p.qty}</b></td></tr>`).join("")}</tbody></table>`;
     window.print();

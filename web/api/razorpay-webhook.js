@@ -56,7 +56,7 @@ async function maybeSendEmail(price, expiresIso, pay) {
     method: 'POST',
     headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      from: 'Amazon Seller Tools <onboarding@resend.dev>',
+      from: 'Seller Tools India <onboarding@resend.dev>',
       to: [to],
       subject: price.label + ' activated',
       html: '<p>Thank you! Your <b>' + price.label + '</b> plan is active until '

@@ -1,4 +1,4 @@
-# SaaS Plan — Amazon Seller Tools (amazonsellertools.vercel.app)
+# SaaS Plan — Seller Tools India (amazonsellertools.vercel.app)
 
 This is the master plan to turn the free tool site into a paid product.
 Give the prompts in section 5 to Claude Code **one at a time, in order**.
@@ -31,7 +31,7 @@ Do these when the plan says they are needed — not all up front.
 3. **After Phase 1 is live** (legal pages must exist first): Sign up at razorpay.com as **Individual / Unregistered business (freelancer)** with your PAN + personal savings account. Submit the site URL for KYC review.
 4. **Before Phase 4**: From Razorpay dashboard copy `Key Id` and `Key Secret`, and create a webhook secret. Add to Vercel env: `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`. Set webhook URL to `https://amazonsellertools.vercel.app/api/razorpay-webhook` with event `payment.captured`.
 5. **Phase 5**: nothing manual.
-6. **Before Phase 6**: decide your admin email (the account that gets the admin panel) — it is `dipsgos7@gmail.com` unless you change it.
+6. **Before Phase 6**: decide your admin email (the account that gets the admin panel) — it is `gossiistudio@gmail.com` unless you change it.
 
 ## 3. Architecture (what gets built)
 
@@ -102,13 +102,13 @@ TASK: Phase 1 of docs/SAAS_PLAN.md — marketing pages. No backend, no auth yet.
      marketplaces (Amazon.in only), how do I get my settlement report, refund
      policy, contact).
    - Footer on every page: links to Pricing, Terms, Privacy, Refunds, Contact,
-     plus "© <year> Amazon Seller Tools. Not affiliated with Amazon.com, Inc.
+     plus "© <year> Seller Tools India. Not affiliated with Amazon.com, Inc.
      Amazon is a trademark of Amazon.com, Inc."
 2) New route #/pricing: 3-column pricing table exactly per the plans table in
    docs/SAAS_PLAN.md section 1 (Free / Starter ₹199 per month or ₹999 per year /
    Pro ₹499 per month or ₹2,499 per year, with feature lists). Starter+Pro
    buttons say "Coming soon — join waitlist" and open a mailto link to
-   dipsgos7@gmail.com with subject "Waitlist" (until payments phase ships).
+   gossiistudio@gmail.com with subject "Waitlist" (until payments phase ships).
    Mark Pro rows that are not built yet as "coming soon".
 3) Create real standalone files web/terms.html, web/privacy.html,
    web/refunds.html, web/contact.html (shared minimal CSS, link back to /).
@@ -122,12 +122,12 @@ TASK: Phase 1 of docs/SAAS_PLAN.md — marketing pages. No backend, no auth yet.
      and a device identifier used to prevent account sharing, and NOTHING from
      your uploaded files because they are processed in your browser only),
      why, retention, user rights (access/correction/erasure — email us),
-     grievance contact dipsgos7@gmail.com. The device tracking MUST be
+     grievance contact gossiistudio@gmail.com. The device tracking MUST be
      disclosed here clearly — that is a legal requirement, never hide it.
    - Refunds: 7-day money-back on first purchase, no pro-rata refund after
      that, how to claim (email), processing time 5-7 working days to original
      payment method.
-   - Contact: email dipsgos7@gmail.com, expected reply time, and a line for
+   - Contact: email gossiistudio@gmail.com, expected reply time, and a line for
      business name/address placeholder I can fill later.
    - Also link these 4 pages from the SPA footer and add them to
      web/sitemap.xml.
@@ -320,7 +320,7 @@ out; profit regression intact.
 
 TASK: Phase 6 of docs/SAAS_PLAN.md — admin panel for the owner.
 
-Admin = profiles.is_admin true (I set it by SQL for dipsgos7@gmail.com; put
+Admin = profiles.is_admin true (I set it by SQL for gossiistudio@gmail.com; put
 the exact UPDATE statement in the PR description).
 
 1) web/api/admin.js: one function, action-based, every action requires a

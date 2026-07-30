@@ -8,6 +8,9 @@
 //     responds 403 {error:"device_limit"} and does NOT claim.
 //   - action:"logout_all": clears profiles.active_session_id (every other
 //     session then fails its next entitlement check) and logs the event.
+//   - action:"reset_devices": deletes all of the user's devices rows, clears
+//     profiles.active_session_id, and logs the event. Self-service unblock for
+//     the device-limit screen; the client re-claims afterwards.
 //
 // All of this is disclosed in web/privacy.html §1–§2 (DPDP Act).
 // Env (server only): SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
@@ -68,6 +71,18 @@ module.exports = async (req, res) => {
     try { body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {}); } catch (e) { body = {}; }
     const ua = (req.headers['user-agent'] || '').toString();
     const ip = clientIp(req);
+
+    // reset devices: forget every known device and clear the active session
+    // (other sessions fail their next entitlement check). The caller then
+    // re-claims, which registers this browser as the first device again.
+    if (body.action === 'reset_devices') {
+      await rest('DELETE', '/devices?user_id=eq.' + encodeURIComponent(user.id));
+      await rest('PATCH', '/profiles?id=eq.' + encodeURIComponent(user.id), { active_session_id: null });
+      await rest('POST', '/login_events', {
+        user_id: user.id, ip, user_agent: ua, device_hash: 'reset_devices', kicked_previous: false
+      });
+      return res.status(200).json({ ok: true });
+    }
 
     // logout everywhere: clear the active session and log it.
     if (body.action === 'logout_all') {
