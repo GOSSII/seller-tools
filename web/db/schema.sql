@@ -195,3 +195,19 @@ create table if not exists public.rzp_plans (
   created_at   timestamptz not null default now()
 );
 alter table public.rzp_plans enable row level security;
+
+-- ============================================================================
+-- Presence (owner request 2026-07-30): who is online right now + session length
+-- (idempotent — re-run this whole file after pulling this change)
+-- ============================================================================
+-- One row per browser tab-session. sid is a random per-tab id (sessionStorage);
+-- no IP or user-agent stored. user_id set only when the visitor is logged in.
+create table if not exists public.presence (
+  sid           text primary key,
+  user_id       uuid references auth.users(id) on delete set null,
+  route         text,
+  started_at    timestamptz not null default now(),
+  last_seen_at  timestamptz not null default now()
+);
+create index if not exists presence_last_seen_idx on public.presence (last_seen_at desc);
+alter table public.presence enable row level security;  -- service-role only
