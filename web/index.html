@@ -2423,8 +2423,18 @@ async function renderAdmin(){
       <div class="stat green"><div class="k">Paid · active</div><div class="v">${num(stats.paid_count)}</div></div>
       <div class="stat"><div class="k">Revenue · this month</div><div class="v">${money0(stats.revenue_month_paise)}</div></div>
       <div class="stat"><div class="k">Revenue · total</div><div class="v">${money0(stats.revenue_total_paise)}</div></div>
+      <div class="stat green"><div class="k">Online now</div><div class="v">${num(stats.online_now||0)}</div></div>
+      <div class="stat"><div class="k">Avg session · 24h</div><div class="v">${stats.avg_session_min||0} min</div></div>
     </div>
     <div style="margin-bottom:16px">${chart||'<div class="viz"><div class="viz-title">Signups · last 30 days</div><p class="lede" style="margin-top:8px">No signups yet.</p></div>'}</div>
+    <div class="panel" style="margin-bottom:16px"><h4>Online right now <span class="sa-sub">— ${num(stats.online_now||0)} on the site · ${num(stats.sessions_24h||0)} sessions in 24h · avg ${stats.avg_session_min||0} min</span></h4>
+      ${(stats.online_list&&stats.online_list.length)?`<div class="pay-wrap"><table class="pay-table">
+        <thead><tr><th>Who</th><th>Where</th><th>On site for</th></tr></thead>
+        <tbody>${stats.online_list.map(o=>`<tr>
+          <td>${o.email?esc(o.email):'<span class="sa-sub">visitor</span>'}</td>
+          <td>${esc(o.route||"—")}</td>
+          <td>${o.mins<1?"&lt;1 min":Math.round(o.mins)+" min"}</td></tr>`).join("")}</tbody></table></div>`
+      :'<p class="lede" style="margin:4px 0 2px">No one is online right now.</p>'}</div>
     <div style="margin:6px 0 10px"><input id="adm-search" type="search" placeholder="Search users by email…" style="max-width:360px"></div>
     <div id="adm-users"></div>
     <div id="adm-detail" style="margin-top:18px"></div>
@@ -4917,11 +4927,43 @@ window.addEventListener("focus",()=>{
   }).catch(()=>{});
 });
 (function(){const y=document.getElementById("foot-year");if(y)y.textContent=new Date().getFullYear();})();
+/* ---- Presence heartbeat (disclosed in privacy.html): a random per-tab id
+   plus the current route, pinged every minute while the tab is visible, so
+   the admin panel can show who's online and typical session length.
+   No cookies, no IP stored; user id only when logged in. ---- */
+function presenceSid(){
+  try{
+    let s=sessionStorage.getItem("sa_sid");
+    if(!s){
+      s=crypto.randomUUID?crypto.randomUUID():[...crypto.getRandomValues(new Uint8Array(16))].map(b=>b.toString(16).padStart(2,"0")).join("");
+      sessionStorage.setItem("sa_sid",s);
+    }
+    return s;
+  }catch(e){ return null; }
+}
+let _lastPing=0;
+function sendPing(){
+  const sid=presenceSid(); if(!sid) return;
+  if(document.visibilityState!=="visible") return;
+  if(Date.now()-_lastPing<30000) return;
+  _lastPing=Date.now();
+  const s=storedSession();
+  const headers={"Content-Type":"application/json"};
+  if(s&&s.access_token) headers.Authorization="Bearer "+s.access_token;
+  try{
+    fetch("/api/ping",{method:"POST",headers,keepalive:true,
+      body:JSON.stringify({sid,route:location.hash.replace(/^#\/?/,"").slice(0,60)||"home"})}).catch(()=>{});
+  }catch(e){}
+}
+setInterval(sendPing,60000);
+window.addEventListener("hashchange",sendPing);
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") sendPing(); });
 (async()=>{
   let handled=false;
   try{ handled=await handleAuthRedirect(); }catch(e){}
   renderAuthSlot();
   maybeClaimOnLoad();
+  sendPing();
   if(!handled) route();
 })();
 </script>

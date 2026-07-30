@@ -75,20 +75,48 @@ module.exports = async (req, res) => {
     }).catch(() => {});
 
     if (action === 'stats') {
-      const [pRes, eRes, payRes] = await Promise.all([
+      const [pRes, eRes, payRes, prRes] = await Promise.all([
         rest('GET', '/profiles?select=id,created_at&order=created_at.desc&limit=2000'),
         rest('GET', '/entitlements?select=user_id,plan,expires_at&limit=5000'),
-        rest('GET', '/payments?select=amount_paise,status,created_at&status=eq.paid&limit=5000')
+        rest('GET', '/payments?select=amount_paise,status,created_at&status=eq.paid&limit=5000'),
+        rest('GET', '/presence?select=user_id,route,started_at,last_seen_at&order=last_seen_at.desc&limit=2000')
       ]);
       const profiles = (await jsonOf(pRes)) || [], ents = (await jsonOf(eRes)) || [], pays = (await jsonOf(payRes)) || [];
+      const presence = (await jsonOf(prRes)) || [];
       const paidUsers = new Set(ents.filter(e => isActive(e, now)).map(e => e.user_id));
+
+      // Presence: online = heartbeat in the last 2 minutes (client pings each
+      // minute). Session length = last_seen - started, per tab-session.
+      const nowMs = now.getTime();
+      const durMin = r => Math.max(0, (new Date(r.last_seen_at) - new Date(r.started_at)) / 60000);
+      const online = presence.filter(r => nowMs - new Date(r.last_seen_at).getTime() < 2 * 60000);
+      const day = presence.filter(r => nowMs - new Date(r.started_at).getTime() < 24 * 3600000);
+      const avgSessionMin = day.length ? day.reduce((s, r) => s + durMin(r), 0) / day.length : 0;
+
+      // Resolve emails for logged-in online visitors.
+      const ids = [...new Set(online.map(r => r.user_id).filter(Boolean))].slice(0, 50);
+      let emails = {};
+      if (ids.length) {
+        const inList = '(' + ids.map(encodeURIComponent).join(',') + ')';
+        const em = await jsonOf(await rest('GET', '/profiles?select=id,email&id=in.' + inList));
+        (em || []).forEach(p => { emails[p.id] = p.email; });
+      }
+      const onlineList = online.slice(0, 50).map(r => ({
+        email: r.user_id ? (emails[r.user_id] || null) : null,
+        route: r.route || '', mins: Math.round(durMin(r) * 10) / 10
+      }));
+
       await audit('stats');
       return res.status(200).json({
         users_total: profiles.length,
         paid_count: paidUsers.size,
         revenue_month_paise: revenueThisMonthPaise(pays, now),
         revenue_total_paise: pays.reduce((s, p) => s + (p.amount_paise || 0), 0),
-        signups: signupsByDay(profiles, now, 30)
+        signups: signupsByDay(profiles, now, 30),
+        online_now: online.length,
+        sessions_24h: day.length,
+        avg_session_min: Math.round(avgSessionMin * 10) / 10,
+        online_list: onlineList
       });
     }
 
