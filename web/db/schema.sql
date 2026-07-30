@@ -1,5 +1,5 @@
 -- ============================================================================
--- Amazon Seller Tools — database schema (Phase 2)
+-- Seller Tools India — database schema (Phase 2)
 -- Paste this whole file into the Supabase SQL editor and Run.
 -- It is IDEMPOTENT: safe to run again after edits; it will not drop data.
 --

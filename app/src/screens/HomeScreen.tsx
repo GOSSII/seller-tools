@@ -11,7 +11,7 @@ export default function HomeScreen({ navigation }: any) {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
-      <Text style={styles.title}>Seller Tools</Text>
+      <Text style={styles.title}>Seller Tools India</Text>
       <Text style={styles.subtitle}>Free calculators for Indian marketplace sellers · Updated 2026</Text>
 
       <View style={styles.grid}>
