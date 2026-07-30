@@ -1398,6 +1398,14 @@ const HELP={
     steps:["Drop the settlement file.","Sort by Net to see which products actually make money after fees, taxes and refunds.","Sort by Refund % to spot problem products. Units ÷ days gives the daily sales rate for the Restock Planner."]},
   "reconcile":{input:`Settlement file(s): <b>Payments → All Statements → Download Flat File V2</b> — drop every statement for the period you're checking. Optional but recommended: the matching MTR — <b>Reports → Tax Document Library → Merchant Tax Reports → B2C</b> (.csv) — so shipped-but-unpaid orders can be caught too.`,
     steps:["Drop your settlement file(s), and the MTR for the same months if you have it.","Work through each issue list — every row shows the order, the amount at stake and the exact Seller Central path to claim it.","Tick rows off as you raise them (ticks are saved in your browser), and export the checklist as CSV to track claims."]},
+  "fnsku-labels":{input:`Your FNSKU (starts with X0) is in <b>Inventory → FBA Inventory</b> — the FNSKU column — or on the <b>Print item labels</b> page (<b>Manage Inventory</b> → tick your FBA listings → <b>Print item labels</b>). Copy it from either place; the product name can be anything your packers will recognise.`,
+    steps:["Add a row per product: FNSKU/code, product name, condition (defaults to New) and how many stickers you need.","Pick the paper: A4 sticker sheets with 65, 40 or 24 labels per page, or a 4×6 thermal sheet (12 per page).","Generate, check the preview, download — and print at 100% scale (never \"fit to page\", or the barcode dimensions shift).","Stick one label per unit, covering any existing barcode on the retail packaging."]},
+  "listing-checker":{input:`Copy the title, bullet points and description straight from <b>Seller Central → Inventory → Manage Inventory → Edit</b> (the listing edit page). Target keywords: your main search terms, comma-separated — the <b>Search term report</b> is the best source.`,
+    steps:["Paste the title, the bullets (one per line) and the description.","Add your target keywords, comma-separated — coverage is checked across all three fields.","Work through the \"Fix first\" list; the score updates live as you edit.","Paste the cleaned-up text back into the Edit listing page."]},
+  "gst-invoice":{input:`<b>Orders → Order Reports → Unshipped Orders</b> → Request report → Download (a .txt file). Enable the address columns in the report settings on that page so buyer ship-to details appear on the invoices.`,
+    steps:["Fill in your seller details once — business name, address, GSTIN, state and invoice numbering (saved in your browser).","Drop the unshipped-orders report file.","Pick the GST rate, whether prices include GST, and set unit prices per SKU (auto-filled if the report has a price column). HSN codes are optional.","Generate — one merged A4 PDF, one invoice per order, with CGST+SGST for same-state buyers and IGST otherwise. Verify with your CA before filing."]},
+  "payout-forecast":{input:`Your last deposit date is in <b>Payments → Payments Dashboard → Statement view</b> — the settlement closing date and the amount deposited to your bank.`,
+    steps:["Enter the date of your last settlement, your cycle (7-day standard, 14-day, or daily), and average sales per day.","Adjust deductions %, reserve % and bank-credit delay if yours differ.","Read the headline for your next deposit, and the table for the next 6 settlement closes and estimated bank-credit dates."]},
   "trends":{input:`Several settlement files: <b>Payments → All Statements → Download Flat File V2</b> for each statement — the more months you drop, the better the picture.`,
     steps:["Drop all your settlement files at once (or add them one by one — duplicates are skipped).","Read the month-by-month charts: sales, fees as % of sales, refund rate and net payout.","Pick a SKU to see its own monthly units, sales and net — is it growing, and is it still worth the fees?"]},
 };
@@ -2648,7 +2656,7 @@ function renderHome(){
     "Free calculators and tools for Amazon India sellers: true profit per SKU, FBA fees, settlement analyzer, GST report and 4×6 label cropper. Files never leave your browser.");
   backBtn.hidden=true;
   const heroBars=[34,48,28,60,44,72,52,88,64,96,70,100].map(h=>`<i style="height:${h}%"></i>`).join("");
-  const minis=[{id:"keyword-combiner",icon:"🔤",name:"Keyword Combiner"}]
+  const minis=[{id:"keyword-combiner",icon:"🔤",name:"Keyword Combiner"},{id:"payout-forecast",icon:"💸",name:"Payout Forecaster"},{id:"listing-checker",icon:"📝",name:"Listing Quality Checker"}]
     .concat(CALCS.filter(c=>c.id!=="profit").map(c=>({id:c.id,icon:c.icon,name:c.name.replace(/^Amazon /,"")})));
   app.innerHTML=`
     <div class="wrap">
@@ -2735,6 +2743,8 @@ function renderHome(){
         <a class="tile" href="#/profit"><span class="pill">Popular</span><div class="ico">🧮</div><h3>Amazon Profit Calculator</h3><p>True profit per SKU with 2026 referral, closing &amp; FBA fees.</p></a>
         <a class="tile" href="#/label-cropper"><div class="ico">🏷️</div><h3>Amazon Label Cropper</h3><p>Crop Easy Ship A4 label PDFs to clean 4×6 thermal pages, sorted by SKU.</p></a>
         <a class="tile" href="#/order-printer"><div class="ico">🖨️</div><h3>Amazon Order Printer</h3><p>Picklists and packing slips from your unshipped-orders report.</p></a>
+        <a class="tile" href="#/fnsku-labels"><div class="ico">📦</div><h3>FNSKU Sticker Generator</h3><p>Code 128 barcode stickers for FBA units — A4 65/40/24-up sheets or 4×6 thermal.</p></a>
+        <a class="tile" href="#/gst-invoice"><div class="ico">🧾</div><h3>GST Invoice Generator</h3><p>GST-compliant invoices for self-ship orders — one merged A4 PDF from the unshipped-orders report.</p></a>
         <a class="tile" href="#/link-builder"><div class="ico">🔗</div><h3>Amazon Link Builder</h3><p>2-step, canonical and add-to-cart URLs from an ASIN and keyword.</p></a>
       </div>
       <div class="minigrid">
@@ -5085,6 +5095,1198 @@ function opRender(){
   });
 }
 
+/* ============================================================
+   PAYOUT DATE FORECASTER — next settlement closes, bank-credit
+   dates and estimated amounts. Pure local math.
+   ============================================================ */
+function renderPayoutForecast(){
+  document.title="Payout Date Forecaster — Seller Tools India";
+  const md=document.querySelector('meta[name="description"]');
+  if(md) md.setAttribute("content","Forecast your next 6 Amazon.in settlement closes, bank-credit dates and estimated deposit amounts — free, entirely in your browser.");
+  backBtn.hidden=false;
+  const s=pfcLoad();
+  app.innerHTML=`
+    <div class="wrap page">
+      <h2>Payout Date Forecaster</h2>
+      <p class="lede">Enter your last settlement date and cycle, and see when the next six Amazon payouts should close and land in your bank — with a rough deposit amount for each.</p>
+      ${helpHtml("payout-forecast")}
+      <div class="cols">
+        <div class="card">
+          <div class="fields">
+            <div class="f-full"><label for="pfc-last">Date of last settlement / deposit</label>
+              <input type="date" id="pfc-last" value="${esc(s.last)}"></div>
+            <div class="f-full"><label for="pfc-cycle">Settlement cycle</label>
+              <select id="pfc-cycle">
+                <option value="7"${s.cycle==="7"?" selected":""}>Every 7 days (standard)</option>
+                <option value="14"${s.cycle==="14"?" selected":""}>Every 14 days</option>
+                <option value="1"${s.cycle==="1"?" selected":""}>Daily — 1 day (select sellers)</option>
+              </select></div>
+            <div><label for="pfc-sales">Average sales per day (₹)</label>
+              <input id="pfc-sales" inputmode="decimal" value="${esc(s.sales)}"></div>
+            <div><label for="pfc-ded" title="Referral, closing and shipping fees, GST on fees, refunds — typically around 22% of sales">Typical deductions (%)</label>
+              <input id="pfc-ded" inputmode="decimal" value="${esc(s.ded)}"></div>
+            <div><label for="pfc-res" title="Unshipped-order reserve + A-to-Z claim reserve — held this settlement, released in the next">Reserve / holdback (%) ⓘ</label>
+              <input id="pfc-res" inputmode="decimal" value="${esc(s.res)}" title="Unshipped + A-to-Z reserve — held now, released next settlement"></div>
+            <div><label for="pfc-delay">Bank credit delay (business days)</label>
+              <input id="pfc-delay" inputmode="numeric" value="${esc(s.delay)}"></div>
+          </div>
+          <div class="note" style="margin-top:12px;margin-bottom:0">Reserve ⓘ — Amazon holds back a slice of each settlement (unshipped orders + A-to-Z claim reserve) and releases it in the following one.</div>
+        </div>
+        <div id="pfc-out"></div>
+      </div>
+    </div>`;
+  const numeric={"pfc-sales":1,"pfc-ded":1,"pfc-res":1,"pfc-delay":1};
+  ["pfc-last","pfc-cycle","pfc-sales","pfc-ded","pfc-res","pfc-delay"].forEach(id=>{
+    const el=document.getElementById(id);
+    const on=()=>{
+      if(numeric[id]){
+        let v=el.value.replace(/[^0-9.]/g,"");
+        const i=v.indexOf(".");
+        if(i!==-1) v=v.slice(0,i+1)+v.slice(i+1).replace(/\./g,"");
+        if(v!==el.value) el.value=v;
+      }
+      pfcSave();pfcPaint();
+    };
+    el.addEventListener("input",on);
+    el.addEventListener("change",on);
+  });
+  pfcPaint();
+}
+
+function pfcLoad(){
+  const t=new Date();
+  const iso=t.getFullYear()+"-"+String(t.getMonth()+1).padStart(2,"0")+"-"+String(t.getDate()).padStart(2,"0");
+  const d={last:iso,cycle:"7",sales:"5000",ded:"22",res:"5",delay:"2"};
+  let s={};
+  try{s=JSON.parse(localStorage.getItem("payout_fc")||"{}")||{};}catch(e){}
+  for(const k in d) if(typeof s[k]==="string"&&s[k]!=="") d[k]=s[k];
+  if(!["7","14","1"].includes(d.cycle)) d.cycle="7";
+  return d;
+}
+
+function pfcSave(){
+  const g=id=>{const el=document.getElementById(id);return el?el.value:"";};
+  try{
+    localStorage.setItem("payout_fc",JSON.stringify({
+      last:g("pfc-last"),cycle:g("pfc-cycle"),sales:g("pfc-sales"),
+      ded:g("pfc-ded"),res:g("pfc-res"),delay:g("pfc-delay"),
+    }));
+  }catch(e){}
+}
+
+function pfcParseDate(s){
+  const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(s||"");
+  if(!m) return null;
+  const d=new Date(+m[1],+m[2]-1,+m[3]);
+  return isNaN(d)?null:d;
+}
+
+function pfcToday(){
+  const d=new Date();
+  return new Date(d.getFullYear(),d.getMonth(),d.getDate());
+}
+
+function pfcAddDays(d,n){
+  return new Date(d.getFullYear(),d.getMonth(),d.getDate()+n);
+}
+
+/* Add n business days, skipping Saturdays and Sundays; if the result still
+   lands on a weekend (possible only when n=0), roll forward to Monday. */
+function pfcAddBiz(d,n){
+  let x=new Date(d.getFullYear(),d.getMonth(),d.getDate());
+  let left=Math.max(0,Math.round(n)||0);
+  while(left>0){
+    x=pfcAddDays(x,1);
+    const w=x.getDay();
+    if(w!==0&&w!==6) left--;
+  }
+  while(x.getDay()===0||x.getDay()===6) x=pfcAddDays(x,1);
+  return x;
+}
+
+function pfcFmt(d){
+  return d.toLocaleDateString("en-IN",{weekday:"short",day:"numeric",month:"short",year:"numeric"});
+}
+
+function pfcPaint(){
+  const out=document.getElementById("pfc-out"); if(!out) return;
+  const g=id=>{const el=document.getElementById(id);return el?el.value:"";};
+  const last=pfcParseDate(g("pfc-last"));
+  const cyc=+g("pfc-cycle")||7;
+  const sales=Math.max(0,parseFloat(g("pfc-sales"))||0);
+  const ded=Math.min(100,Math.max(0,parseFloat(g("pfc-ded"))||0));
+  const res=Math.min(100,Math.max(0,parseFloat(g("pfc-res"))||0));
+  const delay=Math.min(15,Math.max(0,Math.round(parseFloat(g("pfc-delay"))||0)));
+  if(!last){
+    out.innerHTML=`<div class="banner info">Pick the date of your last settlement (Seller Central → Payments → Statement view) to see the forecast.</div>`;
+    return;
+  }
+  const today=pfcToday();
+  const future=last>today;
+
+  // First upcoming close: last settlement + one cycle; if that is already in
+  // the past (old date entered), roll forward cycle by cycle to the next close.
+  let first=pfcAddDays(last,cyc), rolled=false;
+  while(first<today){first=pfcAddDays(first,cyc);rolled=true;}
+
+  // Per-cycle money. Steady daily sales means each cycle's new holdback is
+  // matched by the previous cycle's release, so every deposit is the same.
+  const gross=sales*cyc;
+  const afterDed=gross*(1-ded/100);
+  const held=afterDed*res/100;
+  const released=held; // previous cycle's reserve, released this settlement
+  const deposit=afterDed-held+released;
+
+  let rowsHtml="",firstCredit=null,firstDays=0;
+  for(let i=0;i<6;i++){
+    const close=pfcAddDays(first,i*cyc);
+    const credit=pfcAddBiz(close,delay);
+    if(i===0){firstCredit=credit;firstDays=Math.round((credit-today)/864e5);}
+    rowsHtml+=`<tr><td>${i+1}</td><td>${pfcFmt(close)}</td><td>${pfcFmt(credit)}</td><td class="num">${inr(deposit)}</td></tr>`;
+  }
+  const when=firstDays<=0?"today":(firstDays===1?"in 1 day":`in ${firstDays} days`);
+  out.innerHTML=`
+    <div class="banner good" style="font-size:15px"><b>Next deposit: ~${inr0(deposit)}</b> on <b>${pfcFmt(firstCredit)}</b> (${when}).</div>
+    ${future?`<div class="banner warn">Your last settlement date is in the future — double-check it against Payments → Statement view.</div>`:""}
+    <div class="chips" style="margin-bottom:14px">
+      <span class="chip">Gross / cycle: ${inr0(gross)}</span>
+      <span class="chip">− Deductions (${ded}%): ${inr0(gross-afterDed)}</span>
+      <span class="chip">− New reserve held (${res}%): ${inr0(held)}</span>
+      <span class="chip">+ Prior reserve released: ${inr0(released)}</span>
+    </div>
+    <div class="tblwrap"><table class="sa" style="min-width:520px">
+      <thead><tr><th>#</th><th>Settlement closes</th><th>Est. bank credit</th><th class="num">Est. deposit</th></tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table></div>
+    <div class="note" style="margin-top:10px">Estimates only — actual settlement timing, cycle changes and reserve amounts are controlled by Amazon and can shift with unshipped orders, claims and bank holidays (only weekends are skipped here). Deposits assume steady daily sales, so each cycle's new holdback is offset by the previous cycle's release.${rolled?" Your last settlement is more than one cycle old, so the schedule starts from the next upcoming close.":""}</div>`;
+}
+
+/* ============================================================
+   LISTING QUALITY CHECKER — live scored checklist for title,
+   bullets, description and keyword coverage. Pure local text math.
+   ============================================================ */
+function renderListingChecker(){
+  document.title="Amazon Listing Quality Checker — Seller Tools India";
+  const md=document.querySelector('meta[name="description"]');
+  if(md) md.setAttribute("content","Score your Amazon.in listing against title, bullet and description style rules — banned phrases, length limits and keyword coverage, live in your browser.");
+  backBtn.hidden=false;
+  app.innerHTML=`
+    <div class="wrap page">
+      <h2>Amazon Listing Quality Checker</h2>
+      <p class="lede">Paste your listing text and get a live, scored checklist against Amazon's style rules — title limits, bullet formatting, promotional phrases that can suppress a listing, and target-keyword coverage. Pure text analysis in your browser; nothing is uploaded.</p>
+      ${helpHtml("listing-checker")}
+      <div class="card">
+        <label for="lqc-title">Product title</label>
+        <textarea id="lqc-title" class="kwta" style="min-height:64px" spellcheck="false" placeholder="BrandName Stainless Steel Water Bottle 1 Litre, Leak-Proof, Office &amp; Gym"></textarea>
+        <div class="note" id="lqc-tcount" style="margin:6px 0 12px 0"></div>
+        <label for="lqc-bullets">Bullet points — one per line (5 recommended)</label>
+        <textarea id="lqc-bullets" class="kwta" spellcheck="false" placeholder="Leak-proof cap: double-seal lid keeps your bag dry&#10;Keeps water cool for 24 hours&#10;…one bullet per line"></textarea>
+        <label for="lqc-desc" style="margin-top:12px">Description</label>
+        <textarea id="lqc-desc" class="kwta" spellcheck="false" placeholder="Paste the product description"></textarea>
+        <label for="lqc-kw" style="margin-top:12px">Target keywords — comma-separated</label>
+        <textarea id="lqc-kw" class="kwta" style="min-height:52px" spellcheck="false" placeholder="steel water bottle, 1 litre bottle, office bottle"></textarea>
+      </div>
+      <div id="lqc-out"></div>
+    </div>`;
+  ["lqc-title","lqc-bullets","lqc-desc","lqc-kw"].forEach(id=>document.getElementById(id).addEventListener("input",lqcUpdate));
+  lqcUpdate();
+}
+
+/* Promotional / restricted phrases Amazon flags in titles and bullets. */
+function lqcBannedIn(text){
+  const rules=[
+    [/\bbest[\s-]?sellers?\b/i,"best seller"],
+    [/(^|[\s(])#\s?1\b/,"#1"],
+    [/\bno\.?\s?1\b/i,"No.1"],
+    [/\bfree\s+(shipping|delivery)\b/i,"free shipping"],
+    [/\bguarantee[ds]?\b/i,"guarantee"],
+    [/\bcheapest\b/i,"cheapest"],
+    [/\bsale\b/i,"sale"],
+    [/\b(discounts?|discounted)\b/i,"discount"],
+    [/\b(covid|corona\s?virus)\b/i,"COVID"],
+  ];
+  const hits=rules.filter(r=>r[0].test(text)).map(r=>r[1]);
+  if(/\p{Extended_Pictographic}/u.test(text)) hits.push("emoji");
+  return hits;
+}
+
+/* ALL-CAPS words (3+ letters) that are not standard abbreviations. */
+function lqcAllCaps(text){
+  const ok=new Set(["USB","LED","LCD","OLED","AMOLED","PVC","ABS","BPA","EVA","RGB","HDMI","GPS","SIM","OTG","COD","MRP","GSM","UPF","SPF","XXL","XXXL","DIY","RAM","ROM","SSD","HDD","LTE","ISI","FSSAI"]);
+  const seen=new Set();
+  (text.split(/[^A-Za-z]+/)).forEach(w=>{
+    if(w.length>=3&&w===w.toUpperCase()&&!ok.has(w)) seen.add(w);
+  });
+  return [...seen];
+}
+
+/* Words (3+ letters, not connectors) used 3 or more times. */
+function lqcRepeats(text){
+  const stop=new Set(["and","for","the","with","from"]);
+  const counts={};
+  (text.toLowerCase().match(/[a-z]{3,}/g)||[]).forEach(w=>{ if(!stop.has(w)) counts[w]=(counts[w]||0)+1; });
+  return Object.keys(counts).filter(w=>counts[w]>=3);
+}
+
+/* One checklist row. label/detail must already be HTML-safe (esc() on user text). */
+function lqcRow(c){
+  const ic=c.state==="pass"?["✓","var(--green)"]:c.state==="warn"?["!","var(--orange)"]:["✕","var(--red)"];
+  return `<div style="display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-bottom:1px solid var(--line)">
+    <span style="flex:none;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff;background:${ic[1]}">${ic[0]}</span>
+    <div style="font-size:13.5px;line-height:1.45"><b>${c.label}</b>${c.detail?`<span style="color:var(--muted)"> — ${c.detail}</span>`:""}</div>
+  </div>`;
+}
+
+/* Runs every check; returns {checks:[{sec,state,pts,label,detail,fix}], kw:[{k,state}]}.
+   All user-supplied fragments inside detail strings are esc()'d here. */
+function lqcAnalyze(title,bullets,desc,kws){
+  const checks=[];
+  const add=(sec,state,pts,label,detail,fix)=>checks.push({sec,state,pts,label,detail,fix});
+
+  /* ---- Title ---- */
+  if(!title){
+    add("Title","fail",10,"No title yet","","Write a title — up to 200 characters, the most important words in the first 80.");
+  }else{
+    const len=title.length;
+    add("Title",len<=200?"pass":"fail",10,`Within the 200-character limit (${len}/200)`,
+      len>200?`${len-200} over — Amazon can suppress listings that exceed it`:"",
+      "Cut the title to 200 characters or fewer.");
+    add("Title",len<=80?"pass":"warn",4,"Key words inside the first ~80 characters",
+      len>80?"mobile search results truncate around 80 characters — front-load brand + product + main keyword":"",
+      "Move the most important words into the first ~80 characters.");
+    add("Title",/^[A-Z0-9]/.test(title)?"pass":"warn",4,"Starts with the brand name, capitalised",
+      /^[A-Z0-9]/.test(title)?"":"Amazon style is Brand + product + key attributes, and the first word capitalised",
+      "Start the title with your brand name, capitalised.");
+    const caps=lqcAllCaps(title);
+    add("Title",caps.length?"warn":"pass",6,"No ALL-CAPS words",
+      caps.length?`found: ${caps.map(esc).join(", ")} — use Title Case; caps only for standard abbreviations`:"",
+      "Rewrite ALL-CAPS words in Title Case.");
+    const ban=lqcBannedIn(title);
+    add("Title",ban.length?"fail":"pass",12,"No promotional or banned phrases",
+      ban.length?`found: ${ban.map(esc).join(", ")}`:"",
+      "Remove promotional claims from the title — Amazon can suppress the listing for them.");
+    const rep=lqcRepeats(title);
+    add("Title",rep.length?"warn":"pass",4,"No word repeated 3+ times",
+      rep.length?`repeated: ${rep.map(esc).join(", ")}`:"",
+      "Repeats add no ranking value — use the space for another attribute (size, colour, material).");
+  }
+
+  /* ---- Bullets ---- */
+  if(!bullets.length){
+    add("Bullets","fail",8,"No bullet points yet","5 recommended — each one is indexed for search",
+      "Add 5 bullets — one benefit or feature each, most important first.");
+  }else{
+    const n=bullets.length;
+    add("Bullets",n===5?"pass":"warn",8,`5 bullet points (you have ${n})`,
+      n>5?"Amazon shows only the first 5":n<5?"use all 5 — each is free indexed search real estate":"",
+      n>5?"Merge down to 5 bullets — the rest are never shown.":"Add bullets until you have 5.");
+    const long=bullets.map((b,i)=>[i+1,b.length]).filter(x=>x[1]>250);
+    add("Bullets",long.length?"warn":"pass",6,"Each bullet ≤ ~250 characters",
+      long.length?long.map(x=>`bullet ${x[0]}: ${x[1]} chars`).join(", "):"",
+      "Tighten long bullets — buyers scan only the first few words of each.");
+    const lower=bullets.map((b,i)=>[i+1,b]).filter(x=>!/^[A-Z0-9]/.test(x[1]));
+    add("Bullets",lower.length?"warn":"pass",4,"Each bullet starts with a capital letter",
+      lower.length?`bullet ${lower.map(x=>x[0]).join(", ")}`:"",
+      "Capitalise the first word of each bullet.");
+    const dots=bullets.map((b,i)=>[i+1,b]).filter(x=>/[.。]$/.test(x[1]));
+    add("Bullets",dots.length?"warn":"pass",3,"No ending period (Amazon style: bullets are fragments)",
+      dots.length?`bullet ${dots.map(x=>x[0]).join(", ")}`:"",
+      "Drop the trailing period from each bullet.");
+    const bban=lqcBannedIn(bullets.join("\n"));
+    add("Bullets",bban.length?"fail":"pass",10,"No promotional or banned phrases",
+      bban.length?`found: ${bban.map(esc).join(", ")}`:"",
+      "Remove promotional claims from the bullets.");
+  }
+
+  /* ---- Description ---- */
+  if(!desc){
+    add("Description","warn",6,"No description yet","a keyword-rich description helps both indexing and conversion",
+      "Write a description — aim for 200–2,000 characters.");
+  }else{
+    const dl=desc.length;
+    add("Description",dl>2000?"fail":dl<200?"warn":"pass",6,`Good length (${dl} characters)`,
+      dl>2000?`${dl-2000} over the 2,000-character limit`:dl<200?"thin — aim for 200+ characters":"",
+      dl>2000?"Cut the description to 2,000 characters or fewer.":"Expand the description — cover materials, sizing, care and use cases.");
+    const tags=new Set();
+    for(const m of desc.matchAll(/<\s*\/?\s*([a-zA-Z][a-zA-Z0-9]*)/g)){ const t=m[1].toLowerCase(); if(t!=="br") tags.add(t); }
+    add("Description",tags.size?"warn":"pass",5,"No HTML tags other than &lt;br&gt;",
+      tags.size?`found: ${[...tags].map(t=>esc("<"+t+">")).join(" ")} — Amazon strips these or shows them as plain text`:"",
+      "Remove HTML from the description; only <br> line breaks render reliably.");
+  }
+
+  /* ---- Keyword coverage ---- */
+  const hay=(title+"\n"+bullets.join("\n")+"\n"+desc).toLowerCase();
+  const hayWords=new Set(hay.match(/[a-z0-9]+/g)||[]);
+  const kw=kws.map(k=>{
+    const kl=k.toLowerCase();
+    const parts=kl.match(/[a-z0-9]+/g)||[];
+    const state=hay.includes(kl)?"exact":(parts.length&&parts.every(w=>hayWords.has(w)))?"words":"missing";
+    return {k,state};
+  });
+  return {checks,kw};
+}
+
+function lqcUpdate(){
+  const out=document.getElementById("lqc-out"); if(!out) return;
+  const title=document.getElementById("lqc-title").value.trim().replace(/\s+/g," ");
+  const bullets=document.getElementById("lqc-bullets").value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  const desc=document.getElementById("lqc-desc").value.trim();
+  const seen=new Set();
+  const kws=document.getElementById("lqc-kw").value.split(",").map(s=>s.trim().replace(/\s+/g," ")).filter(Boolean)
+    .filter(k=>{const kl=k.toLowerCase(); if(seen.has(kl))return false; seen.add(kl); return true;});
+
+  const tc=document.getElementById("lqc-tcount");
+  tc.style.color=title.length>200?"var(--red)":"";
+  tc.innerHTML=title
+    ?`${title.length} / 200 characters${title.length>80&&title.length<=200?` — <b>${title.length-80}</b> beyond the ~80 shown on mobile`:""}`
+    :"Up to 200 characters; mobile search results show roughly the first 80.";
+
+  if(!title&&!bullets.length&&!desc&&!kws.length){
+    out.innerHTML=`<div class="banner info" style="margin-top:16px">Paste your listing above — the analysis updates live as you type.</div>`;
+    return;
+  }
+
+  const {checks,kw}=lqcAnalyze(title,bullets,desc,kws);
+
+  /* Score: pass = full points, warn = half, fail = 0; keyword coverage scaled. */
+  let total=0,earned=0;
+  checks.forEach(c=>{ total+=c.pts; earned+=c.state==="pass"?c.pts:c.state==="warn"?c.pts/2:0; });
+  if(kw.length){
+    const frac=kw.reduce((s,x)=>s+(x.state==="exact"?1:x.state==="words"?0.6:0),0)/kw.length;
+    total+=14; earned+=14*frac;
+  }
+  const score=total?Math.round(earned/total*100):0;
+  const scol=score>=80?"var(--green)":score>=50?"var(--orange)":"var(--red)";
+
+  /* Fix-first: fails, then warns, biggest points first. */
+  const fixes=checks.filter(c=>c.state!=="pass")
+    .sort((a,b)=>(a.state==="fail"?0:1)-(b.state==="fail"?0:1)||b.pts-a.pts)
+    .map(c=>`<b>${c.sec}:</b> ${esc(c.fix)}`);
+  const missing=kw.filter(x=>x.state==="missing").length;
+  if(missing) fixes.push(`<b>Keywords:</b> Work the ${missing} missing keyword${missing>1?"s":""} into the title or bullets — words not in the listing can't rank organically.`);
+
+  let h=`
+    <div class="panel"><div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px">
+        <h4 style="margin:0">Overall score</h4>
+        <b style="font-size:22px;color:${scol}">${score}<span style="font-size:13px;color:var(--muted);font-weight:400"> / 100</span></b>
+      </div>
+      <div style="height:10px;border-radius:999px;background:var(--line);overflow:hidden;margin-top:10px">
+        <div style="height:100%;width:${score}%;background:${scol};border-radius:999px;transition:width .25s"></div>
+      </div>
+    </div></div>`;
+
+  h+=fixes.length
+    ?`<div class="panel"><div class="card"><h4 style="margin:0 0 8px">Fix first</h4><ol style="margin:0;padding-left:20px;font-size:13.5px;display:grid;gap:6px">${fixes.slice(0,7).map(f=>`<li>${f}</li>`).join("")}</ol></div></div>`
+    :`<div class="panel"><div class="banner good" style="margin-bottom:0">No issues found — this listing follows Amazon's style rules.</div></div>`;
+
+  ["Title","Bullets","Description"].forEach(sec=>{
+    const rows=checks.filter(c=>c.sec===sec);
+    if(!rows.length) return;
+    const passed=rows.filter(c=>c.state==="pass").length;
+    h+=`<div class="panel"><div class="card"><h4 style="margin:0 0 4px">${sec} <span class="sa-sub">${passed}/${rows.length} passed</span></h4>${rows.map(lqcRow).join("")}</div></div>`;
+  });
+
+  h+=`<div class="panel"><div class="card"><h4 style="margin:0 0 8px">Keyword coverage</h4>${
+    kw.length
+      ?`<div class="chips">${kw.map(x=>
+          x.state==="exact"?`<span class="chip" style="background:var(--green-soft);border-color:var(--green-line);color:#166534">✓ ${esc(x.k)}</span>`
+          :x.state==="words"?`<span class="chip" style="background:var(--blue-soft);border-color:var(--blue-line);color:#1e3a5f" title="Every word appears, but not as one phrase">≈ ${esc(x.k)}</span>`
+          :`<span class="chip" style="background:var(--orange-soft);border-color:var(--orange-line);color:#9a4b12">✕ ${esc(x.k)}</span>`
+        ).join("")}</div>
+        <div class="note" style="margin:10px 0 0">✓ appears as a phrase &nbsp;·&nbsp; ≈ all words present, but scattered &nbsp;·&nbsp; ✕ missing — Amazon can only rank you for words that exist somewhere in the listing.</div>`
+      :`<div class="note" style="margin:0">Add comma-separated target keywords above to check which ones your listing actually contains (not scored until you do).</div>`
+  }</div></div>`;
+
+  out.innerHTML=h;
+}
+
+/* ============================================================
+   FNSKU BARCODE STICKER GENERATOR — Code 128 stickers for FBA
+   units, drawn with pdf-lib entirely in the browser.
+   ============================================================ */
+function renderFnskuLabels(){
+  document.title="FNSKU Barcode Sticker Generator — Seller Tools India";
+  const md=document.querySelector('meta[name="description"]');
+  if(md) md.setAttribute("content","Free FNSKU barcode sticker generator for Amazon FBA — Code 128 labels on A4 65/40/24-up sheets or 4×6 thermal, generated fully in your browser.");
+  backBtn.hidden=false;
+  const fmts=fnskuFormats();
+  let savedFmt="a4-65";
+  try{savedFmt=localStorage.getItem("fnsku_fmt")||"a4-65";}catch(e){}
+  if(!fmts[savedFmt]) savedFmt="a4-65";
+  const th='style="text-align:left;font-size:12px;font-weight:600;color:#667;padding:0 8px 6px 0;white-space:nowrap"';
+  app.innerHTML=`
+    <div class="wrap page">
+      <h2>FNSKU Barcode Sticker Generator</h2>
+      <p class="lede">Type or paste your FNSKUs and get a print-ready PDF of Code 128 barcode stickers — for A4 sticker sheets (65, 40 or 24 per page) or a 4×6 thermal printer. Each sticker carries the barcode, the code in text, the product name and the condition — the layout Amazon expects on every FBA unit.</p>
+      ${helpHtml("fnsku-labels")}
+      <div class="sa-priv">🔒 Private by design — stickers are generated entirely in your browser; your codes and product names never leave this device.</div>
+      <div class="card" style="margin-top:14px">
+        <label>Stickers to print</label>
+        <div style="overflow-x:auto;margin-top:8px">
+          <table style="width:100%;border-collapse:collapse;min-width:600px">
+            <thead><tr>
+              <th ${th}>FNSKU / code</th>
+              <th ${th}>Product name</th>
+              <th ${th}>Condition</th>
+              <th ${th}>Qty</th>
+              <th style="width:34px"></th>
+            </tr></thead>
+            <tbody id="fk-rows"></tbody>
+          </table>
+        </div>
+        <div class="optrow"><button class="bigbtn sec" id="fk-add" type="button">+ Add row</button></div>
+        <div class="cropgrid">
+          <div style="grid-column:span 2"><label for="fk-fmt">Paper / sticker format</label>
+            <select id="fk-fmt">${Object.entries(fmts).map(([k,f])=>`<option value="${k}"${k===savedFmt?" selected":""}>${esc(f.name)}</option>`).join("")}</select></div>
+        </div>
+        <div class="optrow" style="margin-bottom:0">
+          <button class="bigbtn" id="fk-go" type="button">Generate sticker PDF</button>
+          <a class="bigbtn sec" id="fk-dl" style="display:none" download="fnsku-stickers.pdf">Download PDF</a>
+        </div>
+        <div class="note" id="fk-status" style="margin:10px 0 0">Fill in at least one row, pick your paper, and generate.</div>
+      </div>
+      <div id="fk-prev"></div>
+    </div>`;
+  const tbody=document.getElementById("fk-rows");
+  const status=t=>{const el=document.getElementById("fk-status");if(el)el.textContent=t;};
+  const addRow=r=>{tbody.insertAdjacentHTML("beforeend",fnskuRowHtml(r||{code:"",name:"",cond:"New",qty:30}));};
+  const saved=fnskuLoadRows();
+  if(saved.length) saved.forEach(addRow); else addRow();
+  tbody.addEventListener("input",()=>fnskuSaveRows(fnskuReadRows()));
+  tbody.addEventListener("click",e=>{
+    const b=e.target.closest(".fk-del"); if(!b) return;
+    const tr=b.closest("tr");
+    if(tbody.children.length>1) tr.remove();
+    else tr.querySelectorAll("input").forEach(inp=>{inp.value=inp.dataset.f==="cond"?"New":inp.dataset.f==="qty"?"30":"";});
+    fnskuSaveRows(fnskuReadRows());
+  });
+  document.getElementById("fk-add").addEventListener("click",()=>addRow());
+  document.getElementById("fk-fmt").addEventListener("change",e=>{
+    try{localStorage.setItem("fnsku_fmt",e.target.value);}catch(err){}
+  });
+  document.getElementById("fk-go").addEventListener("click",async()=>{
+    const btn=document.getElementById("fk-go");
+    if(btn.disabled) return;
+    const all=fnskuReadRows();
+    fnskuSaveRows(all);
+    const rows=all.filter(r=>r.code);
+    const fmtKey=document.getElementById("fk-fmt").value;
+    if(!rows.length){status("Enter at least one FNSKU/code first.");return;}
+    for(const r of rows){
+      if(!fnskuCode128Values(r.code)){status(`"${r.code}" can't be encoded — Code 128 accepts printable ASCII characters only (letters, digits, - . / etc.).`);return;}
+    }
+    const total=rows.reduce((s,r)=>s+r.qty,0);
+    if(total>5000){status(`That's ${total} stickers — the limit is 5,000 per PDF. Split it into batches.`);return;}
+    btn.disabled=true;
+    try{
+      status("Loading PDF engine…");
+      await loadPdfLib();
+      status("Drawing barcodes…");
+      const res=await fnskuGenerate(rows,fmtKey);
+      const url=URL.createObjectURL(new Blob([res.bytes],{type:"application/pdf"}));
+      const dl=document.getElementById("fk-dl");
+      dl.href=url; dl.style.display="inline-block";
+      document.getElementById("fk-prev").innerHTML=`<div class="panel"><h4>Preview — ${res.stickers} sticker(s) on ${res.pages} page(s) (${esc(res.fmtName)})</h4><iframe class="pdfprev" src="${url}" title="FNSKU sticker preview"></iframe></div>`;
+      status(`Done — ${res.stickers} sticker(s) on ${res.pages} page(s). Print at 100% scale (no "fit to page").`+(res.dense?" Note: long codes print quite dense on this sticker size — test-scan one sticker before printing the lot.":""));
+    }catch(err){
+      status("Something went wrong: "+((err&&err.message)||err));
+    }
+    btn.disabled=false;
+  });
+}
+
+function fnskuRowHtml(r){
+  const td='style="padding:4px 8px 4px 0"';
+  return `<tr>
+    <td ${td}><input data-f="code" value="${esc(r.code||"")}" placeholder="X0ABC1234" autocomplete="off" autocapitalize="characters" spellcheck="false"></td>
+    <td ${td}><input data-f="name" value="${esc(r.name||"")}" placeholder="Product name (printed under the barcode)"></td>
+    <td ${td} width="110"><input data-f="cond" value="${esc(r.cond||"New")}" style="width:100px"></td>
+    <td ${td} width="80"><input data-f="qty" inputmode="numeric" value="${esc(String(r.qty||30))}" style="width:70px"></td>
+    <td><button class="fk-del" type="button" title="Remove row" aria-label="Remove row" style="border:none;background:none;cursor:pointer;font-size:15px;color:#889;padding:4px">✕</button></td>
+  </tr>`;
+}
+
+function fnskuLoadRows(){
+  try{
+    const raw=JSON.parse(localStorage.getItem("fnsku_rows")||"[]");
+    if(!Array.isArray(raw)) return [];
+    return raw.slice(0,200).map(r=>({
+      code:String((r&&r.code)||"").slice(0,64),
+      name:String((r&&r.name)||"").slice(0,200),
+      cond:String((r&&r.cond)||"New").slice(0,40),
+      qty:Math.max(1,Math.min(9999,parseInt((r&&r.qty),10)||1)),
+    }));
+  }catch(e){return [];}
+}
+
+function fnskuSaveRows(rows){
+  try{localStorage.setItem("fnsku_rows",JSON.stringify(rows));}catch(e){}
+}
+
+function fnskuReadRows(){
+  const out=[];
+  document.querySelectorAll("#fk-rows tr").forEach(tr=>{
+    const g=f=>{const el=tr.querySelector(`input[data-f="${f}"]`);return el?el.value:"";};
+    out.push({
+      code:g("code").replace(/\s+/g,""),
+      name:g("name").trim(),
+      cond:g("cond").trim()||"New",
+      qty:Math.max(1,Math.min(9999,parseInt(g("qty"),10)||1)),
+    });
+  });
+  return out;
+}
+
+/* Sticker sheet geometry, in PDF points (1 mm = 72/25.4 pt). */
+function fnskuFormats(){
+  const MM=72/25.4, A4=[595.28,841.89];
+  return {
+    "a4-65":{name:"A4 sticker sheet — 65 per page (38.1 × 21.2 mm)",page:A4,cols:5,rows:13,w:38.1*MM,h:21.2*MM,left:4.75*MM,top:10.7*MM,hgap:2.5*MM,vgap:0},
+    "a4-40":{name:"A4 sticker sheet — 40 per page (52.5 × 29.7 mm)",page:A4,cols:4,rows:10,w:52.5*MM,h:29.7*MM,left:0,top:0,hgap:0,vgap:0},
+    "a4-24":{name:"A4 sticker sheet — 24 per page (63.5 × 33.9 mm)",page:A4,cols:3,rows:8,w:63.5*MM,h:33.9*MM,left:7.25*MM,top:12.9*MM,hgap:2.5*MM,vgap:0},
+    "4x6":{name:"4×6 thermal — 12 per page (2 × 6 grid)",page:[288,432],cols:2,rows:6,w:144,h:72,left:0,top:0,hgap:0,vgap:0},
+  };
+}
+
+/* Code 128 encoder — subset B with subset C for digit runs.
+   Returns the full code-value sequence (start, data, checksum, stop),
+   or null if the text has characters outside printable ASCII. */
+function fnskuCode128Values(text){
+  const t=String(text||"");
+  if(!t.length) return null;
+  for(let i=0;i<t.length;i++){const c=t.charCodeAt(i);if(c<32||c>126) return null;}
+  const digits=at=>{let n=0;while(at+n<t.length&&t.charCodeAt(at+n)>=48&&t.charCodeAt(at+n)<=57)n++;return n;};
+  const vals=[];
+  let i=0,mode;
+  if(digits(0)>=4){mode="C";vals.push(105);}   // Start C
+  else{mode="B";vals.push(104);}               // Start B
+  while(i<t.length){
+    if(mode==="C"){
+      if(digits(i)>=2){vals.push(parseInt(t.substr(i,2),10));i+=2;}
+      else{vals.push(100);mode="B";}           // CODE B
+    }else{
+      const d=digits(i);
+      if(d>=6||(d>=4&&i+d===t.length)){vals.push(99);mode="C";} // CODE C
+      else{vals.push(t.charCodeAt(i)-32);i++;}
+    }
+  }
+  let sum=vals[0];
+  for(let k=1;k<vals.length;k++) sum+=vals[k]*k;
+  vals.push(sum%103);                          // checksum
+  vals.push(106);                              // stop
+  return vals;
+}
+
+/* Expands the code values to the flat list of bar/space module widths
+   (bar first, alternating). Each symbol is 11 modules; the stop is 13. */
+function fnskuCode128Widths(text){
+  const P=[
+    "212222","222122","222221","121223","121322","131222","122213","122312",
+    "132212","221213","221312","231212","112232","122132","122231","113222",
+    "123122","123221","223211","221132","221231","213212","223112","312131",
+    "311222","321122","321221","312212","322112","322211","212123","212321",
+    "232121","111323","131123","131321","112313","132113","132311","211313",
+    "231113","231311","112133","112331","132131","113123","113321","133121",
+    "313121","211331","231131","213113","213311","213131","311123","311321",
+    "331121","312113","312311","332111","314111","221411","431111","111224",
+    "111422","121124","121421","141122","141221","112214","112412","122114",
+    "122411","142112","142211","241211","221114","413111","241112","134111",
+    "111242","121142","121241","114212","124112","124211","411212","421112",
+    "421211","212141","214121","412121","111143","111341","131141","114113",
+    "114311","411113","411311","113141","114131","311141","411131","211412",
+    "211214","211232","2331112"];
+  const vals=fnskuCode128Values(text);
+  if(!vals) return null;
+  const out=[];
+  for(const v of vals) for(const ch of P[v]) out.push(+ch);
+  return out;
+}
+
+/* Keep text drawable with the standard Helvetica (WinAnsi) fonts. */
+function fnskuAscii(s){
+  return String(s||"")
+    .replace(/[‘’]/g,"'").replace(/[“”]/g,'"')
+    .replace(/[–—]/g,"-").replace(/[^\x20-\x7E]/g,"")
+    .replace(/\s+/g," ").trim();
+}
+
+function fnskuFit(font,text,size,maxW){
+  let t=String(text||"");
+  if(!t) return "";
+  if(font.widthOfTextAtSize(t,size)<=maxW) return t;
+  while(t.length&&font.widthOfTextAtSize(t+"...",size)>maxW) t=t.slice(0,-1);
+  return t?t+"...":"";
+}
+
+/* Draws one sticker into its cell (x = cell left, yTop = cell top, pdf-lib
+   coordinates). Returns true if the barcode came out denser than ~0.5 pt
+   per module (worth a test scan). */
+function fnskuDrawSticker(page,font,fontB,x,yTop,w,h,it){
+  const black=PDFLib.rgb(0,0,0);
+  const widths=fnskuCode128Widths(it.code);
+  const px=Math.max(6,w*0.06);                 // horizontal pad = quiet zone
+  const py=Math.max(3,h*0.055);
+  const codeSize0=Math.min(9,Math.max(5,h*0.115));
+  const nameSize=Math.min(7,Math.max(4.5,h*0.095));
+  const gap=Math.max(1.5,h*0.02);
+  const maxW=w-2*px;
+  const barH=Math.max(8,h-2*py-(codeSize0+2*nameSize+3*gap));
+  const modules=widths.reduce((s,n)=>s+n,0);
+  const mw=maxW/modules;                       // module width; px ≈ 10-module quiet zone
+  const barTop=yTop-py;
+  let bx=x+px;
+  for(let i=0;i<widths.length;i++){
+    const bwid=widths[i]*mw;
+    if(i%2===0) page.drawRectangle({x:bx,y:barTop-barH,width:bwid,height:barH,color:black});
+    bx+=bwid;
+  }
+  // Human-readable code — shrink to fit before truncating.
+  let cs=codeSize0, code=fnskuAscii(it.code);
+  while(cs>4&&fontB.widthOfTextAtSize(code,cs)>maxW) cs-=0.5;
+  code=fnskuFit(fontB,code,cs,maxW);
+  const codeY=barTop-barH-gap-cs*0.85;
+  page.drawText(code,{x:x+(w-fontB.widthOfTextAtSize(code,cs))/2,y:codeY,size:cs,font:fontB,color:black});
+  const name=fnskuFit(font,fnskuAscii(it.name),nameSize,maxW);
+  const nameY=codeY-gap-nameSize;
+  if(name) page.drawText(name,{x:x+(w-font.widthOfTextAtSize(name,nameSize))/2,y:nameY,size:nameSize,font,color:black});
+  const cond=fnskuFit(font,fnskuAscii(it.cond||"New"),nameSize,maxW);
+  const condY=nameY-gap-nameSize;
+  if(cond) page.drawText(cond,{x:x+(w-font.widthOfTextAtSize(cond,nameSize))/2,y:condY,size:nameSize,font,color:black});
+  return mw<0.5;
+}
+
+async function fnskuGenerate(rows,fmtKey){
+  const F=fnskuFormats();
+  const fmt=F[fmtKey]||F["a4-65"];
+  const doc=await PDFLib.PDFDocument.create();
+  const font=await doc.embedFont(PDFLib.StandardFonts.Helvetica);
+  const fontB=await doc.embedFont(PDFLib.StandardFonts.HelveticaBold);
+  const per=fmt.cols*fmt.rows;
+  const items=[];
+  for(const r of rows) for(let i=0;i<r.qty;i++) items.push(r);
+  let page=null,dense=false;
+  for(let idx=0;idx<items.length;idx++){
+    const slot=idx%per;
+    if(slot===0) page=doc.addPage([fmt.page[0],fmt.page[1]]);
+    const col=slot%fmt.cols, row=Math.floor(slot/fmt.cols);
+    const x=fmt.left+col*(fmt.w+fmt.hgap);
+    const yTop=fmt.page[1]-fmt.top-row*(fmt.h+fmt.vgap);
+    if(fnskuDrawSticker(page,font,fontB,x,yTop,fmt.w,fmt.h,items[idx])) dense=true;
+  }
+  const bytes=await doc.save();
+  return {bytes,pages:doc.getPageCount(),stickers:items.length,fmtName:fmt.name,dense};
+}
+
+/* ============================================================
+   GST INVOICE GENERATOR — self-ship GST invoices from the
+   unshipped-orders report, one merged A4 PDF, fully local.
+   ============================================================ */
+function renderGstInvoice(){
+  document.title="GST Invoice Generator — Self-Ship Invoices — Seller Tools India";
+  const md=document.querySelector('meta[name="description"]');
+  if(md) md.setAttribute("content","Generate GST-compliant tax invoices for your Amazon.in self-ship orders from the unshipped-orders report — free, fully in your browser.");
+  backBtn.hidden=false;
+  const s=gstinvLoadSeller();
+  app.innerHTML=`
+    <div class="wrap page">
+      <h2>GST Invoice Generator</h2>
+      <p class="lede">Self-ship (merchant-fulfilled) sellers must issue their own GST invoices. Drop your <b>unshipped orders report</b> (Seller Central → Orders → Order Reports → Unshipped Orders) and get <b>one merged A4 PDF</b> — a TAX INVOICE page per order, with CGST+SGST or IGST worked out from the buyer's state.</p>
+      ${helpHtml("gst-invoice")}
+      <div class="card" style="margin-top:14px">
+        <h3 style="margin-top:0">Your seller details <span class="note" style="font-weight:normal">(saved in this browser)</span></h3>
+        <div class="cropgrid" style="margin-top:12px">
+          <div style="grid-column:span 2"><label for="gstinv-name">Business / legal name</label><input id="gstinv-name" value="${esc(s.name||"")}" placeholder="As on your GST registration"></div>
+          <div style="grid-column:span 2"><label for="gstinv-gstin">GSTIN (15 characters)</label><input id="gstinv-gstin" value="${esc(s.gstin||"")}" maxlength="15" style="text-transform:uppercase" placeholder="e.g. 27ABCDE1234F1Z5"></div>
+        </div>
+        <div style="margin-top:12px"><label for="gstinv-addr">Registered address</label><textarea id="gstinv-addr" rows="2" style="width:100%;box-sizing:border-box" placeholder="Address, city, PIN">${esc(s.addr||"")}</textarea></div>
+        <div class="cropgrid" style="margin-top:12px">
+          <div><label for="gstinv-state">Your state</label><input id="gstinv-state" value="${esc(s.state||"")}" placeholder="e.g. Maharashtra"></div>
+          <div><label for="gstinv-scode">State code (2 digits)</label><input id="gstinv-scode" value="${esc(s.scode||"")}" maxlength="2" inputmode="numeric" placeholder="e.g. 27"></div>
+          <div><label for="gstinv-prefix">Invoice no. prefix</label><input id="gstinv-prefix" value="${esc(s.prefix||"INV-")}" placeholder="INV-"></div>
+          <div><label for="gstinv-start">Starting number</label><input id="gstinv-start" value="${esc(s.start||"1")}" inputmode="numeric" placeholder="1"></div>
+        </div>
+        <div class="note" style="margin-top:8px">The first 2 digits of your GSTIN are your state code — it is auto-filled from the GSTIN if you leave it blank. Invoice numbers run <b>prefix + number</b>, incrementing per order (leading zeros in the starting number are kept).</div>
+      </div>
+      <label class="sa-drop" id="gstinv-drop" style="margin-top:14px">
+        <div class="ico">🧾</div>
+        <h3>Drop your unshipped-orders report here</h3>
+        <p>or click to choose — .txt or .csv</p>
+        <input type="file" id="gstinv-file" accept=".csv,.txt,text/plain,text/csv">
+      </label>
+      <div class="sa-priv">🔒 Private by design — the report (including customer names and addresses) and your GSTIN are processed entirely in your browser and never uploaded anywhere.</div>
+      <div id="gstinv-out"></div>
+    </div>`;
+  const saveNow=()=>gstinvSaveSeller(gstinvReadSellerForm());
+  ["gstinv-name","gstinv-gstin","gstinv-addr","gstinv-state","gstinv-scode","gstinv-prefix","gstinv-start"].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.addEventListener("change",saveNow);
+  });
+  document.getElementById("gstinv-gstin").addEventListener("change",()=>{
+    const g=document.getElementById("gstinv-gstin").value.trim();
+    const sc=document.getElementById("gstinv-scode");
+    if(/^\d{2}/.test(g)&&!sc.value.trim()){sc.value=g.slice(0,2);saveNow();}
+  });
+  const drop=document.getElementById("gstinv-drop"),file=document.getElementById("gstinv-file");
+  ["dragenter","dragover"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add("over");}));
+  ["dragleave","drop"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove("over");}));
+  const read=f=>{
+    const rd=new FileReader();
+    rd.onload=()=>{gstinvOnFile(String(rd.result),f.name);};
+    rd.readAsText(f);
+  };
+  drop.addEventListener("drop",ev=>{const f=ev.dataTransfer.files[0];if(f)read(f);});
+  file.addEventListener("change",()=>{const f=file.files[0];if(f)read(f);});
+  if(gstinvState().parsed) gstinvRenderSettings();
+}
+
+/* Per-session state kept on the function object so this file stays
+   declaration-only (survives route changes, not reloads). */
+function gstinvState(){
+  return (gstinvState._s=gstinvState._s||{parsed:null,fileName:"",prices:null,priceCol:false,settings:null});
+}
+
+function gstinvLoadSeller(){
+  try{return JSON.parse(localStorage.getItem("gstinv_seller")||"{}")||{};}catch(e){return {};}
+}
+function gstinvSaveSeller(v){
+  try{localStorage.setItem("gstinv_seller",JSON.stringify(v));}catch(e){}
+}
+function gstinvReadSellerForm(){
+  const g=id=>{const el=document.getElementById(id);return el?el.value.trim():"";};
+  const prev=gstinvLoadSeller();
+  return Object.assign({},prev,{
+    name:g("gstinv-name"),gstin:g("gstinv-gstin").toUpperCase(),addr:g("gstinv-addr"),
+    state:g("gstinv-state"),scode:g("gstinv-scode"),prefix:g("gstinv-prefix"),start:g("gstinv-start")
+  });
+}
+
+function gstinvStatus(msg){
+  const el=document.getElementById("gstinv-status");
+  if(el) el.textContent=msg;
+}
+
+function gstinvOnFile(text,name){
+  const st=gstinvState();
+  st.parsed=parseOrdersReport(text);
+  st.fileName=name||"";
+  const px=gstinvExtractPrices(text);
+  st.prices=px?px.map:null;
+  st.priceCol=!!px;
+  gstinvRenderSettings();
+}
+
+/* Second, price-only pass over the raw report (parseOrdersReport does not
+   read prices). Returns {map} where map key is orderId+"\u0001"+sku and the
+   value is {amt,qty} — amt is the summed line total (Amazon's item-price
+   column is the price for the whole line, not per unit). Null if the file
+   has no price-like column. */
+function gstinvExtractPrices(text){
+  const lines=text.split(/\r\n|\r|\n/).filter(l=>l.trim()!=="");
+  if(!lines.length) return null;
+  const delim=lines[0].includes("\t")?"\t":",";
+  const header=saSplit(lines[0],delim).map(saNormHeader);
+  const first=names=>{for(const n of names){const i=header.indexOf(n);if(i!==-1)return i;}return -1;};
+  const pi=first(["item-price","unit-price","price","sale-price","item-cost"]);
+  if(pi===-1) return null;
+  const perUnit=header[pi]==="unit-price";
+  const oi=header.indexOf("order-id"), si=header.indexOf("sku");
+  const qi=first(["quantity-to-ship","quantity-purchased"]);
+  if(oi===-1||si===-1) return null;
+  const map=new Map();
+  for(let i=1;i<lines.length;i++){
+    const f=saSplit(lines[i],delim);
+    if(f.length<2) continue;
+    const oid=(f[oi]||"").trim(); if(!oid) continue;
+    const sku=(f[si]||"").trim();
+    const qty=qi===-1?1:(parseInt((f[qi]||"").trim(),10)||1);
+    const raw=(f[pi]||"").replace(/[^0-9.\-]/g,"");
+    const p=parseFloat(raw);
+    if(!isFinite(p)||p<=0) continue;
+    const amt=perUnit?p*qty:p;
+    const k=oid+"\u0001"+sku;
+    const cur=map.get(k)||{amt:0,qty:0};
+    cur.amt+=amt; cur.qty+=qty;
+    map.set(k,cur);
+  }
+  return map.size?{map}:null;
+}
+
+function gstinvRenderSettings(){
+  const out=document.getElementById("gstinv-out"); if(!out) return;
+  const st=gstinvState();
+  const r=st.parsed;
+  if(r.missing.length){
+    out.innerHTML=`<div class="banner warn" style="margin-top:16px">This file is missing the ${r.missing.map(esc).join(", ")} column(s). Export the <b>Unshipped Orders</b> report from Seller Central → Orders → Order Reports and try again.</div>`;
+    return;
+  }
+  const orders=r.orders;
+  const totalUnits=orders.reduce((s,o)=>s+o.items.reduce((x,i)=>x+i.qty,0),0);
+  const hasAddr=orders.some(o=>o.addr||o.city||o.state);
+  // Detected SKUs with an average unit price prefill where the report had one.
+  const skus=new Map();
+  for(const o of orders) for(const it of o.items){
+    const k=it.sku||"(no SKU)";
+    const row=skus.get(k)||{sku:k,name:it.name||"",qty:0,amt:0,priced:0};
+    row.qty+=it.qty; if(!row.name&&it.name) row.name=it.name;
+    if(st.prices){
+      const p=st.prices.get(o.orderId+"\u0001"+it.sku);
+      if(p&&p.qty>0){row.amt+=p.amt;row.priced+=p.qty;}
+    }
+    skus.set(k,row);
+  }
+  const prev=st.settings||{};
+  const skuRows=[...skus.values()].sort((a,b)=>a.sku<b.sku?-1:1);
+  const prevPrices=prev.skuPrices||{}, prevHsn=prev.skuHsn||{};
+  out.innerHTML=`
+    <div class="stats" style="margin-top:16px">
+      <div class="stat blue"><div class="k">Orders / invoices</div><div class="v">${orders.length}</div></div>
+      <div class="stat"><div class="k">Units</div><div class="v">${totalUnits}</div></div>
+      <div class="stat"><div class="k">Distinct SKUs</div><div class="v">${skuRows.length}</div></div>
+      <div class="stat ${st.priceCol?"green":""}"><div class="k">Price column</div><div class="v" style="font-size:15px">${st.priceCol?"Detected":"Not in file"}</div></div>
+    </div>
+    ${hasAddr?"":`<div class="banner warn">No shipping addresses in this file — GST invoices need the buyer's state to pick CGST+SGST vs IGST. Enable the address columns in the report settings on the Order Reports page, or every invoice will fall back to IGST.</div>`}
+    <div class="card" style="margin-top:14px">
+      <h3 style="margin-top:0">Invoice settings for this file</h3>
+      <div class="cropgrid" style="margin-top:12px">
+        <div><label for="gstinv-rate">GST rate</label>
+          <select id="gstinv-rate">${[0,5,12,18,28].map(x=>`<option value="${x}"${String(prev.rate??18)===String(x)?" selected":""}>${x}%</option>`).join("")}</select></div>
+        <div><label for="gstinv-incl">Entered prices</label>
+          <select id="gstinv-incl">
+            <option value="incl"${(prev.incl||"incl")==="incl"?" selected":""}>Include GST (Amazon prices do)</option>
+            <option value="excl"${prev.incl==="excl"?" selected":""}>Exclude GST — add tax on top</option>
+          </select></div>
+        ${st.priceCol?`<div style="grid-column:span 2"><label for="gstinv-src">Price source</label>
+          <select id="gstinv-src">
+            <option value="report"${(prev.src||"report")==="report"?" selected":""}>Use the price column from the report</option>
+            <option value="table"${prev.src==="table"?" selected":""}>Use the unit prices in the table below</option>
+          </select></div>`:""}
+      </div>
+      <div class="note" style="margin-top:8px">${st.priceCol
+        ?"A price column was found — line amounts come straight from the report (unit prices below are the detected averages, used only for rows the report leaves blank or if you switch the source to the table)."
+        :"This report has no price column, so enter a unit price per SKU below — it is multiplied by the quantity on each order."} HSN codes are optional and print in the HSN column when filled.</div>
+      <div class="tblwrap" style="margin-top:12px"><table class="sa">
+        <thead><tr><th>SKU</th><th>Product</th><th class="num">Units</th><th class="num">Unit price (₹)</th><th>HSN (optional)</th></tr></thead>
+        <tbody>${skuRows.map((p,i)=>{
+          const detected=p.priced>0?(p.amt/p.priced):0;
+          const val=prevPrices[p.sku]!==undefined?prevPrices[p.sku]:(detected?detected.toFixed(2):"");
+          return `<tr><td>${esc(p.sku)}</td><td>${esc(p.name||"—")}</td><td class="num">${p.qty}</td>
+            <td class="num"><input id="gstinv-p-${i}" data-sku="${esc(p.sku)}" inputmode="decimal" value="${esc(String(val))}" placeholder="0.00" style="width:90px;text-align:right"></td>
+            <td><input id="gstinv-h-${i}" data-sku="${esc(p.sku)}" value="${esc(prevHsn[p.sku]||"")}" placeholder="—" style="width:90px"></td></tr>`;
+        }).join("")}</tbody>
+      </table></div>
+      <div class="optrow" style="margin-top:14px">
+        <button class="bigbtn" id="gstinv-go">🧾 Generate ${orders.length} GST invoice(s) — one PDF</button>
+        <a class="bigbtn sec" id="gstinv-dl" download="gst-invoices.pdf" style="display:none">⬇️ Download PDF</a>
+      </div>
+      <div class="note" id="gstinv-status" style="margin-top:10px" aria-live="polite">Check the settings above, then generate. Nothing leaves your browser.</div>
+    </div>
+    <div id="gstinv-prev"></div>`;
+  document.getElementById("gstinv-go").addEventListener("click",gstinvGenerate);
+}
+
+/* GST state codes + common aliases/abbreviations, so the buyer's
+   ship-state text from the report resolves to a 2-digit code. */
+function gstinvStateCode(name){
+  const CODES={"jammu and kashmir":"01","jammu & kashmir":"01","jk":"01","himachal pradesh":"02","hp":"02",
+    "punjab":"03","pb":"03","chandigarh":"04","ch":"04","uttarakhand":"05","uttaranchal":"05","uk":"05","ua":"05",
+    "haryana":"06","hr":"06","delhi":"07","new delhi":"07","dl":"07","rajasthan":"08","rj":"08",
+    "uttar pradesh":"09","up":"09","bihar":"10","br":"10","sikkim":"11","sk":"11","arunachal pradesh":"12","ar":"12",
+    "nagaland":"13","nl":"13","manipur":"14","mn":"14","mizoram":"15","mz":"15","tripura":"16","tr":"16",
+    "meghalaya":"17","ml":"17","assam":"18","as":"18","west bengal":"19","wb":"19","jharkhand":"20","jh":"20",
+    "odisha":"21","orissa":"21","od":"21","or":"21","chhattisgarh":"22","chattisgarh":"22","cg":"22",
+    "madhya pradesh":"23","mp":"23","gujarat":"24","gj":"24",
+    "dadra and nagar haveli and daman and diu":"26","dadra and nagar haveli":"26","daman and diu":"26","dn":"26","dd":"26",
+    "maharashtra":"27","mh":"27","karnataka":"29","ka":"29","goa":"30","ga":"30","lakshadweep":"31","ld":"31",
+    "kerala":"32","kl":"32","tamil nadu":"33","tamilnadu":"33","tn":"33","puducherry":"34","pondicherry":"34","py":"34",
+    "andaman and nicobar islands":"35","andaman and nicobar":"35","an":"35","telangana":"36","ts":"36","tg":"36",
+    "andhra pradesh":"37","ap":"37","ladakh":"38","la":"38"};
+  const k=String(name||"").toLowerCase().replace(/&/g,"and").replace(/[^a-z ]/g," ").replace(/\s+/g," ").trim();
+  return CODES[k]||null;
+}
+
+/* Indian-system amount in words: crore / lakh / thousand. */
+function gstinvWords(n){
+  n=Math.round((isFinite(n)?n:0)*100)/100;
+  const rupees=Math.floor(n), paise=Math.round((n-rupees)*100);
+  const ones=["","One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten","Eleven","Twelve","Thirteen","Fourteen","Fifteen","Sixteen","Seventeen","Eighteen","Nineteen"];
+  const tens=["","","Twenty","Thirty","Forty","Fifty","Sixty","Seventy","Eighty","Ninety"];
+  const two=x=>x<20?ones[x]:(tens[Math.floor(x/10)]+(x%10?" "+ones[x%10]:""));
+  const three=x=>(x>=100?ones[Math.floor(x/100)]+" Hundred"+(x%100?" ":""):"")+(x%100?two(x%100):"");
+  const parts=[];
+  let r=rupees;
+  const crore=Math.floor(r/10000000); r%=10000000;
+  const lakh=Math.floor(r/100000); r%=100000;
+  const thou=Math.floor(r/1000); r%=1000;
+  if(crore) parts.push(three(crore)+" Crore");
+  if(lakh) parts.push(two(lakh)+" Lakh");
+  if(thou) parts.push(two(thou)+" Thousand");
+  if(r) parts.push(three(r));
+  let w=rupees===0?"Zero":parts.join(" ");
+  w="Rupees "+w;
+  if(paise) w+=" and "+two(paise)+" Paise";
+  return w+" Only";
+}
+
+/* pdf-lib StandardFonts are WinAnsi — the rupee sign (and most non-Latin-1
+   text) cannot be encoded, so PDF text goes through this. */
+function gstinvPdfSafe(s){
+  return String(s??"").replace(/₹/g,"Rs ").replace(/[‘’]/g,"'").replace(/[“”]/g,'"')
+    .replace(/[–—]/g,"-").replace(/×/g,"x").replace(/[^\x20-\x7E -ÿ]/g,"").replace(/\s+/g," ").trim();
+}
+function gstinvRs(n){
+  n=isFinite(n)?n:0;
+  return (n<0?"-":"")+"Rs "+Math.abs(n).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function gstinvWrap(font,text,size,maxW){
+  const words=gstinvPdfSafe(text).split(" ").filter(Boolean);
+  const lines=[]; let cur="";
+  for(let w of words){
+    while(font.widthOfTextAtSize(w,size)>maxW&&w.length>2){ // hard-break very long tokens
+      let cut=w.length-1;
+      while(cut>1&&font.widthOfTextAtSize(w.slice(0,cut),size)>maxW) cut--;
+      const head=w.slice(0,cut);
+      if(cur){lines.push(cur);cur="";}
+      lines.push(head); w=w.slice(cut);
+    }
+    const t=cur?cur+" "+w:w;
+    if(font.widthOfTextAtSize(t,size)<=maxW) cur=t;
+    else {if(cur)lines.push(cur); cur=w;}
+  }
+  if(cur) lines.push(cur);
+  return lines.length?lines:[""];
+}
+
+async function gstinvGenerate(){
+  const st=gstinvState();
+  const btn=document.getElementById("gstinv-go");
+  if(!st.parsed||st.parsed.missing.length||gstinvGenerate._busy) return;
+  const seller=gstinvReadSellerForm();
+  if(!seller.scode&&/^\d{2}/.test(seller.gstin)) seller.scode=seller.gstin.slice(0,2);
+  gstinvSaveSeller(seller);
+  if(!seller.name||!seller.gstin||!seller.scode){
+    gstinvStatus("Fill in your business name, GSTIN and 2-digit state code above first — a tax invoice is not valid without them.");
+    return;
+  }
+  if(!/^[0-9]{2}[A-Z0-9]{13}$/.test(seller.gstin)){
+    gstinvStatus("That GSTIN doesn't look right — it should be 15 characters starting with your 2-digit state code (e.g. 27ABCDE1234F1Z5). Fix it and generate again.");
+    return;
+  }
+  // Collect per-file settings + the SKU table.
+  const val=id=>{const el=document.getElementById(id);return el?el.value:"";};
+  const rate=parseFloat(val("gstinv-rate"))||0;
+  const incl=(val("gstinv-incl")||"incl")==="incl";
+  const src=st.priceCol?(val("gstinv-src")||"report"):"table";
+  const skuPrices={},skuHsn={};
+  document.querySelectorAll('[id^="gstinv-p-"]').forEach(el=>{
+    const p=parseFloat(String(el.value).replace(/[^0-9.\-]/g,""));
+    if(isFinite(p)&&p>0) skuPrices[el.getAttribute("data-sku")]=p;
+  });
+  document.querySelectorAll('[id^="gstinv-h-"]').forEach(el=>{
+    const h=el.value.trim(); if(h) skuHsn[el.getAttribute("data-sku")]=h;
+  });
+  st.settings={rate,incl:incl?"incl":"excl",src,skuPrices,skuHsn};
+  // Build invoice models — merge same-SKU lines within an order.
+  const orders=st.parsed.orders;
+  const startStr=(seller.start||"1").replace(/[^0-9]/g,"")||"1";
+  const width=(seller.start||"").trim().length;
+  let num=parseInt(startStr,10);
+  const noPrice=new Set();
+  const invoices=[];
+  for(const o of orders){
+    const merged=new Map();
+    for(const it of o.items){
+      const k=it.sku||"(no SKU)";
+      const m=merged.get(k)||{sku:k,name:it.name||"",qty:0};
+      m.qty+=it.qty; if(!m.name&&it.name) m.name=it.name;
+      merged.set(k,m);
+    }
+    const lines=[];
+    for(const m of merged.values()){
+      let amt=null;
+      if(src==="report"&&st.prices){
+        const p=st.prices.get(o.orderId+"\u0001"+(m.sku==="(no SKU)"?"":m.sku));
+        if(p&&p.amt>0) amt=p.amt;
+      }
+      if(amt===null&&skuPrices[m.sku]!==undefined) amt=skuPrices[m.sku]*m.qty;
+      if(amt===null){noPrice.add(m.sku);amt=0;}
+      const taxable=incl?amt/(1+rate/100):amt;
+      const tax=incl?amt-taxable:taxable*rate/100;
+      lines.push({sku:m.sku,name:m.name,hsn:skuHsn[m.sku]||"",qty:m.qty,taxable,tax,total:taxable+tax});
+    }
+    const buyerCode=gstinvStateCode(o.state);
+    const intra=buyerCode?buyerCode===seller.scode
+      :(!!o.state&&o.state.trim().toLowerCase()===(seller.state||"").trim().toLowerCase()&&!!seller.state);
+    const invNo=seller.prefix+String(num).padStart(width,"0");
+    num++;
+    invoices.push({o,lines,intra,buyerCode,invNo,
+      taxable:lines.reduce((s,l)=>s+l.taxable,0),
+      tax:lines.reduce((s,l)=>s+l.tax,0),
+      total:lines.reduce((s,l)=>s+l.total,0)});
+  }
+  if(noPrice.size){
+    gstinvStatus("No price found for: "+[...noPrice].slice(0,8).join(", ")+(noPrice.size>8?` (+${noPrice.size-8} more)`:"")+". Enter a unit price for these SKUs in the table above, then generate again.");
+    return;
+  }
+  gstinvGenerate._busy=true;
+  if(btn) btn.disabled=true;
+  gstinvStatus("Loading the PDF engine…");
+  try{
+    await loadPdfLib();
+    gstinvStatus(`Building ${invoices.length} invoice(s)…`);
+    const doc=await PDFLib.PDFDocument.create();
+    const font=await doc.embedFont(PDFLib.StandardFonts.Helvetica);
+    const fontB=await doc.embedFont(PDFLib.StandardFonts.HelveticaBold);
+    const A4W=595.28,A4H=841.89,L=40,R=A4W-40;
+    const black=PDFLib.rgb(0,0,0),grey=PDFLib.rgb(0.42,0.42,0.42),line=PDFLib.rgb(0.75,0.75,0.75);
+    const today=new Date().toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"});
+    for(const inv of invoices){
+      const o=inv.o;
+      let pg=doc.addPage([A4W,A4H]);
+      const footer=()=>{
+        pg.drawLine({start:{x:L,y:56},end:{x:R,y:56},thickness:0.7,color:line});
+        pg.drawText("This is a computer-generated invoice.",{x:L,y:44,size:8,font,color:grey});
+        pg.drawText("Generated by Seller Tools India - verify with your CA before filing.",{x:L,y:33,size:8,font,color:grey});
+        const sig="For "+gstinvPdfSafe(seller.name);
+        pg.drawText(sig,{x:R-font.widthOfTextAtSize(sig,9),y:44,size:9,font,color:black});
+        pg.drawText("Authorised Signatory",{x:R-font.widthOfTextAtSize("Authorised Signatory",8),y:33,size:8,font,color:grey});
+      };
+      footer();
+      let y=A4H-52;
+      const title="TAX INVOICE";
+      pg.drawText(title,{x:(A4W-fontB.widthOfTextAtSize(title,16))/2,y,size:16,font:fontB});
+      y-=10;
+      pg.drawLine({start:{x:L,y},end:{x:R,y},thickness:1,color:black});
+      y-=18;
+      // Seller block (left) + invoice meta (right).
+      const rightX=R-190;
+      const meta=[["Invoice No.",inv.invNo],["Invoice Date",today],["Order ID",o.orderId],
+        ...(o.date?[["Order Date",String(o.date).slice(0,10)]]:[])];
+      let my=y;
+      for(const [k,v] of meta){
+        pg.drawText(k+":",{x:rightX,y:my,size:9,font,color:grey});
+        pg.drawText(gstinvPdfSafe(v).slice(0,30),{x:rightX+70,y:my,size:9,font:fontB});
+        my-=13;
+      }
+      pg.drawText(gstinvPdfSafe(seller.name).slice(0,60),{x:L,y,size:12,font:fontB});
+      y-=14;
+      for(const ln of gstinvWrap(font,seller.addr,9,rightX-L-20).slice(0,3)){
+        pg.drawText(ln,{x:L,y,size:9,font}); y-=11;
+      }
+      pg.drawText("GSTIN: "+seller.gstin,{x:L,y,size:9,font:fontB}); y-=11;
+      pg.drawText("State: "+gstinvPdfSafe(seller.state||"")+" (Code "+seller.scode+")",{x:L,y,size:9,font}); y-=11;
+      y=Math.min(y,my)-8;
+      pg.drawLine({start:{x:L,y},end:{x:R,y},thickness:0.7,color:line});
+      y-=16;
+      // Buyer / ship-to block.
+      pg.drawText("Bill To / Ship To:",{x:L,y,size:9,font:fontB,color:grey});
+      const posName=gstinvPdfSafe(o.state||"");
+      const pos="Place of Supply: "+(posName||"(not in report)")+(inv.buyerCode?" (Code "+inv.buyerCode+")":"");
+      pg.drawText(pos,{x:R-font.widthOfTextAtSize(pos,9),y,size:9,font});
+      y-=13;
+      if(o.buyer){pg.drawText(gstinvPdfSafe(o.buyer).slice(0,60),{x:L,y,size:10,font:fontB});y-=12;}
+      const addrFull=[o.addr,[o.city,o.state,o.pin].filter(Boolean).join(", ")].filter(Boolean).join(", ");
+      for(const ln of gstinvWrap(font,addrFull||"(address not in report)",9,R-L-20).slice(0,3)){
+        pg.drawText(ln,{x:L,y,size:9,font}); y-=11;
+      }
+      y-=8;
+      // Items table.
+      const half=rate/2;
+      const cols=inv.intra
+        ?[["#",22,0],["Description",176,0],["HSN",44,0],["Qty",30,1],["Rate",56,1],["Taxable",62,1],[`CGST ${half}%`,62,1],[`SGST ${half}%`,63,1]]
+        :[["#",22,0],["Description",188,0],["HSN",48,0],["Qty",34,1],["Rate",62,1],["Taxable",78,1],[`IGST ${rate}%`,83,1]];
+      const xs=[L]; for(const c of cols) xs.push(xs[xs.length-1]+c[1]);
+      const tableTop=y;
+      const HEAD=20,ROWMIN=16;
+      let rowY=y-HEAD;
+      cols.forEach((c,i)=>{
+        const tx=c[2]?xs[i+1]-6-fontB.widthOfTextAtSize(c[0],8):xs[i]+4;
+        pg.drawText(c[0],{x:tx,y:rowY+6,size:8,font:fontB});
+      });
+      pg.drawLine({start:{x:L,y:rowY},end:{x:R,y:rowY},thickness:0.8,color:black});
+      const cell=(pgRef,txt,i,yy,bold)=>{
+        const f=bold?fontB:font, t=gstinvPdfSafe(txt);
+        const tx=cols[i][2]?xs[i+1]-6-f.widthOfTextAtSize(t,8):xs[i]+4;
+        pgRef.drawText(t,{x:tx,y:yy,size:8,font:f});
+      };
+      let n=1, top=tableTop;
+      const closeBox=bottom=>{
+        pg.drawRectangle({x:L,y:bottom,width:R-L,height:top-bottom,borderColor:black,borderWidth:1});
+        for(let i=1;i<xs.length-1;i++)
+          pg.drawLine({start:{x:xs[i],y:top},end:{x:xs[i],y:bottom},thickness:0.6,color:line});
+      };
+      for(const l of inv.lines){
+        const desc=gstinvWrap(font,(l.name||l.sku)+(l.name?"  ["+l.sku+"]":""),8,cols[1][1]-8).slice(0,3);
+        const rh=Math.max(ROWMIN,desc.length*10+6);
+        if(rowY-rh<150){ // continuation page
+          closeBox(rowY);
+          pg=doc.addPage([A4W,A4H]); footer();
+          let cy=A4H-52;
+          const t2="TAX INVOICE (contd.) - "+inv.invNo;
+          pg.drawText(gstinvPdfSafe(t2),{x:L,y:cy,size:12,font:fontB});
+          cy-=16;
+          top=cy; rowY=cy-HEAD;
+          cols.forEach((c,i)=>{
+            const tx=c[2]?xs[i+1]-6-fontB.widthOfTextAtSize(c[0],8):xs[i]+4;
+            pg.drawText(c[0],{x:tx,y:rowY+6,size:8,font:fontB});
+          });
+          pg.drawLine({start:{x:L,y:rowY},end:{x:R,y:rowY},thickness:0.8,color:black});
+        }
+        const baseY=rowY-rh;
+        cell(pg,String(n),0,rowY-12);
+        desc.forEach((dl,k)=>pg.drawText(dl,{x:xs[1]+4,y:rowY-12-k*10,size:8,font}));
+        cell(pg,l.hsn||"-",2,rowY-12);
+        cell(pg,String(l.qty),3,rowY-12);
+        cell(pg,gstinvRs(l.taxable/l.qty).replace("Rs ",""),4,rowY-12);
+        cell(pg,gstinvRs(l.taxable).replace("Rs ",""),5,rowY-12);
+        if(inv.intra){
+          cell(pg,gstinvRs(l.tax/2).replace("Rs ",""),6,rowY-12);
+          cell(pg,gstinvRs(l.tax/2).replace("Rs ",""),7,rowY-12);
+        }else cell(pg,gstinvRs(l.tax).replace("Rs ",""),6,rowY-12);
+        rowY=baseY;
+        pg.drawLine({start:{x:L,y:rowY},end:{x:R,y:rowY},thickness:0.4,color:line});
+        n++;
+      }
+      closeBox(rowY);
+      // Totals block, right-aligned under the table.
+      let ty=rowY-18;
+      const trow=(k,v,bold)=>{
+        const f=bold?fontB:font,size=bold?10:9;
+        pg.drawText(k,{x:R-210,y:ty,size,font:f});
+        const t=gstinvRs(v);
+        pg.drawText(t,{x:R-f.widthOfTextAtSize(t,size),y:ty,size,font:f});
+        ty-=14;
+      };
+      trow("Total Taxable Value",inv.taxable);
+      if(inv.intra){trow(`CGST @ ${half}%`,inv.tax/2);trow(`SGST @ ${half}%`,inv.tax/2);}
+      else trow(`IGST @ ${rate}%`,inv.tax);
+      pg.drawLine({start:{x:R-210,y:ty+10},end:{x:R,y:ty+10},thickness:0.7,color:black});
+      trow("Invoice Total",inv.total,true);
+      ty-=4;
+      for(const wl of gstinvWrap(fontB,"Amount in words: "+gstinvWords(inv.total),9,R-L).slice(0,2)){
+        pg.drawText(wl,{x:L,y:ty,size:9,font:fontB}); ty-=12;
+      }
+      pg.drawText(inv.intra?"Tax charged as CGST + SGST (buyer in your state)."
+        :"Tax charged as IGST (inter-state supply).",{x:L,y:ty,size:8,font,color:grey});
+    }
+    const bytes=await doc.save();
+    const url=URL.createObjectURL(new Blob([bytes],{type:"application/pdf"}));
+    const dl=document.getElementById("gstinv-dl");
+    if(dl){dl.href=url;dl.style.display="inline-block";}
+    const prev=document.getElementById("gstinv-prev");
+    if(prev) prev.innerHTML=`<div class="panel"><h4>Preview — ${invoices.length} invoice(s), ${doc.getPageCount()} page(s)</h4><iframe class="pdfprev" src="${url}" title="GST invoices preview"></iframe></div>`;
+    const intraN=invoices.filter(i=>i.intra).length;
+    const gross=invoices.reduce((s,i)=>s+i.total,0);
+    gstinvStatus(`Done — ${invoices.length} invoice(s) (${inr(gross)} incl. GST): ${intraN} CGST+SGST, ${invoices.length-intraN} IGST. Invoice numbers ${invoices[0]?invoices[0].invNo:""}–${invoices.length?invoices[invoices.length-1].invNo:""}. Check the preview, then download. Set the starting number to ${num} for your next batch.`);
+  }catch(e){
+    try{console.error("GST invoice:",e);}catch(_){}
+    gstinvStatus("Could not generate the PDF"+(String(e).includes("load failed")
+      ?" — the PDF engine failed to load (check your connection); nothing was uploaded anywhere."
+      :" — "+gstinvPdfSafe(String(e&&e.message||e)).slice(0,120)));
+  }
+  gstinvGenerate._busy=false;
+  if(btn) btn.disabled=false;
+}
+
 function route(){
   const h=location.hash.replace(/^#\/?/,"");
   renderAuthSlot();
@@ -5106,6 +6308,10 @@ function route(){
   if(h==="keyword-combiner"){renderKeywordCombiner();window.scrollTo(0,0);return;}
   if(h==="label-cropper"){renderLabelCropper();window.scrollTo(0,0);return;}
   if(h==="order-printer"){renderOrderPrinter();window.scrollTo(0,0);return;}
+  if(h==="payout-forecast"){renderPayoutForecast();window.scrollTo(0,0);return;}
+  if(h==="listing-checker"){renderListingChecker();window.scrollTo(0,0);return;}
+  if(h==="fnsku-labels"){renderFnskuLabels();window.scrollTo(0,0);return;}
+  if(h==="gst-invoice"){renderGstInvoice();window.scrollTo(0,0);return;}
   renderCalc(h);
   window.scrollTo(0,0);
 }
