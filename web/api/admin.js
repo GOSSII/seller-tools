@@ -87,7 +87,7 @@ module.exports = async (req, res) => {
 
       // Presence: online = heartbeat in the last 2 minutes (client pings each
       // minute). Session length = last_seen - started, per tab-session.
-      const nowMs = now.getTime();
+      const nowMs = now; // `now` is already an epoch-ms number (Date.now())
       const durMin = r => Math.max(0, (new Date(r.last_seen_at) - new Date(r.started_at)) / 60000);
       const online = presence.filter(r => nowMs - new Date(r.last_seen_at).getTime() < 2 * 60000);
       const day = presence.filter(r => nowMs - new Date(r.started_at).getTime() < 24 * 3600000);
