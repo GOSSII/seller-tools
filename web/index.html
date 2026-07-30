@@ -2438,6 +2438,34 @@ function deviceLabelFromUAClient(ua){
    server-side by /api/admin (is_admin); the client only reflects it.
    ============================================================ */
 const money0=paise=>"₹"+Math.round((paise||0)/100).toLocaleString("en-IN");
+/* Hidden diagnostics page (#/whoami): shows the CURRENT USER their own
+   session state, their own profile row (via RLS) and whether /api/admin
+   accepts them. Shows nothing about anyone else — safe to keep around. */
+async function renderWhoAmI(){
+  backBtn.hidden=false;
+  app.innerHTML=`<div class="wrap page"><div class="auth"><h2>Diagnostics</h2>
+    <p class="lede">What this browser's session looks like.</p>
+    <div class="card" id="who-out" style="font-size:14px;line-height:2">Checking…</div></div></div>`;
+  const out=document.getElementById("who-out");
+  const lines=[];
+  const u=sessionUser();
+  lines.push(u?("1. Logged in as: <b>"+esc(u.email||u.id)+"</b>"):"1. Logged in: <b>NO</b> — log in first, then reopen #/whoami");
+  if(u){
+    try{
+      const c=await sb();
+      const {data,error}=await c.from("profiles").select("email,is_admin").limit(1);
+      if(error) lines.push("2. Profile row: <b>error</b> — "+esc(error.message));
+      else if(!data||!data.length) lines.push("2. Profile row: <b>MISSING</b> — run the schema backfill");
+      else lines.push("2. Profile: <b>"+esc(data[0].email||"—")+"</b> · is_admin: <b>"+String(data[0].is_admin)+"</b>");
+    }catch(e){ lines.push("2. Profile check failed: "+esc(String(e&&e.message||e))); }
+    try{
+      const r=await adminCall({action:"stats"});
+      lines.push("3. /api/admin says: <b>HTTP "+r.status+"</b>"+(r.ok?" — admin access OK ✅":" — not accepted as admin"));
+    }catch(e){ lines.push("3. /api/admin: network error"); }
+    lines.push("4. Session id claimed: <b>"+(storedSessionId()?"yes":"no")+"</b>");
+  }
+  out.innerHTML=lines.join("<br>");
+}
 async function adminCall(payload){
   const token=await accessToken();
   return fetch("/api/admin",{method:"POST",
@@ -4949,6 +4977,7 @@ function route(){
   if(h==="new-password"){renderNewPassword();window.scrollTo(0,0);return;}
   if(h==="account"){renderAccount();window.scrollTo(0,0);return;}
   if(h==="admin"){renderAdmin();window.scrollTo(0,0);return;}
+  if(h==="whoami"){renderWhoAmI();window.scrollTo(0,0);return;}
   if(h==="settlement-analyzer"){renderSettlementAnalyzer();window.scrollTo(0,0);return;}
   if(h==="gst-report"){renderGstReport();window.scrollTo(0,0);return;}
   if(h==="sku-report"){renderSkuReport();window.scrollTo(0,0);return;}
