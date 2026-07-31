@@ -758,14 +758,11 @@ function closingFee(p,ful,cat){
   return t[t.length-1];
 }
 function shipFee(p,ful,zone,kg,tier){
+  // Self-ship: Amazon charges no shipping fee — you book your own courier,
+  // so that cost is yours to add (fold it into Packaging).
   if(ful==='self') return 0;
   if(ful==='fba') return fbaWeightHandling(kg,zone,tier||FBA_STEP_DEFAULT);
-  // Easy Ship still uses the older slab table — not yet re-verified against
-  // the current schedule, unlike the FBA figures above.
-  const s = SLABS.find(x=>kg<=x.max) || SLABS[SLABS.length-1];
-  let f = zone==='national'?s.esN:s.esL;
-  if(p<300) f=Math.max(0,f-10);
-  return f;
+  return esWeightHandling(kg,tier||FBA_STEP_DEFAULT);
 }
 /* FBA fulfilment, Amazon.in "Fulfilment fees" schedule (G200651740).
    Pick & pack is flat across STEP levels; weight handling depends on the
@@ -789,6 +786,24 @@ const pickPack = kg => {
   if(w>5) f+=Math.ceil((w-5)/5)*2;                 // each additional 5 kg after 5 kg
   return f;
 };
+/* Easy Ship weight handling, Amazon.in "Easy Ship features and fees"
+   (G201379720). Standard size is a FLAT fee — Amazon no longer prices Local,
+   Regional and National differently here — varying only by STEP tier. The
+   seller packs the parcel, so unlike FBA there is no 100 g packaging added;
+   the weight entered is the parcel weight, rounded up to the next 500 g. */
+const ES_WH={premium:[53,73,110], standard:[55,75,112], basic:[59,79,116]};
+const ES_WH_ADD={after2:34, after5:18};
+const esShipWeight = kg => Math.ceil(Math.max(0,kg)*2)/2;
+function esWeightHandling(kg,tier){
+  const col=ES_WH[tier]||ES_WH[FBA_STEP_DEFAULT];
+  const w=esShipWeight(kg);
+  if(w<=0.5) return col[0];
+  if(w<=1)   return col[1];
+  if(w<=2)   return col[2];
+  let f=col[2]+Math.ceil(Math.min(w,5)-2)*ES_WH_ADD.after2;
+  if(w>5) f+=Math.ceil(w-5)*ES_WH_ADD.after5;
+  return f;
+}
 function fbaWeightHandling(kg,zone,tier){
   const t=FBA_WH[tier]||FBA_WH[FBA_STEP_DEFAULT];
   const k=zone==="national"?"n":"r";
@@ -902,7 +917,11 @@ const CALCS = [
         cat.verified
           ? `Referral rate from Amazon's "${cat.amzCat}" fee category (schedule effective 10 June 2026). Amazon publishes 193 categories — check yours in Seller Central if your product sits elsewhere.`
           : `Referral rate for this category is not yet confirmed against Amazon's 10 June 2026 schedule. The 0% band below ₹1,000 is verified; the rate above ₹1,000 is our earlier estimate.`,
-        v.ful==="fba"
+        v.ful==="easyship"
+          ? "Easy Ship weight handling is Amazon's published flat fee for a Standard STEP tier — since the current schedule it no longer varies by zone, so Local and National charge the same. Premium and Advanced sellers pay a little less, Basic a little more."
+          : v.ful==="self"
+          ? "Self-ship: Amazon charges a closing fee but no shipping fee, because you book the courier yourself. Add what your courier charges to Packaging to see a true net."
+          : v.ful==="fba"
           ? "FBA fulfilment uses Amazon's published fee table for a Standard STEP tier, on billing weight plus 100 g packaging rounded up to the next 500 g. Amazon prices standard-size weight handling as Regional or National only — there is no Local rate — so \"Local\" here is charged at the Regional rate. Premium and Advanced sellers pay a little less, Basic a little more."
           : null,
         gstReg
