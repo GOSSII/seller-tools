@@ -2258,6 +2258,128 @@ function renderPaymentProblem(msg, retryPlan){
   if(b) b.addEventListener("click",()=>{ b.disabled=true; b.textContent="Opening secure checkout…"; startCheckout(retryPlan,false); });
 }
 
+/* ============================================================
+   ACCOUNT: payment receipts + DPDP data export
+   ============================================================ */
+/* Who the receipt is from. Filling `gstin` prints it on the receipt and adds
+   the "includes GST" line — it deliberately does NOT turn this into a tax
+   invoice, because a compliant one needs the customer's place of supply to
+   split CGST+SGST vs IGST, and we don't collect that at checkout. */
+const BILLING_ENTITY={
+  name:"Seller Tools India",
+  legal:"a GOSSII Studio product",
+  address:"",
+  gstin:"",
+  gstRate:18,
+  email:"gossiistudio@gmail.com",
+};
+async function acReceipt(row,btn){
+  const msg=document.getElementById("ac-rcpt-msg");
+  const say=t=>{ if(msg) msg.textContent=t; };
+  if(!row){ say("That payment row is no longer available — reload the page."); return; }
+  const old=btn?btn.textContent:"";
+  if(btn){ btn.disabled=true; btn.textContent="…"; }
+  try{
+    await loadPdfLib();
+    const u=sessionUser()||{};
+    const A4W=595.28,A4H=841.89,L=48,R=A4W-48;
+    const doc=await PDFLib.PDFDocument.create();
+    const font=await doc.embedFont(PDFLib.StandardFonts.Helvetica);
+    const bold=await doc.embedFont(PDFLib.StandardFonts.HelveticaBold);
+    const pg=doc.addPage([A4W,A4H]);
+    const black=PDFLib.rgb(0,0,0), grey=PDFLib.rgb(0.42,0.42,0.42), line=PDFLib.rgb(0.78,0.78,0.78);
+    // StandardFonts are WinAnsi — the rupee glyph cannot be encoded.
+    const safe=s=>String(s??"").replace(/₹/g,"Rs ").replace(/[^\x20-\x7E]/g,"").trim();
+    const rs=p=>"Rs "+((p||0)/100).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
+    const at=(t,x,y,size,f,c)=>pg.drawText(safe(t),{x,y,size:size||10,font:f||font,color:c||black});
+    const right=(t,y,size,f,c)=>{const s=safe(t),fo=f||font,sz=size||10;pg.drawText(s,{x:R-fo.widthOfTextAtSize(s,sz),y,size:sz,font:fo,color:c||black});};
+    let y=A4H-60;
+    at("PAYMENT RECEIPT",L,y,17,bold); y-=12;
+    pg.drawLine({start:{x:L,y},end:{x:R,y},thickness:1,color:black}); y-=22;
+    const topY=y;
+    at(BILLING_ENTITY.name,L,y,12,bold); y-=13;
+    if(BILLING_ENTITY.legal){ at(BILLING_ENTITY.legal,L,y,9,font,grey); y-=12; }
+    if(BILLING_ENTITY.address){ at(BILLING_ENTITY.address,L,y,9); y-=12; }
+    if(BILLING_ENTITY.gstin){ at("GSTIN: "+BILLING_ENTITY.gstin,L,y,9,bold); y-=12; }
+    at(BILLING_ENTITY.email,L,y,9,font,grey); y-=12;
+    // Receipt meta, right-aligned against the same top line.
+    const pid=row.razorpay_payment_id||"";
+    let my=topY;
+    const meta=[["Receipt No.",pid?("STI-"+pid.replace(/^pay_/,"").slice(0,12).toUpperCase()):"—"],
+      ["Date",fmtDate(row.created_at)],["Payment ID",pid||"—"],["Method","Razorpay"]];
+    for(const [k,v] of meta){
+      const kv=safe(k+":");
+      pg.drawText(kv,{x:R-210,y:my,size:9,font,color:grey});
+      pg.drawText(safe(v).slice(0,26),{x:R-140,y:my,size:9,font:bold});
+      my-=13;
+    }
+    y=Math.min(y,my)-10;
+    pg.drawLine({start:{x:L,y},end:{x:R,y},thickness:0.7,color:line}); y-=20;
+    at("Billed to",L,y,9,bold,grey); y-=13;
+    at(userDisplayName(u),L,y,11,bold); y-=12;
+    at(u.email||"",L,y,9); y-=24;
+    // Line items.
+    const th=y;
+    at("Description",L+6,th-14,9,bold); right("Amount",th-14,9,bold);
+    pg.drawLine({start:{x:L,y:th-22},end:{x:R,y:th-22},thickness:0.8,color:black});
+    const plan=(row.plan||"").charAt(0).toUpperCase()+(row.plan||"").slice(1);
+    at(plan+" plan"+(row.period?" · "+row.period:"")+" — subscription",L+6,th-40,10);
+    right(rs(row.amount_paise),th-40,10);
+    pg.drawLine({start:{x:L,y:th-52},end:{x:R,y:th-52},thickness:0.5,color:line});
+    at("Total paid",L+6,th-70,11,bold); right(rs(row.amount_paise),th-70,12,bold);
+    pg.drawRectangle({x:L,y:th-80,width:R-L,height:80,borderColor:black,borderWidth:1});
+    y=th-104;
+    if(BILLING_ENTITY.gstin){
+      const rate=BILLING_ENTITY.gstRate||18;
+      const gst=(row.amount_paise||0)-Math.round((row.amount_paise||0)/(1+rate/100));
+      at("Amount includes GST @ "+rate+"% ("+rs(gst)+").",L,y,9,font,grey); y-=13;
+    }
+    at("Payment received in full. This is a computer-generated receipt and needs no signature.",L,y,9,font,grey); y-=13;
+    at("Questions about this payment? Email "+BILLING_ENTITY.email,L,y,9,font,grey);
+    const bytes=await doc.save();
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(new Blob([bytes],{type:"application/pdf"}));
+    a.download="receipt-"+(pid||fmtDate(row.created_at)).replace(/[^A-Za-z0-9_-]/g,"")+".pdf";
+    document.body.appendChild(a); a.click(); a.remove();
+    say("Receipt downloaded. It is generated on your device — nothing was sent anywhere.");
+  }catch(e){
+    try{console.error("Receipt:",e);}catch(_){}
+    say("Couldn't build the receipt"+(String(e).includes("load failed")?" — the PDF engine failed to load; check your connection.":". Please try again."));
+  }
+  if(btn){ btn.disabled=false; btn.textContent=old||"Receipt"; }
+}
+/* DPDP Act: a copy of everything we hold, assembled in the browser from the
+   rows the user can already read under RLS. */
+async function acExportData(btn){
+  const msg=document.getElementById("ac-export-msg");
+  const say=t=>{ if(msg) msg.textContent=t; };
+  const old=btn?btn.textContent:"";
+  if(btn){ btn.disabled=true; btn.textContent="Collecting…"; }
+  try{
+    const u=sessionUser()||{};
+    const c=await sb();
+    const grab=async(table,cols)=>{ try{ const {data}=await c.from(table).select(cols); return data||[]; }catch(e){ return []; } };
+    const [profile,payments,subs,devices,events]=await Promise.all([
+      grab("profiles","plan,expires_at,device_limit,created_at"),
+      grab("payments","created_at,plan,period,amount_paise,razorpay_payment_id,status"),
+      grab("subscriptions","created_at,plan,period,status,current_end"),
+      grab("devices","label,first_seen,last_seen"),
+      grab("login_events","created_at,ip,user_agent,kicked_previous"),
+    ]);
+    const out={exported_at:new Date().toISOString(),
+      account:{email:u.email||"",name:userDisplayName(u),user_id:u.id||""},
+      profile,payments,subscriptions:subs,devices,login_events:events,
+      note:"Exported from Seller Tools India in your browser. Uploaded reports are never stored on our servers, so they cannot appear here."};
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(new Blob([JSON.stringify(out,null,2)],{type:"application/json"}));
+    a.download="seller-tools-india-my-data.json";
+    document.body.appendChild(a); a.click(); a.remove();
+    say("Downloaded "+(payments.length+devices.length+events.length)+" record(s) across profile, payments, devices and login history.");
+  }catch(e){
+    say("Couldn't build the export right now — please try again, or email us and we'll send it.");
+  }
+  if(btn){ btn.disabled=false; btn.textContent=old||"⬇ Download my data"; }
+}
 function renderAccount(){
   if(!sessionUser()){location.hash="#/login";return;}
   setMeta("Account — Seller Tools India","Your Seller Tools India account and plan.");
@@ -2268,6 +2390,7 @@ function renderAccount(){
       <div><h2>Your account</h2><p class="lede" style="margin:4px 0 0;font-size:14px">Welcome back, ${esc(userDisplayName(u0))}.</p></div>
       <button type="button" class="lp-btn sec" id="ac-logout">Logout</button>
     </div>
+    <div id="ac-expiry"></div>
     <div class="stats" style="margin:18px 0">
       <div class="stat blue"><div class="k">Current plan</div><div class="v" id="ac-plan"><span class="plan-badge free">Free</span></div></div>
       <div class="stat"><div class="k">Plan expires</div><div class="v" id="ac-exp" style="font-size:16px">—</div></div>
@@ -2307,8 +2430,19 @@ function renderAccount(){
       </div>
     </div>
     <div class="card acct-card" id="ac-activity" style="margin-top:16px"></div>
+    <div class="card acct-card" style="margin-top:16px">
+      <h3>Your data</h3>
+      <p class="sa-sub" style="margin:0 0 12px">Under India's DPDP Act you can take a copy of the personal data we hold about you at any time. This downloads everything on your account — profile, payments, devices and login history — as a JSON file, straight from your browser.</p>
+      <button type="button" class="lp-btn sec" id="ac-export">⬇ Download my data</button>
+      <div class="note" id="ac-export-msg" style="margin-top:10px"></div>
+      <p class="sa-sub" style="margin:14px 0 0">Want your account deleted? Email <a href="mailto:gossiistudio@gmail.com?subject=Delete%20my%20account">gossiistudio@gmail.com</a> from this address and we'll erase it.</p>
+    </div>
   </div>`;
   const msg=document.getElementById("ac-msg");
+  {
+    const ex=document.getElementById("ac-export");
+    if(ex) ex.addEventListener("click",()=>acExportData(ex));
+  }
   document.getElementById("ac-logout").addEventListener("click",doLogout);
   document.getElementById("ac-save").addEventListener("click",async()=>{
     const name=document.getElementById("ac-name").value.trim();
@@ -2339,6 +2473,19 @@ function renderAccount(){
         } else ex.textContent="—";
       }
       if(rn) rn.textContent=ent.plan==="free"?"Upgrade":"Renew / change plan";
+      // Expiry is easy to miss as a date in a tile — say it loudly once the
+      // plan is nearly up, and louder still once it has lapsed.
+      const warn=document.getElementById("ac-expiry");
+      if(warn&&ent.plan!=="free"&&ent.expires_at){
+        const dl=daysLeft(ent.expires_at);
+        // daysLeft() clamps at 0 for the "days left" tile, so ask the date
+        // itself whether the plan has actually lapsed.
+        const expMs=new Date(ent.expires_at).getTime();
+        if(isFinite(expMs)&&expMs<=Date.now())
+          warn.innerHTML=`<div class="banner warn" style="margin:0 0 4px">Your ${esc(ent.plan)} plan expired on <b>${esc(fmtDate(ent.expires_at))}</b> — the paid reports are locked until you renew. <a href="#/pricing">Renew now</a>.</div>`;
+        else if(dl!=null&&dl<=7)
+          warn.innerHTML=`<div class="banner warn" style="margin:0 0 4px">Your ${esc(ent.plan)} plan ends in <b>${dl===0?"less than a day":dl+" day"+(dl===1?"":"s")}</b> (${esc(fmtDate(ent.expires_at))}). <a href="#/pricing">Renew now</a> so your reports don't stop mid-month.</div>`;
+      }
     }catch(e){}
   })();
   /* Auto-renewal status + cancel (reads own subscriptions rows via RLS). */
@@ -2402,14 +2549,19 @@ function renderAccount(){
       if(!rows.length){ host.innerHTML=""; return; }
       host.innerHTML=`<h4 class="acct-h4">Payment history</h4>
         <div class="pay-wrap"><table class="pay-table">
-          <thead><tr><th>Date</th><th>Plan</th><th>Amount</th><th>Payment ID</th></tr></thead>
-          <tbody>${rows.map(r=>`<tr>
+          <thead><tr><th>Date</th><th>Plan</th><th>Amount</th><th>Payment ID</th><th></th></tr></thead>
+          <tbody>${rows.map((r,i)=>`<tr>
             <td>${esc(fmtDate(r.created_at))}</td>
             <td>${esc((r.plan||"").charAt(0).toUpperCase()+(r.plan||"").slice(1))}${r.period?` · ${esc(r.period)}`:""}</td>
             <td>${esc(inrPaise(r.amount_paise))}</td>
             <td class="pid">${esc(r.razorpay_payment_id||"—")}</td>
+            <td><button type="button" class="fbtn" data-receipt="${i}">Receipt</button></td>
           </tr>`).join("")}</tbody>
-        </table></div>`;
+        </table></div>
+        <div class="note" id="ac-rcpt-msg" style="margin-top:8px"></div>`;
+      host.querySelectorAll("[data-receipt]").forEach(b=>b.addEventListener("click",()=>{
+        acReceipt(rows[Number(b.dataset.receipt)],b);
+      }));
     }catch(e){ host.innerHTML=""; }
   })();
   /* Login activity + known devices, and "Log out everywhere". */
