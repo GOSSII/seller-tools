@@ -49,6 +49,17 @@ module.exports = async (req, res) => {
   try {
     if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' });
 
+    // Razorpay only accepts recurring payments once Subscriptions is
+    // activated on the account. The Plan/Subscription API calls below
+    // succeed regardless, so without this gate Checkout is the first thing
+    // to notice and shows the buyer "merchant is not supporting recurring
+    // payment". Refusing here instead makes the client fall back to the
+    // one-time order silently. Set SUBSCRIPTIONS_ENABLED=1 in Vercel once
+    // Razorpay has approved Subscriptions on the account.
+    if (!/^(1|true|yes)$/i.test(String(process.env.SUBSCRIPTIONS_ENABLED || ''))) {
+      return res.status(503).json({ error: 'subscriptions_disabled' });
+    }
+
     const token = bearer(req);
     if (!token) return res.status(401).json({ error: 'auth_required' });
 
