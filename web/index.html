@@ -3151,6 +3151,93 @@ function parseSettlement(text,opts={}){
   });
   return {summary,records,errors,header,unmappedColumns:unmapped,missingColumns};
 }
+/* ============================================================
+   MONTHLY / CUSTOM UNIFIED TRANSACTION REPORT
+   Payments -> Reports Repository. A different shape from the
+   settlement flat file: a definitions preamble, then ONE row per
+   transaction with a column per amount (rather than one row per
+   amount line). Converted here into exactly the record shape
+   parseSettlement returns, so every downstream check, bucket and
+   chart works unchanged. Returns null if the text isn't this
+   report, so callers can fall through to the other parsers.
+   ============================================================ */
+const UT_MONTHS={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+/* "30 Apr 2026 9:10:58 pm UTC" -> "2026-04-30" (what saParseDate expects). */
+function utDate(s){
+  const m=String(s||"").trim().match(/^(\d{1,2})\s+([A-Za-z]{3})[A-Za-z]*\.?\s+(\d{4})/);
+  if(!m) return "";
+  const mo=UT_MONTHS[m[2].toLowerCase()];
+  return mo?`${m[3]}-${String(mo).padStart(2,"0")}-${m[1].padStart(2,"0")}`:"";
+}
+function parseUnifiedTransaction(text){
+  const lines=String(text||"").replace(/^﻿/,"").split(/\r\n|\r|\n/);
+  // The real header sits below Amazon's definitions preamble.
+  let hln=-1;
+  for(let i=0;i<lines.length&&i<80;i++){
+    const l=lines[i].toLowerCase();
+    if(l.indexOf("date/time")!==-1&&l.indexOf("settlement id")!==-1&&l.indexOf("order id")!==-1&&l.indexOf("total")!==-1){hln=i;break;}
+  }
+  if(hln===-1) return null;
+  const header=saSplit(lines[hln],",").map(h=>h.replace(/^﻿/,"").trim());
+  const norm=header.map(h=>h.toLowerCase().replace(/\s+/g," ").trim());
+  const at=n=>norm.indexOf(n);
+  const like=re=>norm.findIndex(h=>re.test(h));
+  const I={date:at("date/time"),settle:at("settlement id"),type:at("type"),order:at("order id"),
+    sku:at("sku"),desc:at("description"),qty:at("quantity"),market:at("marketplace"),
+    fulfil:at("fulfillment"),sales:at("product sales"),ship:at("shipping credits"),
+    gift:at("gift wrap credits"),promo:at("promotional rebates"),gst:like(/^total sales tax liable/),
+    tcsC:at("tcs-cgst"),tcsS:at("tcs-sgst"),tcsI:at("tcs-igst"),tds:like(/^tds/),
+    selling:at("selling fees"),fba:at("fba fees"),otherFee:at("other transaction fees"),
+    other:at("other"),total:at("total")};
+  if(I.type===-1||I.total===-1||I.sales===-1) return null;
+  const errors=[],records=[];
+  const cell=(f,i)=>i>=0&&i<f.length?String(f[i]||"").trim():"";
+  const money=(f,i)=>{const v=parseFloat(cell(f,i).replace(/,/g,"").replace(/[^0-9.\-]/g,""));return isFinite(v)?v:0;};
+  for(let i=hln+1;i<lines.length;i++){
+    const raw=lines[i]; if(raw.trim()==="") continue;
+    const f=saSplit(raw,",");
+    if(f.length<header.length){errors.push({line:i+1,reason:`Expected ${header.length} columns, got ${f.length}`,raw});continue;}
+    const type=cell(f,I.type)||"Other";
+    // Transfers are payouts to the bank, not transactions against an order —
+    // the flat file leaves them out of records too.
+    if(/^transfer$/i.test(type)) continue;
+    const desc=cell(f,I.desc);
+    const amounts=[];
+    const add=(label,v)=>{ if(Math.abs(v)>0.0001) amounts.push({amountType:type,amountDescription:label,amount:v}); };
+    const principal=money(f,I.sales);
+    // Labels chosen so saBucketOf() files each amount in the right bucket.
+    add("Principal",principal);
+    add("Shipping",money(f,I.ship));
+    add("GiftWrap",money(f,I.gift));
+    add("Promotion Rebate",money(f,I.promo));
+    add("Product Tax",money(f,I.gst));
+    add("TCS-CGST",money(f,I.tcsC));
+    add("TCS-SGST",money(f,I.tcsS));
+    add("TCS-IGST",money(f,I.tcsI));
+    add("TDS (Section 194-O)",money(f,I.tds));
+    add("Commission",money(f,I.selling));
+    add("FBA Fees",money(f,I.fba));
+    add(desc||"Other transaction fee",money(f,I.otherFee));
+    add(desc||"Other",money(f,I.other));
+    if(!amounts.length) continue;
+    const ful=cell(f,I.fulfil).toLowerCase();
+    const qty=parseInt(cell(f,I.qty).replace(/,/g,""),10);
+    const rec={settlementId:cell(f,I.settle),transactionType:type,orderId:cell(f,I.order),
+      sku:cell(f,I.sku),quantity:Number.isFinite(qty)?qty:0,
+      marketplaceName:cell(f,I.market),
+      fulfillmentId:ful.indexOf("merchant")===0||ful.indexOf("seller")===0?"MFN":(ful.indexOf("amazon")===0?"AFN":""),
+      postedDate:utDate(cell(f,I.date)),orderItemCode:"",shipmentId:"",adjustmentId:"",promotionId:"",
+      principal:0,amounts,fees:[],feeMap:{}};
+    for(const l of amounts){
+      if(/^principal$/i.test(l.amountDescription)) rec.principal+=l.amount;
+      else{ rec.fees.push(l); const d=l.amountDescription||l.amountType||"(unlabelled)"; rec.feeMap[d]=(rec.feeMap[d]??0)+l.amount; }
+    }
+    records.push(rec);
+  }
+  if(!records.length) return null;
+  return {summary:null,records,errors,header,unmappedColumns:[],missingColumns:[],source:"unified"};
+}
+window.parseUnifiedTransaction=parseUnifiedTransaction;
 window.parseSettlement=parseSettlement; // exposed for verification/debugging
 
 /* ---- analyzer UI ---- */
@@ -3924,7 +4011,9 @@ function recAddFiles(list){
       const text=String(rd.result);
       recFiles=recFiles.filter(x=>x.name!==f.name); // re-drop replaces
       const mtr=parseMtr(text);
+      const ut=mtr?null:parseUnifiedTransaction(text);
       if(mtr){ recFiles.push({name:f.name,kind:"mtr",rows:mtr.rows,errors:mtr.errors}); }
+      else if(ut){ recFiles.push({name:f.name,kind:"settlement",parsed:ut}); }
       else{
         const p=parseSettlement(text);
         if(p.records.length||p.summary){
@@ -3943,7 +4032,9 @@ function recAddFiles(list){
 function recRenderResults(){
   const out=document.getElementById("rec-out"); if(!out) return;
   const kindLabel={settlement:"Settlement",mtr:"MTR",error:"Skipped"};
-  let h=`<div class="rec-files">${recFiles.map((f,i)=>`<span class="rec-file"${f.kind==="error"?` title="${esc(f.msg)}"`:""}><b>${esc(f.name)}</b><span class="rf-kind">${f.kind==="error"?"⚠ "+kindLabel[f.kind]:kindLabel[f.kind]}</span><button type="button" data-rm="${i}" aria-label="Remove ${esc(f.name)}">✕</button></span>`).join("")}</div>`;
+  const kindOf=f=>f.kind==="error"?"⚠ "+kindLabel.error
+    :f.kind==="settlement"&&f.parsed&&f.parsed.source==="unified"?"Unified txn":kindLabel[f.kind];
+  let h=`<div class="rec-files">${recFiles.map((f,i)=>`<span class="rec-file"${f.kind==="error"?` title="${esc(f.msg)}"`:""}><b>${esc(f.name)}</b><span class="rf-kind">${kindOf(f)}</span><button type="button" data-rm="${i}" aria-label="Remove ${esc(f.name)}">✕</button></span>`).join("")}</div>`;
   const bad=recFiles.filter(f=>f.kind==="error");
   if(bad.length) h+=`<div class="banner warn">${bad.map(f=>`<b>${esc(f.name)}</b>: ${esc(f.msg)}`).join("<br>")}</div>`;
   const settlements=recFiles.filter(f=>f.kind==="settlement").map(f=>f.parsed);
@@ -4122,7 +4213,8 @@ function trAddFiles(list){
   files.forEach(f=>{
     const rd=new FileReader();
     rd.onload=()=>{
-      const p=parseSettlement(String(rd.result));
+      const txt=String(rd.result);
+      const p=parseUnifiedTransaction(txt)||parseSettlement(txt);
       trFiles=trFiles.filter(x=>x.name!==f.name); // re-drop replaces
       if(p.records.length||p.summary){
         const dup=p.summary&&trFiles.some(x=>x.kind==="settlement"&&x.parsed.summary&&x.parsed.summary.settlementId===p.summary.settlementId);
