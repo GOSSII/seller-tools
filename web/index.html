@@ -757,15 +757,50 @@ function closingFee(p,ful,cat){
   }
   return t[t.length-1];
 }
-function shipFee(p,ful,zone,kg){
+function shipFee(p,ful,zone,kg,tier){
   if(ful==='self') return 0;
+  if(ful==='fba') return fbaWeightHandling(kg,zone,tier||FBA_STEP_DEFAULT);
+  // Easy Ship still uses the older slab table — not yet re-verified against
+  // the current schedule, unlike the FBA figures above.
   const s = SLABS.find(x=>kg<=x.max) || SLABS[SLABS.length-1];
-  let f;
-  if(ful==='easyship'){ f = zone==='national'?s.esN:s.esL; if(p<300) f=Math.max(0,f-10); }
-  else { f = zone==='national'?s.fbN:s.fbL; }
+  let f = zone==='national'?s.esN:s.esL;
+  if(p<300) f=Math.max(0,f-10);
   return f;
 }
-const pickPack = kg => kg<=.5?14 : kg<=1?20 : kg<=3?26 : kg<=5?38 : 50;
+/* FBA fulfilment, Amazon.in "Fulfilment fees" schedule (G200651740).
+   Pick & pack is flat across STEP levels; weight handling depends on the
+   seller's STEP tier and on Regional vs National — note there is NO Local
+   rate for standard-size weight handling, only pick & pack is zone-free. */
+const FBA_STEP_DEFAULT="standard";
+const FBA_WH={
+  premium :{r:[37,52,76], n:[63,83,120]},
+  standard:{r:[39,54,78], n:[65,85,122]},
+  basic   :{r:[42,58,82], n:[69,89,126]},
+};
+const FBA_WH_ADD={r:{after2:24,after5:13}, n:{after2:34,after5:18}};
+/* Shipping weight = billing weight + 100 g standard packaging, rounded up to
+   the next 500 g slab. Billing weight is the greater of actual and volumetric
+   (L x W x H / 5000), so callers pass whichever is larger. */
+const fbaShipWeight = kg => Math.ceil((Math.max(0,kg)+0.1)*2)/2;
+const pickPack = kg => {
+  const w=Math.min(fbaShipWeight(kg),20);
+  if(w<=1) return 17;
+  let f=17+Math.ceil(w-1)*5;                       // each additional kg to 5 kg
+  if(w>5) f+=Math.ceil((w-5)/5)*2;                 // each additional 5 kg after 5 kg
+  return f;
+};
+function fbaWeightHandling(kg,zone,tier){
+  const t=FBA_WH[tier]||FBA_WH[FBA_STEP_DEFAULT];
+  const k=zone==="national"?"n":"r";
+  const col=t[k], add=FBA_WH_ADD[k];
+  const w=fbaShipWeight(kg);
+  if(w<=0.5) return col[0];
+  if(w<=1)   return col[1];
+  if(w<=2)   return col[2];
+  let f=col[2]+Math.ceil(Math.min(w,5)-2)*add.after2;
+  if(w>5) f+=Math.ceil(w-5)*add.after5;
+  return f;
+}
 
 /* ---- formatters ---- */
 const inr  = n => {n=isFinite(n)?n:0; return (n<0?"-":"")+"₹"+Math.abs(n).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});};
@@ -867,6 +902,9 @@ const CALCS = [
         cat.verified
           ? `Referral rate from Amazon's "${cat.amzCat}" fee category (schedule effective 10 June 2026). Amazon publishes 193 categories — check yours in Seller Central if your product sits elsewhere.`
           : `Referral rate for this category is not yet confirmed against Amazon's 10 June 2026 schedule. The 0% band below ₹1,000 is verified; the rate above ₹1,000 is our earlier estimate.`,
+        v.ful==="fba"
+          ? "FBA fulfilment uses Amazon's published fee table for a Standard STEP tier, on billing weight plus 100 g packaging rounded up to the next 500 g. Amazon prices standard-size weight handling as Regional or National only — there is no Local rate — so \"Local\" here is charged at the Regional rate. Premium and Advanced sellers pay a little less, Basic a little more."
+          : null,
         gstReg
           ? "The 18% GST Amazon charges on its fees is claimable back as input tax credit (ITC) in your GST return, so it isn't a true cost for registered sellers."
           : null,
