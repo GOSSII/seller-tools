@@ -1396,6 +1396,8 @@ const HELP={
     steps:["Drop the settlement file.","Read TCS (match against GSTR-2A), TDS under section 194-O, and the GST on Amazon fees claimable as input tax credit.","Hand the numbers to your accountant at filing time."]},
   "sku-report":{input:`Same file: <b>Payments → All Statements → Download Flat File V2</b>.`,
     steps:["Drop the settlement file.","Sort by Net to see which products actually make money after fees, taxes and refunds.","Sort by Refund % to spot problem products. Units ÷ days gives the daily sales rate for the Restock Planner."]},
+  "ad-profit":{input:`Two files. <b>Payments → All Statements → Flat File V2</b> (or a Monthly Unified Transaction report) for what each SKU actually earned — and, from the <b>Advertising console → Sponsored Ads → Reports</b>, a <b>Sponsored Products “Advertised product”</b> report for the same period, which is the only place ad spend is broken down per SKU.`,
+    steps:["Drop the settlement (or unified transaction) file, and the advertised-product report for the same dates.","Fill in product costs for your main SKUs — without them the table shows payout, not profit.","Read the “ads turn profit into loss” list first: those SKUs earn money until the advertising is counted.","Compare each SKU's ACOS against its break-even ACOS — anything above it is being advertised at a loss."]},
   "reconcile":{input:`Settlement file(s): <b>Payments → All Statements → Download Flat File V2</b> — drop every statement for the period you're checking. Optional but recommended: the matching MTR — <b>Reports → Tax Document Library → Merchant Tax Reports → B2C</b> (.csv) — so shipped-but-unpaid orders can be caught too.`,
     steps:["Drop your settlement file(s), and the MTR for the same months if you have it.","Work through each issue list — every row shows the order, the amount at stake and the exact Seller Central path to claim it.","Tick rows off as you raise them (ticks are saved in your browser), and export the checklist as CSV to track claims."]},
   "fnsku-labels":{input:`Your FNSKU (starts with X0) is in <b>Inventory → FBA Inventory</b> — the FNSKU column — or on the <b>Print item labels</b> page (<b>Manage Inventory</b> → tick your FBA listings → <b>Print item labels</b>). Copy it from either place; the product name can be anything your packers will recognise.`,
@@ -2095,6 +2097,10 @@ const PW_MOCKS={
     <div class="row"><span>MUG-CERAMIC</span><b class="amt pos">+₹63/u</b></div>
     <div class="row"><span>CABLE-USB-C</span><b class="amt neg">−₹11/u</b></div>
     <div class="row"><span>Net after fees</span><b class="big">per SKU</b></div>`,
+  adprofit:`<div class="row"><span>KURTA-RED-M · after ads</span><b class="amt pos">+₹96/u</b></div>
+    <div class="row"><span>MUG-CERAMIC · after ads</span><b class="amt neg">−₹34/u</b></div>
+    <div class="row"><span>Ad spend eating profit</span><b class="amt neg">−₹18,420</b></div>
+    <div class="row"><span>SKUs ads turn to a loss</span><b class="big">7</b></div>`,
   reconcile:`<div class="row"><span>Referral fee not returned</span><b class="amt pos">+₹1,242</b></div>
     <div class="row"><span>SAFE-T-eligible refunds</span><b class="amt pos">+₹3,940</b></div>
     <div class="row"><span>Shipped but not paid</span><b class="amt pos">+₹2,118</b></div>
@@ -2124,6 +2130,11 @@ const REC_INFO={route:"reconcile",title:"Reconciliation & SAFE-T Finder",plan:"P
   desc:"Find money Amazon may owe you — and exactly how to claim it.",
   feats:["Refunds where your referral fee wasn't returned","SAFE-T-eligible refunds within the 60-day window","Shipments with no payment line, loss-making orders","Step-by-step claim paths + CSV checklist export"],
   mock:PW_MOCKS.reconcile};
+const ADP_INFO={route:"ad-profit",title:"Ad Profitability by SKU",plan:"Pro",needPro:true,
+  price:"₹499/month — unlock with Pro",priceAlt:"or ₹2,499/year (save ~58%)",
+  desc:"Advertising is usually the biggest line in an Amazon P&L, and the one report Amazon never gives you is whether it pays.",
+  feats:["True ACOS per SKU — ad spend against that SKU's real payout","Which SKUs are only profitable until the ads are counted","Break-even ACOS per SKU, from your own margins","Product costs included, so it's profit and not just payout"],
+  mock:PW_MOCKS.adprofit};
 const TREND_INFO={route:"trends",title:"Multi-Month Trends",plan:"Pro",needPro:true,
   price:"₹499/month — unlock with Pro",priceAlt:"or ₹2,499/year (save ~58%)",
   desc:"Drop several settlement files and see your business month by month.",
@@ -2760,6 +2771,7 @@ function renderHome(){
       <div class="grid" style="padding:14px 0 8px">
         <a class="tile" href="#/sku-report"><span class="pill">Pro</span><div class="ico">⚡</div><h3>SKU P&amp;L with your costs</h3><p>Add product costs, see true P&amp;L per SKU and loss-makers flagged.</p></a>
         <a class="tile" href="#/reconcile"><span class="pill">Pro</span><div class="ico">🕵️</div><h3>Reconciliation &amp; SAFE-T Finder</h3><p>Cross-check settlements and your MTR to find missing referral-fee credits, SAFE-T-eligible refunds and unpaid shipments — with claim steps.</p></a>
+        <a class="tile" href="#/ad-profit"><span class="pill">Pro</span><div class="ico">📉</div><h3>Ad Profitability by SKU</h3><p>True ACOS per SKU — and which products only make money until the ads are paid for.</p></a>
         <a class="tile" href="#/trends"><span class="pill">Pro</span><div class="ico">📈</div><h3>Multi-Month Trends</h3><p>Sales, fees %, refund rate and net payout month by month — overall and per SKU.</p></a>
       </div>
 
@@ -6379,6 +6391,282 @@ async function gstinvGenerate(){
   if(btn) btn.disabled=false;
 }
 
+/* ============================================================
+   AD PROFITABILITY BY SKU (Pro)
+   Advertising is normally the largest line in an Amazon P&L, but
+   the settlement and transaction reports carry it as a single
+   unattributed "Cost of Advertising" service fee — no order, no
+   SKU. The only per-SKU breakdown lives in the Advertising
+   console's Sponsored Products "Advertised product" report, so
+   this tool joins the two on SKU and answers the question neither
+   file answers alone: after fees, refunds, product cost AND ads,
+   which SKUs actually make money? Everything stays local.
+   ============================================================ */
+let adpFiles=[], adpSort="damage";
+const ADP_SKU_ALIASES=["advertised sku","seller sku","sku"];
+const ADP_ASIN_ALIASES=["advertised asin","asin"];
+const ADP_SPEND_ALIASES=["spend","total spend","cost","spend(inr)","spend (inr)"];
+const ADP_SALES_ALIASES=["7 day total sales","14 day total sales","30 day total sales",
+  "7 day total sales (inr)","total sales","sales","attributed sales"];
+const ADP_ORDER_ALIASES=["7 day total orders (#)","14 day total orders (#)","30 day total orders (#)",
+  "7 day total orders","total orders","orders"];
+function adpNorm(h){return String(h||"").toLowerCase().replace(/[₹"]/g,"").replace(/\s+/g," ").trim();}
+function adpFind(norm,aliases){
+  for(const a of aliases){ const i=norm.indexOf(a); if(i!==-1) return i; }
+  return -1;
+}
+/* Sponsored Products "Advertised product" report (CSV export). Tolerant about
+   column names because Amazon renames the attribution window periodically.
+   Returns null when it isn't an ad report, so other parsers get a turn. */
+function parseAdReport(text){
+  const lines=String(text||"").replace(/^﻿/,"").split(/\r\n|\r|\n/);
+  let hln=-1,delim=",",norm=null;
+  for(let i=0;i<lines.length&&i<30;i++){
+    if(!lines[i].trim()) continue;
+    const d=lines[i].includes("\t")?"\t":",";
+    const n=saSplit(lines[i],d).map(adpNorm);
+    if(adpFind(n,ADP_SPEND_ALIASES)!==-1&&(adpFind(n,ADP_SKU_ALIASES)!==-1||adpFind(n,ADP_ASIN_ALIASES)!==-1)){
+      hln=i;delim=d;norm=n;break;
+    }
+  }
+  if(hln===-1) return null;
+  const I={sku:adpFind(norm,ADP_SKU_ALIASES),asin:adpFind(norm,ADP_ASIN_ALIASES),
+    spend:adpFind(norm,ADP_SPEND_ALIASES),sales:adpFind(norm,ADP_SALES_ALIASES),
+    orders:adpFind(norm,ADP_ORDER_ALIASES),clicks:adpFind(norm,["clicks"]),
+    impressions:adpFind(norm,["impressions"])};
+  const cell=(f,i)=>i>=0&&i<f.length?String(f[i]||"").trim():"";
+  const money=(f,i)=>{const v=parseFloat(cell(f,i).replace(/,/g,"").replace(/[^0-9.\-]/g,""));return isFinite(v)?v:0;};
+  const bySku=new Map(); let rows=0,noKey=0;
+  for(let i=hln+1;i<lines.length;i++){
+    if(!lines[i].trim()) continue;
+    const f=saSplit(lines[i],delim);
+    if(f.length<3) continue;
+    const key=cell(f,I.sku)||cell(f,I.asin);
+    if(!key){noKey++;continue;}
+    rows++;
+    const e=bySku.get(key)||{key,spend:0,adSales:0,adOrders:0,clicks:0,impressions:0};
+    e.spend+=Math.abs(money(f,I.spend));
+    e.adSales+=Math.abs(money(f,I.sales));
+    e.adOrders+=Math.abs(money(f,I.orders));
+    e.clicks+=Math.abs(money(f,I.clicks));
+    e.impressions+=Math.abs(money(f,I.impressions));
+    bySku.set(key,e);
+  }
+  if(!bySku.size) return null;
+  return {bySku,rows,noKey,hasAsinOnly:I.sku===-1};
+}
+/* Ad spend the settlement/transaction file knows about but cannot attribute. */
+function adpSpendFromSettlement(records){
+  let total=0,rows=0;
+  for(const rec of records||[]){
+    let hit=0;
+    for(const l of rec.amounts||[]){
+      if(/advertis/i.test(l.amountDescription||"")||/advertis/i.test(l.amountType||"")) hit+=Math.abs(l.amount);
+    }
+    // One charge can arrive split across several amount columns — count the
+    // transaction once, not once per column.
+    if(hit>0){ total+=hit; rows++; }
+  }
+  return {total,rows};
+}
+function renderAdProfit(){
+  setMeta("Ad Profitability by SKU — Seller Tools India",
+    "Join your Amazon settlement with the Sponsored Products advertised-product report to see true ACOS, break-even ACOS and which SKUs only make money until the ads are counted.");
+  backBtn.hidden=false;
+  gatePremium(ADP_INFO, adpBody);
+}
+function adpBody(){
+  app.innerHTML=`
+    <div class="wrap page">
+      <h2>Ad Profitability by SKU</h2>
+      <p class="lede">Your settlement says what each SKU earned. Your advertising report says what each SKU cost to promote. Neither file answers the only question that matters — <b>which SKUs still make money once the ads are paid for</b> — so this one joins them.</p>
+      ${helpHtml("ad-profit")}
+      <label class="sa-drop" id="adp-drop">
+        <div class="ico">📉</div>
+        <h3>Drop your settlement + advertising report</h3>
+        <p>or click to choose — several files at once is fine (.csv or .txt)</p>
+        <input type="file" id="adp-file" multiple accept=".csv,.txt,text/plain,text/csv">
+      </label>
+      <div class="sa-priv">🔒 Private by design — both files are read in your browser and never uploaded.</div>
+      <div id="adp-out"></div>
+    </div>`;
+  const drop=document.getElementById("adp-drop"),file=document.getElementById("adp-file");
+  ["dragenter","dragover"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add("over");}));
+  ["dragleave","drop"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove("over");}));
+  drop.addEventListener("drop",ev=>adpAddFiles(ev.dataTransfer.files));
+  file.addEventListener("change",()=>{adpAddFiles(file.files);file.value="";});
+  if(adpFiles.length) adpRender();
+}
+function adpAddFiles(list){
+  const files=[...(list||[])]; if(!files.length) return;
+  let pending=files.length;
+  files.forEach(f=>{
+    const rd=new FileReader();
+    rd.onload=()=>{
+      const text=String(rd.result);
+      adpFiles=adpFiles.filter(x=>x.name!==f.name); // re-drop replaces
+      const ad=parseAdReport(text);
+      if(ad){ adpFiles.push({name:f.name,kind:"ads",ad}); }
+      else{
+        const p=parseUnifiedTransaction(text)||parseSettlement(text);
+        if(p&&(p.records.length||p.summary)) adpFiles.push({name:f.name,kind:"settlement",parsed:p});
+        else adpFiles.push({name:f.name,kind:"error",msg:"not recognised as a settlement, unified transaction or advertised-product report"});
+      }
+      if(--pending===0) adpRender();
+    };
+    rd.onerror=()=>{adpFiles.push({name:f.name,kind:"error",msg:"could not read the file"});if(--pending===0)adpRender();};
+    rd.readAsText(f);
+  });
+}
+function adpCompute(){
+  const settle=adpFiles.filter(f=>f.kind==="settlement").map(f=>f.parsed);
+  const records=settle.flatMap(p=>p.records);
+  const rows=records.length?skuCompute({records}):[];
+  const costs=loadSkuCosts();
+  const ads=new Map();
+  let adRows=0,adNoKey=0,asinOnly=false;
+  for(const f of adpFiles.filter(x=>x.kind==="ads")){
+    adRows+=f.ad.rows; adNoKey+=f.ad.noKey; asinOnly=asinOnly||f.ad.hasAsinOnly;
+    for(const [k,v] of f.ad.bySku){
+      const e=ads.get(k)||{key:k,spend:0,adSales:0,adOrders:0,clicks:0,impressions:0};
+      e.spend+=v.spend; e.adSales+=v.adSales; e.adOrders+=v.adOrders;
+      e.clicks+=v.clicks; e.impressions+=v.impressions;
+      ads.set(k,e);
+    }
+  }
+  const seen=new Set();
+  const out=rows.map(s=>{
+    const a=ads.get(s.sku);
+    if(a) seen.add(s.sku);
+    const spend=a?a.spend:0;
+    const cost=Number(costs[s.sku])||0;
+    const cogs=cost*(s.units||0);
+    const payout=s.net;                    // after Amazon fees, taxes and refunds
+    const afterAds=payout-spend;
+    const profit=afterAds-cogs;            // only meaningful once a cost is set
+    const beforeAdsProfit=payout-cogs;
+    const sales=s.sales||0;
+    return {sku:s.sku,units:s.units,orders:s.orders,sales,payout,spend,afterAds,
+      cost,cogs,profit,beforeAdsProfit,hasCost:cost>0,
+      adSales:a?a.adSales:0,adOrders:a?a.adOrders:0,clicks:a?a.clicks:0,
+      acos:a&&a.adSales>0?spend/a.adSales*100:null,
+      tacos:sales>0?spend/sales*100:null,
+      // Break-even ACOS: the share of a sale you can spend on ads before the
+      // SKU stops making money. Uses profit when a cost is known.
+      breakEven:(cost>0&&sales>0)?beforeAdsProfit/sales*100:null,
+      flips:(cost>0?beforeAdsProfit>0&&profit<=0:payout>0&&afterAds<=0),
+      matched:!!a};
+  });
+  // Ad spend on SKUs that never appear in the settlement (no sales at all).
+  const orphans=[...ads.values()].filter(a=>!seen.has(a.key))
+    .map(a=>({sku:a.key,units:0,orders:0,sales:0,payout:0,spend:a.spend,afterAds:-a.spend,
+      cost:0,cogs:0,profit:-a.spend,beforeAdsProfit:0,hasCost:false,
+      adSales:a.adSales,adOrders:a.adOrders,clicks:a.clicks,
+      acos:a.adSales>0?a.spend/a.adSales*100:null,tacos:null,breakEven:null,
+      flips:false,matched:false,orphan:true}));
+  const all=out.concat(orphans);
+  const totals=all.reduce((t,r)=>{
+    t.sales+=r.sales; t.payout+=r.payout; t.spend+=r.spend; t.cogs+=r.cogs;
+    t.afterAds+=r.afterAds; t.profit+=r.profit; t.units+=r.units;
+    if(r.flips){ t.flipCount++; t.flipLoss+=Math.abs(r.hasCost?r.profit:r.afterAds); }
+    return t;
+  },{sales:0,payout:0,spend:0,cogs:0,afterAds:0,profit:0,units:0,flipCount:0,flipLoss:0});
+  const unattributed=adpSpendFromSettlement(records);
+  return {rows:all,totals,haveAds:ads.size>0,adRows,adNoKey,asinOnly,unattributed,
+    costed:all.filter(r=>r.hasCost).length,settlementCount:settle.length};
+}
+function adpRender(){
+  const out=document.getElementById("adp-out"); if(!out) return;
+  const label={settlement:"Settlement",ads:"Ad report",error:"Skipped"};
+  let h=`<div class="rec-files">${adpFiles.map((f,i)=>`<span class="rec-file"${f.kind==="error"?` title="${esc(f.msg)}"`:""}><b>${esc(f.name)}</b><span class="rf-kind">${f.kind==="error"?"⚠ "+label.error:label[f.kind]}</span><button type="button" data-adprm="${i}" aria-label="Remove ${esc(f.name)}">✕</button></span>`).join("")}</div>`;
+  const bad=adpFiles.filter(f=>f.kind==="error");
+  if(bad.length) h+=`<div class="banner warn">${bad.map(f=>`<b>${esc(f.name)}</b>: ${esc(f.msg)}`).join("<br>")}</div>`;
+  const r=adpCompute();
+  if(!r.settlementCount){
+    if(adpFiles.length) h+=`<div class="banner info">Add a <b>settlement flat file</b> or a <b>Monthly Unified Transaction</b> report — that's what tells us each SKU's real payout.</div>`;
+    out.innerHTML=h; adpWire(out); return;
+  }
+  const t=r.totals;
+  const pctOfProfit=t.payout>0?Math.min(100,t.spend/t.payout*100):null;
+  h+=`<div class="stats">
+    <div class="stat"><div class="k">Payout after Amazon fees</div><div class="v">${inr0(t.payout)}</div></div>
+    <div class="stat ${t.spend>0?"red":""}"><div class="k">Advertising</div><div class="v">${inr0(-t.spend)}</div></div>
+    <div class="stat ${t.afterAds>0?"green":"red"}"><div class="k">Left after ads</div><div class="v">${inr0(t.afterAds)}</div></div>
+    <div class="stat ${t.flipCount?"red":"green"}"><div class="k">SKUs ads turn to a loss</div><div class="v">${t.flipCount}</div></div>
+  </div>`;
+  if(pctOfProfit!==null)
+    h+=`<div class="banner ${pctOfProfit>=50?"warn":"info"}">Advertising is taking <b>${pctOfProfit.toFixed(1)}%</b> of everything Amazon paid you after its own fees${t.flipCount?`, and turns <b>${t.flipCount} SKU${t.flipCount===1?"":"s"}</b> from profit into a loss worth <b>${inr0(t.flipLoss)}</b>`:""}.</div>`;
+  if(!r.haveAds){
+    h+=`<div class="banner warn">No advertising report loaded, so nothing can be attributed to a SKU. ${r.unattributed.rows?`This settlement does show <b>${inr0(r.unattributed.total)}</b> of advertising across ${r.unattributed.rows} charge(s), but Amazon records it as one unattributed service fee — the per-SKU split only exists in <b>Advertising console → Sponsored Ads → Reports → Sponsored Products → Advertised product</b>. Export it for the same dates and drop it here.`:`Add the <b>Advertised product</b> report from the Advertising console.`}</div>`;
+  }else{
+    if(!r.costed) h+=`<div class="banner info">No product costs saved yet, so the table shows <b>payout</b>, not profit. Add costs in the <a href="#/sku-report">SKU Profitability Report</a> — they're stored in this browser and picked up here automatically.</div>`;
+    if(r.asinOnly) h+=`<div class="banner info">That ad report has ASINs but no SKU column, so rows only match if your settlement uses the same identifier. Re-export it with the <b>Advertised SKU</b> column for an exact match.</div>`;
+    const unmatched=r.rows.filter(x=>x.orphan);
+    if(unmatched.length) h+=`<div class="banner warn"><b>${inr0(unmatched.reduce((s,x)=>s+x.spend,0))}</b> of ad spend went to ${unmatched.length} SKU(s) with no sales at all in this settlement — pure loss unless they sold outside the period.</div>`;
+  }
+  const sorters={damage:(a,b)=>(a.hasCost?a.profit:a.afterAds)-(b.hasCost?b.profit:b.afterAds),
+    spend:(a,b)=>b.spend-a.spend, acos:(a,b)=>(b.acos??-1)-(a.acos??-1), sales:(a,b)=>b.sales-a.sales};
+  const rows=[...r.rows].sort(sorters[adpSort]||sorters.damage);
+  h+=`<div style="display:flex;gap:8px;align-items:center;justify-content:flex-end;margin:14px 0 2px;flex-wrap:wrap">
+      <span class="sa-sub">Sort by</span>
+      ${[["damage","Worst after ads"],["spend","Ad spend"],["acos","ACOS"],["sales","Sales"]]
+        .map(([k,t2])=>`<button type="button" class="fbtn${adpSort===k?" on":""}" data-adpsort="${k}">${t2}</button>`).join("")}
+      <button type="button" class="fbtn" id="adp-csv">⬇ Export CSV</button>
+    </div>
+    <div class="tblwrap"><table class="sa">
+      <thead><tr><th>SKU</th><th class="num">Units</th><th class="num">Sales</th>
+        <th class="num">Payout after fees</th><th class="num">Ad spend</th><th class="num">ACOS</th>
+        <th class="num" title="How much of a sale can go on ads before this SKU stops making money. Needs a product cost.">Break-even ACOS</th><th class="num">After ads${r.costed?" &amp; cost":""}</th><th>Verdict</th></tr></thead>
+      <tbody>${rows.map(x=>{
+        const bottom=x.hasCost?x.profit:x.afterAds;
+        const verdict=x.orphan?["Ad spend, no sales","bad"]
+          :x.flips?["Ads turn profit into a loss","bad"]
+          :bottom>0?["Profitable after ads","good"]
+          :x.spend>0?["Loss before ads too","warn"]
+          :["No ads on this SKU","muted"];
+        const vc=verdict[1]==="good"?"var(--green)":verdict[1]==="bad"?"var(--red)":verdict[1]==="warn"?"var(--orange)":"var(--muted)";
+        const over=x.acos!==null&&x.breakEven!==null&&x.acos>x.breakEven;
+        return `<tr>
+          <td>${esc(x.sku)}${x.hasCost?"":` <span class="sa-sub" title="No product cost saved — this row shows payout, not profit">·no cost</span>`}</td>
+          <td class="num">${x.units||"—"}</td>
+          <td class="num">${x.sales?inr0(x.sales):"—"}</td>
+          <td class="num">${x.payout?inr0(x.payout):"—"}</td>
+          <td class="num">${x.spend?inr0(-x.spend):"—"}</td>
+          <td class="num"${over?' style="color:var(--red);font-weight:700"':""}>${x.acos===null?"—":x.acos.toFixed(1)+"%"}</td>
+          <td class="num"${x.breakEven===null&&x.spend>0?' title="Add this SKU\'s product cost to see the break-even ACOS"':""}>${x.breakEven===null?"—":x.breakEven.toFixed(1)+"%"}</td>
+          <td class="num" style="font-weight:700;color:${bottom>0?"var(--green)":"var(--red)"}">${inr0(bottom)}</td>
+          <td class="sa-sub" style="color:${vc}">${verdict[0]}</td>
+        </tr>`;}).join("")}</tbody>
+    </table></div>
+    <div class="banner info">ACOS here is measured against that SKU's own advertising sales, and break-even ACOS against everything it actually earned — so a SKU whose ACOS sits above its break-even line is being advertised at a loss. Attribution windows mean ad sales and settlement sales never line up perfectly; treat the verdict as a direction, not a decimal.</div>`;
+  out.innerHTML=h; adpWire(out,rows);
+}
+function adpWire(out,rows){
+  out.querySelectorAll("[data-adprm]").forEach(b=>b.addEventListener("click",()=>{
+    adpFiles.splice(Number(b.dataset.adprm),1); adpRender();
+  }));
+  out.querySelectorAll("[data-adpsort]").forEach(b=>b.addEventListener("click",()=>{
+    adpSort=b.dataset.adpsort; adpRender();
+  }));
+  const csv=out.querySelector("#adp-csv");
+  if(csv&&rows) csv.addEventListener("click",()=>{
+    const q=v=>`"${String(v??"").replace(/"/g,'""')}"`;
+    const head=["SKU","Units","Sales","Payout after fees","Ad spend","ACOS %","Break-even ACOS %","Product cost/unit","After ads","Verdict"];
+    const lines=[head.map(q).join(",")];
+    for(const x of rows){
+      const bottom=x.hasCost?x.profit:x.afterAds;
+      const verdict=x.orphan?"Ad spend, no sales":x.flips?"Ads turn profit into a loss"
+        :bottom>0?"Profitable after ads":x.spend>0?"Loss before ads too":"No ads on this SKU";
+      lines.push([x.sku,x.units,x.sales.toFixed(2),x.payout.toFixed(2),x.spend.toFixed(2),
+        x.acos===null?"":x.acos.toFixed(1),x.breakEven===null?"":x.breakEven.toFixed(1),
+        x.hasCost?x.cost.toFixed(2):"",bottom.toFixed(2),verdict].map(q).join(","));
+    }
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(new Blob([lines.join("\r\n")],{type:"text/csv"}));
+    a.download="ad-profitability-by-sku.csv";
+    document.body.appendChild(a); a.click(); a.remove();
+  });
+}
 function route(){
   const h=location.hash.replace(/^#\/?/,"");
   renderAuthSlot();
@@ -6396,6 +6684,7 @@ function route(){
   if(h==="sku-report"){renderSkuReport();window.scrollTo(0,0);return;}
   if(h==="reconcile"){renderReconcile();window.scrollTo(0,0);return;}
   if(h==="trends"){renderTrends();window.scrollTo(0,0);return;}
+  if(h==="ad-profit"){renderAdProfit();window.scrollTo(0,0);return;}
   if(h==="link-builder"){renderLinkBuilder();window.scrollTo(0,0);return;}
   if(h==="keyword-combiner"){renderKeywordCombiner();window.scrollTo(0,0);return;}
   if(h==="label-cropper"){renderLabelCropper();window.scrollTo(0,0);return;}
@@ -6410,7 +6699,7 @@ function route(){
 window.addEventListener("hashchange",route);
 /* Premium tools re-check entitlement when the tab regains focus, so a session
    kicked on another device locks here within seconds of the user returning. */
-const PREMIUM_ROUTES=["settlement-analyzer","gst-report","sku-report","reconcile","trends"];
+const PREMIUM_ROUTES=["settlement-analyzer","gst-report","sku-report","reconcile","trends","ad-profit"];
 window.addEventListener("focus",()=>{
   const h=location.hash.replace(/^#\/?/,"");
   if(!PREMIUM_ROUTES.includes(h) || saUnlocked() || !sessionUser()) return;
