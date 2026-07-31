@@ -670,33 +670,42 @@
 const GST = 0.18;
 
 const CATS = [
-  ["electronics","Electronics",[.045,.06,.07,.09],[4,9,16],8],
-  ["mobile-phones","Mobile Phones & Tablets",[.04,.04,.045,.05],[2,5,9],5],
-  ["computers","Computers & Laptops",[.04,.05,.055,.06],[3,7,12],6],
-  ["clothing","Clothing & Apparel",[.05,.05,.14,.17],[6,14,24],12],
-  ["footwear","Footwear",[.05,.05,.11,.14],[6,13,22],12],
-  ["watches","Watches",[.06,.075,.115,.135],[8,17,28],14],
-  ["beauty","Beauty & Cosmetics",[.04,.075,.13,.17],[10,20,32],15],
-  ["personal-care","Personal Care Appliances",[.045,.065,.08,.10],[6,13,22],12],
-  ["grocery","Grocery & Gourmet",[.035,.045,.05,.055],[3,7,12],6],
-  ["home-kitchen","Home & Kitchen",[.045,.09,.10,.15],[6,14,24],11],
-  ["furniture","Furniture",[.06,.09,.115,.145],[5,12,20],10],
-  ["toys","Toys & Games",[.045,.06,.075,.095],[7,15,25],12],
-  ["sports","Sports & Fitness",[.045,.06,.075,.09],[7,14,23],11],
-  ["books","Books",[.04,.04,.04,.04],[4,9,16],7],
-  ["jewellery","Fashion Jewellery",[.115,.165,.195,.225],[8,18,30],16],
-  ["baby-products","Baby Products",[.04,.05,.055,.06],[7,14,23],11],
-  ["automotive","Automotive",[.06,.085,.095,.11],[6,12,20],9],
-  ["pet-supplies","Pet Supplies",[.04,.05,.05,.065],[8,16,25],12],
-  ["health","Health & Nutrition",[.05,.065,.075,.09],[9,18,28],13],
-  ["large-appliances","Large Appliances",[.04,.045,.05,.055],[3,7,12],6],
-  ["small-appliances","Small Appliances",[.04,.045,.05,.055],[4,9,15],7],
-  ["headphones","Headphones & Earphones",[.075,.115,.145,.18],[4,9,16],10],
-  ["other","Other",[.06,.09,.12,.15],[5,12,20],10],
-].map(([key,name,referral,b,tacos])=>({key,name,referral,bench:{low:b[0],median:b[1],high:b[2]},tacos}));
+  ["electronics","Electronics",[[1000,0],[null,9]],[4,9,16],8,"",0],
+  ["mobile-phones","Mobile Phones & Tablets",[[1000,0],[null,5]],[2,5,9],5,"",0],
+  ["computers","Computers & Laptops",[[1000,0],[null,6]],[3,7,12],6,"",0],
+  ["clothing","Clothing & Apparel",[[1000,0],[null,15]],[6,14,24],12,"Apparel – Sarees and Dress Materials",1],
+  ["footwear","Footwear",[[1000,0],[null,8]],[6,13,22],12,"Shoes",1],
+  ["watches","Watches",[[1000,0],[null,15]],[8,17,28],14,"Watches",1],
+  ["beauty","Beauty & Cosmetics",[[1000,0],[null,7]],[10,20,32],15,"Beauty – Make-up",1],
+  ["personal-care","Personal Care Appliances",[[1000,0],[null,9.5]],[6,13,22],12,"Personal Care Appliances – Grooming and Styling",1],
+  ["grocery","Grocery & Gourmet",[[1000,0],[null,8]],[3,7,12],6,"Grocery – Herbs and Spices",1],
+  ["home-kitchen","Home & Kitchen",[[1000,0],[null,12.5]],[6,14,24],11,"Kitchen – Glassware and Ceramicware",1],
+  ["furniture","Furniture",[[1000,0],[15000,15.5],[null,11]],[5,12,20],10,"Furniture – Other products",1],
+  ["toys","Toys & Games",[[1000,0],[null,12.5]],[7,15,25],12,"Toys – Games and Puzzles, Boards Games, Adult Games and Building Sets",1],
+  ["sports","Sports & Fitness",[[1000,0],[null,10.5]],[7,14,23],11,"Toys – Outdoor, Activity and Sports Toys",1],
+  ["books","Books",[[250,0],[500,2],[1000,4],[null,13.5]],[4,9,16],7,"Books",1],
+  ["jewellery","Fashion Jewellery",[[1000,0],[null,13]],[8,18,30],16,"Silver Jewellery",1],
+  ["baby-products","Baby Products",[[1000,0],[null,9]],[7,14,23],11,"Baby Strollers",1],
+  ["automotive","Automotive",[[1000,0],[null,8.5]],[6,12,20],9,"Automotive – Batteries and Air Fresheners",1],
+  ["pet-supplies","Pet Supplies",[[300,0],[1000,6.5],[null,9.5]],[8,16,25],12,"Pet Foods",1],
+  ["health","Health & Nutrition",[[300,0],[null,11.5]],[9,18,28],13,"Health and Household – Other products",1],
+  ["large-appliances","Large Appliances",[[1000,0],[null,5.5]],[3,7,12],6,"",0],
+  ["small-appliances","Small Appliances",[[1000,0],[5000,7.5],[null,8.5]],[4,9,15],7,"Cleaning and Home Appliances",1],
+  ["headphones","Headphones & Earphones",[[1000,0],[null,18]],[4,9,16],10,"Headsets, Headphones and Earphones",1],
+  ["other","Other",[[1000,0],[null,11.5]],[5,12,20],10,"Toys – Other products",1],
+].map(([key,name,referral,b,tacos,amzCat,verified])=>({key,name,referral,bench:{low:b[0],median:b[1],high:b[2]},tacos,amzCat,verified:!!verified}));
 
 const CATMAP = Object.fromEntries(CATS.map(c=>[c.key,c]));
-const CLOSING = {low:5,mid:9,high:30,vhigh:56};
+/* Closing fees, Amazon.in fee schedule effective 10 Jun 2026 (Table 1 for
+   Easy Ship / Self-Ship / Seller Flex, Table 2 for fulfilment centre). Bands
+   are on item price including shipping charges. FBA "select fee categories"
+   pay less in the two lowest bands; we apply the Standard Fee column. */
+const CLOSING_BANDS=[300,500,1000,null];
+const CLOSING_BY_CHANNEL={
+  easyship:[1,22,45,76],
+  self:[20,26,51,101],
+  fba:[26,22,27,52],
+};
 const SLABS = [
   {max:.5,esL:43,esN:65,fbL:35,fbN:55},{max:1,esL:55,esN:82,fbL:45,fbN:70},
   {max:2,esL:75,esN:110,fbL:60,fbN:90},{max:3,esL:95,esN:140,fbL:80,fbN:115},
@@ -707,12 +716,31 @@ const STORAGE_TIER = {standard:5,large:12,oversize:25};
 const STORAGE_CUFT = {std:45,peak:48,aged:300};
 const CM3_CUFT = 28316.8466;
 
-const refRate=(cat,p)=>{const t=(CATMAP[cat]||CATMAP.other).referral;
-  return p<=300?t[0]:p<=500?t[1]:p<=1000?t[2]:t[3];};
+/* Referral rules are [upToPrice, percent] in ascending order, last entry
+   [null, percent] for everything above. Amazon's schedule effective 10 Jun
+   2026 charges 0% up to Rs 1,000 in most categories, and the breakpoints
+   differ per category, so a fixed four-band table can no longer express it. */
+const refRate=(cat,p)=>{
+  const rules=(CATMAP[cat]||CATMAP.other).referral;
+  for(const [upTo,pct] of rules){ if(upTo===null||p<=upTo) return pct/100; }
+  return rules.length?rules[rules.length-1][1]/100:0;
+};
+/* Where a category's rate changes — used by the Price Band Optimizer instead
+   of the old hard-coded Rs 250/300/500/1,000 steps. */
+const refBandEdges=cat=>((CATMAP[cat]||CATMAP.other).referral||[])
+  .map(r=>r[0]).filter(x=>x!==null);
+/* Human-readable list of the price points where this category's fees step. */
+function bandNote(cat){
+  const edges=[...new Set(refBandEdges(cat).concat([300,500,1000]))].sort((a,b)=>a-b);
+  return "Fees step above "+edges.map(x=>"₹"+x.toLocaleString("en-IN")).join(", ")+".";
+}
 function closingFee(p,ful){
-  let c = p<=250?CLOSING.low : p<=500?CLOSING.mid : p<=1000?CLOSING.high : CLOSING.vhigh;
-  if(p<=250 && ful==='easyship') c=Math.max(0,c-5);
-  return c;
+  const t=CLOSING_BY_CHANNEL[ful]||CLOSING_BY_CHANNEL.self;
+  for(let i=0;i<CLOSING_BANDS.length;i++){
+    const edge=CLOSING_BANDS[i];
+    if(edge===null||p<=edge) return t[i];
+  }
+  return t[t.length-1];
 }
 function shipFee(p,ful,zone,kg){
   if(ful==='self') return 0;
@@ -817,9 +845,17 @@ const CALCS = [
           {l:"Net Profit after ITC",v:inr(netItc),fin:1,loss:netItc<0},
         ]:[]),
       ],
-      note: gstReg
-        ? "The 18% GST Amazon charges on its fees is claimable back as input tax credit (ITC) in your GST return, so it isn't a true cost for registered sellers."
-        : null,
+      note: [
+        // Say which Amazon fee category the rate came from — the app offers 23
+        // broad choices where Amazon publishes 193, so the seller needs to be
+        // able to check the match against their own listing.
+        cat.verified
+          ? `Referral rate from Amazon's "${cat.amzCat}" fee category (schedule effective 10 June 2026). Amazon publishes 193 categories — check yours in Seller Central if your product sits elsewhere.`
+          : `Referral rate for this category is not yet confirmed against Amazon's 10 June 2026 schedule. The 0% band below ₹1,000 is verified; the rate above ₹1,000 is our earlier estimate.`,
+        gstReg
+          ? "The 18% GST Amazon charges on its fees is claimable back as input tax credit (ITC) in your GST return, so it isn't a true cost for registered sellers."
+          : null,
+      ].filter(Boolean).join(" "),
       split:{title:`Where every ${inr0(sp)} goes`,total:sp||1,
         items:seg.map(s=>({key:s[0],nm:s[1],color:s[2],val:(s[0]==="np"&&loss)?net:s[3]}))},
       bench:{title:`Your margin vs. ${cat.name} benchmark`,you:margin,...cat.bench},
@@ -1172,7 +1208,7 @@ const CALCS = [
 {
   id:"price-bands", icon:"🪜", badge:"New",
   name:"Amazon Price Band Optimizer",
-  desc:"Amazon India fees jump at ₹250, ₹300, ₹500 and ₹1,000. Find the price near yours that nets the most per unit.",
+  desc:"Amazon India fees jump at fixed price points — and since 10 June 2026 the referral fee is 0% below ₹1,000 in most categories, so crossing that line is expensive. Find the price near yours that nets the most per unit.",
   fields:[
     {k:"sp",label:"Planned Price (₹)",t:"num",d:999},
     {k:"cost",label:"Product Cost (₹)",t:"num",d:400},
@@ -1226,10 +1262,10 @@ const CALCS = [
         {k:"Uplift vs Planned",v:inr(uplift)},
       ],
       banner: uplift>1
-        ? {t:"warn",x:`Dropping to ₹${best.toLocaleString("en-IN")} would earn ${inr(uplift)} MORE per unit than ₹${sp.toLocaleString("en-IN")} — your planned price sits just above a fee band. Amazon India's closing-fee and referral bands step up above ₹250, ₹300, ₹500 and ₹1,000, and crossing one can cost more than the extra price collects.`}
+        ? {t:"warn",x:`Dropping to ₹${best.toLocaleString("en-IN")} would earn ${inr(uplift)} MORE per unit than ₹${sp.toLocaleString("en-IN")} — your planned price sits just above a fee band. ${bandNote(v.cat)} Crossing one can cost more than the extra price collects.`}
         : {t:"good",x:`Your planned price is efficient — no lower price beats it. The rows below show what each nearby fee-band jump would cost or save.`},
       rows,
-      note:"Fee bands: closing fee steps at ₹250 / ₹500 / ₹1,000; referral rate steps at ₹300 / ₹500 / ₹1,000; Easy Ship shipping relief applies below ₹300. Same verified fee maths as the profit calculator.",
+      note:"Closing fee steps at ₹300 / ₹500 / ₹1,000; referral steps come from your category's own schedule. Same fee maths as the profit calculator, on Amazon's 10 June 2026 rate card.",
     };
   }
 },
@@ -1377,7 +1413,7 @@ const HELP={
   "coupon-roi":{input:`The coupon redemption fee is shown when creating the coupon (<b>Advertising → Coupons</b>).`,
     steps:["Enter price, discount %, redemption fee, expected uplift and baseline orders.","The verdict compares contribution with vs without the coupon, including the break-even uplift."]},
   "price-bands":{input:`No file needed — same inputs as the profit calculator.`,
-    steps:["Enter your planned price and costs.","Check whether a price just under a fee band (₹250 / ₹300 / ₹500 / ₹1,000) nets MORE per unit than your planned price."]},
+    steps:["Enter your planned price and costs.","Check whether a price just under a fee band nets MORE per unit than your planned price — since 10 June 2026 most categories pay no referral fee below ₹1,000, so that step is the big one."]},
   "target-price":{input:`No file needed.`,
     steps:["Pick a target: margin % or profit ₹, and enter your costs.","The tool scans every whole-rupee price through all fee bands and returns the lowest price that reaches the target."]},
   "restock-planner":{input:`Daily sales rate: drop a settlement file into the <b>SKU Profitability Report</b> on this site (units ÷ days in the period), or use <b>Reports → Business Reports → Detail Page Sales and Traffic</b>.`,
