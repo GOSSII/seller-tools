@@ -670,30 +670,31 @@
 const GST = 0.18;
 
 const CATS = [
-  ["electronics","Electronics",[[1000,0],[null,9]],[4,9,16],8,"",0],
-  ["mobile-phones","Mobile Phones & Tablets",[[1000,0],[null,5]],[2,5,9],5,"",0],
-  ["computers","Computers & Laptops",[[1000,0],[null,6]],[3,7,12],6,"",0],
-  ["clothing","Clothing & Apparel",[[1000,0],[null,15]],[6,14,24],12,"Apparel – Sarees and Dress Materials",1],
-  ["footwear","Footwear",[[1000,0],[null,8]],[6,13,22],12,"Shoes",1],
-  ["watches","Watches",[[1000,0],[null,15]],[8,17,28],14,"Watches",1],
-  ["beauty","Beauty & Cosmetics",[[1000,0],[null,7]],[10,20,32],15,"Beauty – Make-up",1],
-  ["personal-care","Personal Care Appliances",[[1000,0],[null,9.5]],[6,13,22],12,"Personal Care Appliances – Grooming and Styling",1],
-  ["grocery","Grocery & Gourmet",[[1000,0],[null,8]],[3,7,12],6,"Grocery – Herbs and Spices",1],
-  ["home-kitchen","Home & Kitchen",[[1000,0],[null,12.5]],[6,14,24],11,"Kitchen – Glassware and Ceramicware",1],
-  ["furniture","Furniture",[[1000,0],[15000,15.5],[null,11]],[5,12,20],10,"Furniture – Other products",1],
-  ["toys","Toys & Games",[[1000,0],[null,12.5]],[7,15,25],12,"Toys – Games and Puzzles, Boards Games, Adult Games and Building Sets",1],
-  ["sports","Sports & Fitness",[[1000,0],[null,10.5]],[7,14,23],11,"Toys – Outdoor, Activity and Sports Toys",1],
-  ["books","Books",[[250,0],[500,2],[1000,4],[null,13.5]],[4,9,16],7,"Books",1],
-  ["jewellery","Fashion Jewellery",[[1000,0],[null,13]],[8,18,30],16,"Silver Jewellery",1],
-  ["baby-products","Baby Products",[[1000,0],[null,9]],[7,14,23],11,"Baby Strollers",1],
-  ["automotive","Automotive",[[1000,0],[null,8.5]],[6,12,20],9,"Automotive – Batteries and Air Fresheners",1],
-  ["pet-supplies","Pet Supplies",[[300,0],[1000,6.5],[null,9.5]],[8,16,25],12,"Pet Foods",1],
-  ["health","Health & Nutrition",[[300,0],[null,11.5]],[9,18,28],13,"Health and Household – Other products",1],
-  ["large-appliances","Large Appliances",[[1000,0],[null,5.5]],[3,7,12],6,"",0],
-  ["small-appliances","Small Appliances",[[1000,0],[5000,7.5],[null,8.5]],[4,9,15],7,"Cleaning and Home Appliances",1],
-  ["headphones","Headphones & Earphones",[[1000,0],[null,18]],[4,9,16],10,"Headsets, Headphones and Earphones",1],
-  ["other","Other",[[1000,0],[null,11.5]],[5,12,20],10,"Toys – Other products",1],
-].map(([key,name,referral,b,tacos,amzCat,verified])=>({key,name,referral,bench:{low:b[0],median:b[1],high:b[2]},tacos,amzCat,verified:!!verified}));
+  ["electronics","Electronics",[[1000,0],[null,9]],[4,9,16],8,"",0,"std"],
+  ["mobile-phones","Mobile Phones & Tablets",[[1000,0],[null,5]],[2,5,9],5,"",0,"std"],
+  ["computers","Computers & Laptops",[[1000,0],[null,6]],[3,7,12],6,"",0,"std"],
+  ["clothing","Clothing & Apparel",[[1000,0],[null,15]],[6,14,24],12,"Apparel – Sarees and Dress Materials",1,"bd"],
+  ["footwear","Footwear",[[1000,0],[null,8]],[6,13,22],12,"Shoes",1,"std"],
+  ["watches","Watches",[[1000,0],[null,15]],[8,17,28],14,"Watches",1,"std"],
+  ["beauty","Beauty & Cosmetics",[[1000,0],[null,7]],[10,20,32],15,"Beauty – Make-up",1,"std"],
+  ["personal-care","Personal Care Appliances",[[1000,0],[null,9.5]],[6,13,22],12,"Personal Care Appliances – Grooming and Styling",1,"std"],
+  ["grocery","Grocery & Gourmet",[[1000,0],[null,8]],[3,7,12],6,"Grocery – Herbs and Spices",1,"bd"],
+  ["home-kitchen","Home & Kitchen",[[1000,0],[null,12.5]],[6,14,24],11,"Kitchen – Glassware and Ceramicware",1,"std"],
+  ["furniture","Furniture",[[1000,0],[15000,15.5],[null,11]],[5,12,20],10,"Furniture – Other products",1,"std"],
+  ["toys","Toys & Games",[[1000,0],[null,12.5]],[7,15,25],12,"Toys – Games and Puzzles, Boards Games, Adult Games and Building Sets",1,"std"],
+  ["sports","Sports & Fitness",[[1000,0],[null,10.5]],[7,14,23],11,"Toys – Outdoor, Activity and Sports Toys",1,"std"],
+  ["books","Books",[[250,0],[500,2],[1000,4],[null,13.5]],[4,9,16],7,"Books",1,"bd"],
+  ["jewellery","Fashion Jewellery",[[1000,0],[null,13]],[8,18,30],16,"Silver Jewellery",1,"bd"],
+  ["baby-products","Baby Products",[[1000,0],[null,9]],[7,14,23],11,"Baby Strollers",1,"std"],
+  ["automotive","Automotive",[[1000,0],[null,8.5]],[6,12,20],9,"Automotive – Batteries and Air Fresheners",1,"std"],
+  ["pet-supplies","Pet Supplies",[[300,0],[1000,6.5],[null,9.5]],[8,16,25],12,"Pet Foods",1,"bd"],
+  ["health","Health & Nutrition",[[300,0],[null,11.5]],[9,18,28],13,"Health and Household – Other products",1,"bd"],
+  ["large-appliances","Large Appliances",[[1000,0],[null,5.5]],[3,7,12],6,"",0,"big"],
+  ["small-appliances","Small Appliances",[[1000,0],[5000,7.5],[null,8.5]],[4,9,15],7,"Cleaning and Home Appliances",1,"std"],
+  ["headphones","Headphones & Earphones",[[1000,0],[null,18]],[4,9,16],10,"Headsets, Headphones and Earphones",1,"std"],
+  ["industrial","Business &amp; Industrial Supplies",[[1000,0],[null,12]],[5,11,18],9,"Business &amp; Scientific Supplies",1,"ac"],
+  ["other","Other",[[1000,0],[null,11.5]],[5,12,20],10,"Toys – Other products",1,"std"],
+].map(([key,name,referral,b,tacos,amzCat,verified,closeGroup])=>({key,name,referral,bench:{low:b[0],median:b[1],high:b[2]},tacos,amzCat,verified:!!verified,closeGroup:closeGroup||"std"}));
 
 const CATMAP = Object.fromEntries(CATS.map(c=>[c.key,c]));
 /* Closing fees, Amazon.in fee schedule effective 10 Jun 2026 (Table 1 for
@@ -704,7 +705,17 @@ const CLOSING_BANDS=[300,500,1000,null];
 const CLOSING_BY_CHANNEL={
   easyship:[1,22,45,76],
   self:[20,26,51,101],
-  fba:[26,22,27,52],
+  fba:[26,22,27,52],           // Standard Fee column
+};
+/* At a fulfilment centre Amazon discounts the two lowest bands for "select
+   fee categories". Groups A and C are one category list (Rs 20 / Rs 18),
+   B and D another (Rs 13 / Rs 14); a fourth list pays Rs 72 above Rs 1,000.
+   Each of our categories carries the group its Amazon fee category sits in. */
+const CLOSING_FBA_GROUPS={
+  std:[26,22,27,52],
+  ac:[20,18,27,52],
+  bd:[13,14,27,52],
+  big:[26,22,27,72],           // Refrigerators, Chimneys, Major Appliances, Home Entertainment
 };
 const SLABS = [
   {max:.5,esL:43,esN:65,fbL:35,fbN:55},{max:1,esL:55,esN:82,fbL:45,fbN:70},
@@ -734,23 +745,62 @@ function bandNote(cat){
   const edges=[...new Set(refBandEdges(cat).concat([300,500,1000]))].sort((a,b)=>a-b);
   return "Fees step above "+edges.map(x=>"₹"+x.toLocaleString("en-IN")).join(", ")+".";
 }
-function closingFee(p,ful){
-  const t=CLOSING_BY_CHANNEL[ful]||CLOSING_BY_CHANNEL.self;
+function closingFee(p,ful,cat){
+  let t;
+  if(ful==="fba"){
+    const g=(CATMAP[cat]||{}).closeGroup||"std";
+    t=CLOSING_FBA_GROUPS[g]||CLOSING_FBA_GROUPS.std;
+  } else t=CLOSING_BY_CHANNEL[ful]||CLOSING_BY_CHANNEL.self;
   for(let i=0;i<CLOSING_BANDS.length;i++){
     const edge=CLOSING_BANDS[i];
     if(edge===null||p<=edge) return t[i];
   }
   return t[t.length-1];
 }
-function shipFee(p,ful,zone,kg){
+function shipFee(p,ful,zone,kg,tier){
   if(ful==='self') return 0;
+  if(ful==='fba') return fbaWeightHandling(kg,zone,tier||FBA_STEP_DEFAULT);
+  // Easy Ship still uses the older slab table — not yet re-verified against
+  // the current schedule, unlike the FBA figures above.
   const s = SLABS.find(x=>kg<=x.max) || SLABS[SLABS.length-1];
-  let f;
-  if(ful==='easyship'){ f = zone==='national'?s.esN:s.esL; if(p<300) f=Math.max(0,f-10); }
-  else { f = zone==='national'?s.fbN:s.fbL; }
+  let f = zone==='national'?s.esN:s.esL;
+  if(p<300) f=Math.max(0,f-10);
   return f;
 }
-const pickPack = kg => kg<=.5?14 : kg<=1?20 : kg<=3?26 : kg<=5?38 : 50;
+/* FBA fulfilment, Amazon.in "Fulfilment fees" schedule (G200651740).
+   Pick & pack is flat across STEP levels; weight handling depends on the
+   seller's STEP tier and on Regional vs National — note there is NO Local
+   rate for standard-size weight handling, only pick & pack is zone-free. */
+const FBA_STEP_DEFAULT="standard";
+const FBA_WH={
+  premium :{r:[37,52,76], n:[63,83,120]},
+  standard:{r:[39,54,78], n:[65,85,122]},
+  basic   :{r:[42,58,82], n:[69,89,126]},
+};
+const FBA_WH_ADD={r:{after2:24,after5:13}, n:{after2:34,after5:18}};
+/* Shipping weight = billing weight + 100 g standard packaging, rounded up to
+   the next 500 g slab. Billing weight is the greater of actual and volumetric
+   (L x W x H / 5000), so callers pass whichever is larger. */
+const fbaShipWeight = kg => Math.ceil((Math.max(0,kg)+0.1)*2)/2;
+const pickPack = kg => {
+  const w=Math.min(fbaShipWeight(kg),20);
+  if(w<=1) return 17;
+  let f=17+Math.ceil(w-1)*5;                       // each additional kg to 5 kg
+  if(w>5) f+=Math.ceil((w-5)/5)*2;                 // each additional 5 kg after 5 kg
+  return f;
+};
+function fbaWeightHandling(kg,zone,tier){
+  const t=FBA_WH[tier]||FBA_WH[FBA_STEP_DEFAULT];
+  const k=zone==="national"?"n":"r";
+  const col=t[k], add=FBA_WH_ADD[k];
+  const w=fbaShipWeight(kg);
+  if(w<=0.5) return col[0];
+  if(w<=1)   return col[1];
+  if(w<=2)   return col[2];
+  let f=col[2]+Math.ceil(Math.min(w,5)-2)*add.after2;
+  if(w>5) f+=Math.ceil(w-5)*add.after5;
+  return f;
+}
 
 /* ---- formatters ---- */
 const inr  = n => {n=isFinite(n)?n:0; return (n<0?"-":"")+"₹"+Math.abs(n).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});};
@@ -785,7 +835,7 @@ const CALCS = [
   compute(v){
     const sp=v.sp, rate=refRate(v.cat,sp);
     const referral=sp*rate;
-    const closing=sp>0?closingFee(sp,v.ful):0;
+    const closing=sp>0?closingFee(sp,v.ful,v.cat):0;
     const shipping=sp>0?shipFee(sp,v.ful,v.zone,v.kg||0.5):0;
     const pp = (v.ful==="fba"&&sp>0)?pickPack(v.kg||0.5):0;
     const st = (v.ful==="fba"&&sp>0)?STORAGE_TIER[v.size]:0;
@@ -852,6 +902,9 @@ const CALCS = [
         cat.verified
           ? `Referral rate from Amazon's "${cat.amzCat}" fee category (schedule effective 10 June 2026). Amazon publishes 193 categories — check yours in Seller Central if your product sits elsewhere.`
           : `Referral rate for this category is not yet confirmed against Amazon's 10 June 2026 schedule. The 0% band below ₹1,000 is verified; the rate above ₹1,000 is our earlier estimate.`,
+        v.ful==="fba"
+          ? "FBA fulfilment uses Amazon's published fee table for a Standard STEP tier, on billing weight plus 100 g packaging rounded up to the next 500 g. Amazon prices standard-size weight handling as Regional or National only — there is no Local rate — so \"Local\" here is charged at the Regional rate. Premium and Advanced sellers pay a little less, Basic a little more."
+          : null,
         gstReg
           ? "The 18% GST Amazon charges on its fees is claimable back as input tax credit (ITC) in your GST return, so it isn't a true cost for registered sellers."
           : null,
@@ -876,7 +929,7 @@ const CALCS = [
   compute(v){
     const sp=v.sp, rate=refRate(v.cat,sp);
     const referral=sp*rate;
-    const closing=sp>0?closingFee(sp,"fba"):0;
+    const closing=sp>0?closingFee(sp,"fba",v.cat):0;
     const wh=sp>0?shipFee(sp,"fba",v.zone,v.kg||0.5):0;
     const pp=sp>0?pickPack(v.kg||0.5):0;
     const st=sp>0?STORAGE_TIER[v.size]:0;
@@ -1227,7 +1280,7 @@ const CALCS = [
       if(p<=0) return -(v.cost+v.pack);
       const rate=refRate(v.cat,p);
       const referral=p*rate;
-      const closing=closingFee(p,v.ful);
+      const closing=closingFee(p,v.ful,v.cat);
       const shipping=shipFee(p,v.ful,v.zone,v.kg||0.5);
       const pp=v.ful==="fba"?pickPack(v.kg||0.5):0;
       const st=v.ful==="fba"?STORAGE_TIER[v.size]:0;
@@ -1290,7 +1343,7 @@ const CALCS = [
     const feesAt=p=>{
       const rate=refRate(v.cat,p);
       const referral=p*rate;
-      const closing=closingFee(p,v.ful);
+      const closing=closingFee(p,v.ful,v.cat);
       const shipping=shipFee(p,v.ful,v.zone,v.kg||0.5);
       const pp=v.ful==="fba"?pickPack(v.kg||0.5):0;
       const st=v.ful==="fba"?STORAGE_TIER[v.size]:0;
