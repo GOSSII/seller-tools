@@ -4180,7 +4180,7 @@ function recCompute(settlements,mtrRows){
      settlement with no fee lines — then "no referral credit on this refund"
      and "this order netted negative" are not findings, they are the absence
      of data. Say so instead of flagging every single refund. */
-  let ordersWithFee=0,ordersWithAnyFee=0;
+  let ordersWithFee=0,ordersWithAnyFee=0,feeLinesAudited=0,weightLinesAudited=0;
   const isSellingFee=l=>{const b=saBucketOf(l.amountDescription||l.amountType,l.amount);
     return l.amount<-0.005&&(b==="referral"||b==="fulfil");};
   for(const list of ordersById.values()){
@@ -4251,6 +4251,7 @@ function recCompute(settlements,mtrRows){
       const per=Math.abs(l.amount)/units;
       const hit=REC_SLAB_OF.get(Math.round(per*100));
       if(!hit) continue;
+      weightLinesAudited++;
       const a=bySkuSlab.get(rec.sku)||[]; a.push({slab:hit.slab,family:hit.family,per,units,rec});
       bySkuSlab.set(rec.sku,a);
     }
@@ -4265,6 +4266,7 @@ function recCompute(settlements,mtrRows){
       date:rec.postedDate,amount:Math.round((e.amt/e.n)*(e.n-units)*100)/100,
       note:lab+" charged "+e.n+" times for "+units+" unit"+(units>1?"s":"")+" of this item"});
     if(buyerPaid<=0||Math.abs(closing)<=0.005) continue;
+    feeLinesAudited++;
     const unitPrice=buyerPaid/units, charged=Math.abs(closing)/units;
     const ceiling=recClosingCeiling(unitPrice,afn);
     if(charged-ceiling>0.51){
@@ -4391,7 +4393,7 @@ function recCompute(settlements,mtrRows){
     recovery:Math.round(recovery*100)/100,
     review:Math.round(review*100)/100,
     unpaid:Math.round(unpaid*100)/100,
-    notes:{feesItemised,feeLinesPresent,ordersWithFee,refundsNoOriginal,refundsNoFee,negativeNoRevenue,
+    notes:{feesItemised,feeLinesPresent,ordersWithFee,refundsNoOriginal,refundsNoFee,negativeNoRevenue,feeLinesAudited,weightLinesAudited,
       skippedCancelled,skippedRecent,gaps,covEnd,cutoff,mtrOrders,manyUnmatched}};
 }
 window.recCompute=recCompute; // exposed for verification/debugging
@@ -4522,6 +4524,17 @@ function recRenderResults(){
     if(n.skippedCancelled) bits.push(`${n.skippedCancelled} shipment line${n.skippedCancelled>1?"s":""} the MTR itself cancels or refunds`);
     if(n.skippedRecent) bits.push(`${n.skippedRecent} shipped after ${esc(saFmtDay(n.cutoff))}, too recent to have reached a statement`);
     h+=`<div class="banner info">Left out of the unpaid list: ${bits.join("; ")}.</div>`;
+  }
+  /* A clean audit is a result too. Without this the checks are invisible on a
+     well-billed account and the seller has no way to know they ran. */
+  if(n.feeLinesAudited||n.weightLinesAudited){
+    const found=res.issues.feeOver.length+res.issues.feeDup.length+res.issues.weightJump.length;
+    const bits=[];
+    if(n.feeLinesAudited) bits.push(`<b>${n.feeLinesAudited.toLocaleString("en-IN")}</b> closing fees against Amazon's published rate card`);
+    if(n.weightLinesAudited) bits.push(`<b>${n.weightLinesAudited.toLocaleString("en-IN")}</b> weight-handling charges against each SKU's usual band`);
+    h+=`<div class="banner ${found?"warn":"good"}">${found?"⚠️":"✅"} <b>Fee audit:</b> checked ${bits.join(" and ")}. ${
+      found?`<b>${found}</b> charge${found>1?"s look":" looks"} wrong — listed below. Amazon requires fee claims within <b>30 days of the order</b>, so start with the newest.`
+           :`Every one was charged correctly — nothing to claim. Amazon only allows fee claims within 30 days, so it is worth re-running this each time you download a statement.`}</div>`;
   }
   if(n.negativeNoRevenue)
     h+=`<div class="banner info">${n.negativeNoRevenue} order${n.negativeNoRevenue>1?"s carry":" carries"} fulfilment fees here but no sale — the revenue is in a statement you haven't loaded, so ${n.negativeNoRevenue>1?"they were":"it was"} left out of the loss-making check rather than counted as a loss.</div>`;
