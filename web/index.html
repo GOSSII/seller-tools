@@ -4654,6 +4654,29 @@ function trendCompute(settlements){
     e.feePct=e.gross?Math.abs(e.fees)/e.gross*100:0;
     e.refundPct=e.gross?Math.abs(e.refunded)/e.gross*100:0;
   }
+  /* How much of each month the loaded statements actually cover. A month that
+     is only half covered is not a low month — it is half a month, and drawing
+     it beside full ones invites exactly the wrong conclusion. */
+  {
+    const days=new Set();
+    for(const p of settlements){
+      if(!p.summary) continue;
+      const a=saParseDate(p.summary.settlementStartDate),b=saParseDate(p.summary.settlementEndDate);
+      if(!a||!b) continue;
+      for(let d=recDayNo(a);d<=recDayNo(b);d++) days.add(d);
+    }
+    for(const e of out){
+      const [Y,Mo]=e.m.split("-").map(Number);
+      const inMonth=new Date(Date.UTC(Y,Mo,0)).getUTCDate();
+      let have=0;
+      for(let day=1;day<=inMonth;day++){
+        const iso=`${e.m}-${String(day).padStart(2,"0")}`;
+        if(days.has(recDayNo(iso))) have++;
+      }
+      e.coverDays=have; e.monthDays=inMonth;
+      e.partial=have<inMonth;
+    }
+  }
   /* Which days actually sell. Amazon's posted date is when it booked the
      transaction, which for a shipped order tracks the dispatch day closely
      enough to tell a Sunday from a Wednesday — but say so rather than calling
@@ -4744,11 +4767,16 @@ function trRenderResults(){
     out.innerHTML=h; trWire(out); return;
   }
   const t=trendCompute(settlements);
-  const M=t.months;
+  /* A month with no statement days behind it isn't a zero month, it's an
+     artefact of one stray line posting outside the period — drawing it as a
+     Rs 0 bar reads as "we sold nothing", which is false. */
+  const covered=new Set(t.months.filter(m=>m.coverDays>0).map(m=>m.m));
+  const M=t.months.filter(m=>covered.has(m.m));
+  const partials=M.filter(m=>m.partial);
   const totGross=M.reduce((s,e)=>s+e.gross,0), totNet=M.reduce((s,e)=>s+e.net,0),
         totFees=M.reduce((s,e)=>s+e.fees,0), totRef=M.reduce((s,e)=>s+e.refunded,0);
   const sv=n=>`<span class="${n<0?'amt-neg':(n>0?'amt-pos':'')}">${inr(n)}</span>`;
-  const mo={lbl:trFmtMonth,unit:`monthly · ${M.length} month${M.length===1?"":"s"}`,x:"m"};
+  const mo={lbl:m=>trFmtMonth(m),unit:`monthly · ${M.length} month${M.length===1?"":"s"}`,x:"m"};
   h+=`<div class="stats">
     <div class="stat blue"><div class="k">Months covered</div><div class="v">${M.length}</div></div>
     <div class="stat green"><div class="k">Gross sales</div><div class="v">${inr(totGross)}</div></div>
@@ -4758,6 +4786,9 @@ function trRenderResults(){
   </div>`;
   if(settlements.length===1)
     h+=`<div class="banner info">Only one settlement loaded — drop more statements to see a real trend.</div>`;
+  if(partials.length)
+    h+=`<div class="banner warn">${partials.map(m=>`<b>${esc(trFmtMonth(m.m))}</b> (${m.coverDays} of ${m.monthDays} days)`).join(" and ")} ${partials.length>1?"are":"is"} only part of a month — the statements you loaded don't cover the rest of it. Those bars are shorter because the period is shorter, not because sales fell. Load the neighbouring statements for a like-for-like month.</div>`;
+  h+=`<div class="banner info">Months here are <b>when Amazon settled the money</b>, not when the buyer ordered. Amazon's own SKU and Business Reports count by order date, so the two will not agree — an order placed late in the month is usually paid in the next one. Across a whole account the gap is small; <b>for a single SKU it can be several times over or under</b>, depending on when in the month that product sells.</div>`;
   h+=`<div class="panel"><h4>Month by month <span class="sa-sub">— hover a bar for the exact figure</span></h4><div class="vizgrid">${
       saBarChart("Product sales",M,"gross","#16a34a",v=>inr(v),mo)
     }${
@@ -4770,7 +4801,7 @@ function trRenderResults(){
     <div class="tblwrap" style="margin-top:12px"><table class="sa">
       <thead><tr><th>Month</th><th class="num">Orders</th><th class="num">Units</th><th class="num">Gross sales</th><th class="num">Refunds</th><th class="num">Fees</th><th class="num">Fee %</th><th class="num">Refund %</th><th class="num">Net payout</th></tr></thead>
       <tbody>${M.map(e=>`<tr>
-        <td>${esc(trFmtMonth(e.m))}</td><td class="num">${e.orders}</td><td class="num">${e.units}</td>
+        <td>${esc(trFmtMonth(e.m))}${e.partial?` <span class="sa-sub" title="Statements cover only ${e.coverDays} of ${e.monthDays} days of this month">· ${e.coverDays}/${e.monthDays} days</span>`:""}</td><td class="num">${e.orders}</td><td class="num">${e.units}</td>
         <td class="num">${inr(e.gross)}</td><td class="num">${sv(e.refunded)}</td><td class="num">${sv(e.fees)}</td>
         <td class="num">${e.feePct.toFixed(1)}%</td><td class="num ${e.refundPct>10?'amt-neg':''}">${e.refundPct.toFixed(1)}%</td>
         <td class="num"><b>${sv(e.net)}</b></td></tr>`).join("")}
@@ -4811,7 +4842,8 @@ function trRenderResults(){
         ${t.skus.map(s=>`<option value="${esc(s.sku)}"${s.sku===sel?" selected":""}>${esc(s.sku)} · ${inr(s.sales)}</option>`).join("")}
       </select></div>`;
     if(sel){
-      const s=t.skus.find(x=>x.sku===sel);
+      const s0=t.skus.find(x=>x.sku===sel);
+      const s=Object.assign({},s0,{months:s0.months.filter(x=>covered.has(x.m))});
       h+=`<div class="vizgrid">${
           saBarChart("Units sold",s.months,"units","#2f5af0",v=>v+(v===1?" unit":" units"),mo)
         }${
