@@ -4132,6 +4132,26 @@ const recShiftDays=(iso,n)=>{const d=recDayNo(iso);return d===null?null:new Date
    large-appliance list pays MORE (Rs 72), so that is the ceiling there. Off
    the fulfilment centre we cannot tell Easy Ship from Self-Ship, so take the
    higher of the two. */
+/* Which weight slab a charged fulfilment fee belongs to. Every value on
+   Amazon's published ladders is unique enough to identify its slab, so we can
+   read the billed weight band straight off the statement without knowing the
+   parcel — and comparing a SKU against its own usual slab neutralises zone and
+   STEP tier, which change the rupees but not the band. */
+const REC_SLAB_OF=(()=>{
+  const m=new Map();
+  const put=(v,slab,family)=>{ if(v>0&&!m.has(Math.round(v*100))) m.set(Math.round(v*100),{slab,family}); };
+  for(const tier of Object.keys(FBA_WH)){
+    FBA_WH[tier].r.forEach((v,i)=>put(v,i,"fba-r-"+tier));
+    FBA_WH[tier].n.forEach((v,i)=>put(v,i,"fba-n-"+tier));
+  }
+  for(const tier of Object.keys(ES_WH)) ES_WH[tier].forEach((v,i)=>put(v,i,"es-"+tier));
+  return m;
+})();
+const REC_FEE_FOR=(family,slab)=>{
+  const [kind,a,b]=family.split("-");
+  if(kind==="fba"){ const t=FBA_WH[b]; return t?t[a][slab]:null; }
+  const t=ES_WH[a]; return t?t[slab]:null;
+};
 function recClosingCeiling(price,afn){
   const band=price<=300?0:price<=500?1:price<=1000?2:3;
   return afn?[26,22,27,72][band]:[20,26,51,101][band];
@@ -4144,7 +4164,8 @@ function recCompute(settlements,mtrRows){
       const a=ordersById.get(rec.orderId)||[]; a.push(rec); ordersById.set(rec.orderId,a);
     }
   }
-  const refundFee=[],safeT=[],negative=[],shipped=[],feeOver=[],feeDup=[];
+  const refundFee=[],safeT=[],negative=[],shipped=[],feeOver=[],feeDup=[],weightJump=[];
+  const bySkuSlab=new Map();   // SKU -> the weight bands Amazon billed it in
   /* The referral (commission) fee specifically — NOT saBucketOf's "referral &
      closing" bucket. Amazon credits the referral fee back when it refunds a
      buyer; the fixed closing fee it generally keeps, and "Refund commission"
@@ -4221,6 +4242,18 @@ function recCompute(settlements,mtrRows){
         const e=feeCount.get(lab)||{n:0,amt:0}; e.n++; e.amt+=Math.abs(l.amount); feeCount.set(lab,e);
       }
     }
+    /* Read the billed weight band off the fulfilment fee, so we can spot a
+       parcel Amazon suddenly measured heavier than usual. */
+    if(rec.sku) for(const l of rec.amounts){
+      const lab=(l.amountDescription||"").trim();
+      if(!/^(fba weight handling fee|amazon easy ship charges|easy ship weight handling fees)$/i.test(lab)) continue;
+      if(l.amount>=-0.005) continue;
+      const per=Math.abs(l.amount)/units;
+      const hit=REC_SLAB_OF.get(Math.round(per*100));
+      if(!hit) continue;
+      const a=bySkuSlab.get(rec.sku)||[]; a.push({slab:hit.slab,family:hit.family,per,units,rec});
+      bySkuSlab.set(rec.sku,a);
+    }
     const age=()=>{const d=saParseDate(rec.postedDate);
       return d?Math.floor((Date.now()-new Date(d+"T00:00:00Z").getTime())/86400000):null;};
     /* Charged more times than there are units in this line? Only judgeable
@@ -4277,6 +4310,28 @@ function recCompute(settlements,mtrRows){
         amount:feePaid,note:"Referral fee charged on the original order, never credited back"});
     }
   }
+  /* A SKU billed in a heavier weight band than it usually is. Zone and STEP
+     tier move the rupees, so compare BANDS, not amounts, and price the excess
+     within the same family. Needs a few shipments before "usual" means
+     anything. */
+  for(const [sku,rows] of bySkuSlab){
+    if(rows.length<4) continue;
+    const count=new Map();
+    for(const r of rows) count.set(r.slab,(count.get(r.slab)||0)+1);
+    let mode=null,best=-1;
+    for(const [slab,n] of count) if(n>best||(n===best&&slab<mode)){best=n;mode=slab;}
+    if(best/rows.length<0.6) continue;          // no settled norm — don't guess
+    for(const r of rows){
+      if(r.slab<=mode) continue;
+      const should=REC_FEE_FOR(r.family,mode);
+      if(should===null||should===undefined) continue;
+      const excess=(r.per-should)*r.units;
+      if(excess<=0.51) continue;
+      weightJump.push({check:"weightJump",orderId:r.rec.orderId,sku,date:r.rec.postedDate,
+        amount:Math.round(excess*100)/100,
+        note:"Billed in weight band "+(r.slab+1)+" (₹"+r.per.toFixed(2)+" per unit) when this SKU normally ships in band "+(mode+1)+" (₹"+should.toFixed(2)+") — "+best+" of its "+rows.length+" shipments"});
+    }
+  }
   /* What period do the loaded statements actually pay for? A shipment can only
      be called unpaid once the statement that would have paid it exists — so
      find the covered window, the holes in it, and stop short of the most
@@ -4328,10 +4383,10 @@ function recCompute(settlements,mtrRows){
   /* "Claimable" is only what the files prove Amazon owes. SAFE-T rows are
      candidates to review — most seller-fulfilled refunds are ordinary returns
      — so they are counted separately and never inflate the headline. */
-  const recovery=[...refundFee,...feeOver,...feeDup].reduce((s,x)=>s+(x.amount||0),0);
+  const recovery=[...refundFee,...feeOver,...feeDup,...weightJump].reduce((s,x)=>s+(x.amount||0),0);
   const review=safeT.reduce((s,x)=>s+(x.amount||0),0);
   const unpaid=shipped.reduce((s,x)=>s+(x.amount||0),0);
-  return {issues:{feeOver,feeDup,refundFee,safeT,shipped,negative},
+  return {issues:{feeOver,feeDup,weightJump,refundFee,safeT,shipped,negative},
     ordersChecked:ordersById.size,refundsChecked,
     recovery:Math.round(recovery*100)/100,
     review:Math.round(review*100)/100,
@@ -4345,6 +4400,9 @@ const REC_CHECKS={
   feeOver:{icon:"⚠️",title:"Closing fee charged above Amazon's own rate card",
     why:"The fixed closing fee depends only on the item's price band and how it was fulfilled — the fee category can only make it cheaper. These orders were charged more than the published maximum for their band, which is a billing error, not a category difference.",
     claim:`<b>Seller Central → Help → Get Support → Selling on Amazon → Payments</b> → "Incorrect closing fee charged". Quote the Order ID, the item price and the fee charged, and cite the fee schedule (Selling on Amazon fee schedule, Table 1 and Table 2). <b>Amazon requires fee claims within 30 calendar days of the order</b> — rows older than that are marked and may be refused.`},
+  weightJump:{icon:"⚖️",title:"Charged for a heavier parcel than usual",
+    why:"Amazon bills weight handling on the band it measured at the fulfilment centre, using the greater of actual and volumetric weight. When one shipment of a SKU is billed a band above the one it normally ships in, either the parcel was packed differently or Amazon mis-measured it — the second is reimbursable.",
+    claim:`Check the packed weight and dimensions first — a bigger box legitimately costs more. If they were unchanged: <b>Seller Central → Help → Get Support → Fulfilment by Amazon</b> → request a <b>measurement re-check</b> for the ASIN, quoting the Order ID and the fee charged. Amazon re-measures and refunds the difference on confirmed errors.`},
   feeDup:{icon:"👯",title:"The same fee charged twice on one order",
     why:"An identical fee line appears twice against the same order and item. Occasionally that is a genuine second unit, so check the quantity before claiming — but a duplicate on a single-unit order is money back.",
     claim:`<b>Seller Central → Help → Get Support → Selling on Amazon → Payments</b> → describe it as a duplicate fee charge, quoting the Order ID, the fee name and the amount. Same <b>30-day</b> claim window as any other fee dispute.`},
@@ -4361,7 +4419,7 @@ const REC_CHECKS={
     why:"Fees exceeded what the buyer paid — you shipped these at a loss. Not a claim, but fix the cause: weight slab, fee category, or a price below the fee floor.",
     claim:`Re-check the maths with the <a href="#/profit">profit calculator</a> and <b>Reports → Fee Preview</b>. If the charged weight or category is wrong: <b>Help → Get Support</b> → ask for a fee correction with the Order ID.`},
 };
-const REC_ORDER=["feeOver","feeDup","refundFee","safeT","shipped","negative"];
+const REC_ORDER=["feeOver","feeDup","weightJump","refundFee","safeT","shipped","negative"];
 
 function renderReconcile(){
   setMeta("Reconciliation & SAFE-T Finder — Seller Tools India",
@@ -4583,13 +4641,34 @@ function trendCompute(settlements){
     e.feePct=e.gross?Math.abs(e.fees)/e.gross*100:0;
     e.refundPct=e.gross?Math.abs(e.refunded)/e.gross*100:0;
   }
+  /* Which days actually sell. Amazon's posted date is when it booked the
+     transaction, which for a shipped order tracks the dispatch day closely
+     enough to tell a Sunday from a Wednesday — but say so rather than calling
+     it the order date. */
+  const dowNames=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  const dow=dowNames.map(name=>({name,short:name.slice(0,3),orders:0,units:0,gross:0,days:0}));
+  {
+    const seenDays=new Set();
+    for(const p of settlements) for(const rec of p.records){
+      if(rec.transactionType!=="Order") continue;
+      const d=saParseDate(rec.postedDate); if(!d) continue;
+      const i=new Date(d+"T00:00:00Z").getUTCDay();
+      const e=dow[i];
+      e.orders++; e.units+=rec.quantity||0;
+      for(const l of rec.amounts) if(/^principal$/i.test(l.amountDescription)) e.gross+=l.amount;
+      if(!seenDays.has(d)){ seenDays.add(d); dow[i].days++; }
+    }
+    // Per-day averages, so a month with five Saturdays doesn't look better than
+    // one with four.
+    for(const e of dow){ e.avgGross=e.days?e.gross/e.days:0; e.avgOrders=e.days?e.orders/e.days:0; }
+  }
   const skuList=[...skus.values()].map(s=>({
     sku:s.sku,
     sales:[...s.byMonth.values()].reduce((t,x)=>t+x.sales,0),
     months:out.map(e=>{const x=s.byMonth.get(e.m);
       return {m:e.m,units:x?x.units:0,sales:x?x.sales:0,net:x?x.net:0};}),
   })).sort((a,b)=>b.sales-a.sales);
-  return {months:out,skus:skuList,skipped};
+  return {months:out,skus:skuList,skipped,dow};
 }
 window.trendCompute=trendCompute; // exposed for verification/debugging
 
@@ -4683,6 +4762,33 @@ function trRenderResults(){
         <td class="num">${e.feePct.toFixed(1)}%</td><td class="num ${e.refundPct>10?'amt-neg':''}">${e.refundPct.toFixed(1)}%</td>
         <td class="num"><b>${sv(e.net)}</b></td></tr>`).join("")}
       </tbody></table></div></div>`;
+  // Which days sell — averaged per occurrence of that weekday.
+  if(t.dow&&t.dow.some(d=>d.days>0)){
+    const D=t.dow.filter(d=>d.days>0);
+    const best=D.reduce((m,x)=>x.avgGross>m.avgGross?x:m,D[0]);
+    const worst=D.reduce((m,x)=>x.avgGross<m.avgGross?x:m,D[0]);
+    const wk=D.filter(d=>d.name==="Saturday"||d.name==="Sunday");
+    const wd=D.filter(d=>d.name!=="Saturday"&&d.name!=="Sunday");
+    const avg=a=>a.length?a.reduce((s,x)=>s+x.avgGross,0)/a.length:0;
+    const wkAvg=avg(wk), wdAvg=avg(wd);
+    const gap=wdAvg?((wkAvg-wdAvg)/wdAvg*100):0;
+    h+=`<div class="panel"><h4>Which days sell <span class="sa-sub">— average per ${esc("weekday")}, not totals</span></h4>
+      <p class="sa-sub" style="margin:4px 0 10px">Averaged over each time that weekday occurred in the period, so a month with five Saturdays doesn't flatter the weekend. Dates are Amazon's posted date — when it booked the transaction, which tracks dispatch rather than when the buyer ordered.</p>
+      <div class="vizgrid">${
+        saBarChart("Average sales per day",D,"avgGross","#16a34a",v=>inr(v),{lbl:d=>d,unit:"by weekday",x:"short"})
+      }${
+        saBarChart("Average orders per day",D,"avgOrders","#2f5af0",v=>v.toFixed(1),{lbl:d=>d,unit:"by weekday",x:"short"})
+      }</div>
+      <div class="banner ${Math.abs(gap)>=15?"warn":"info"}" style="margin-top:12px"><b>${esc(best.name)}</b> is your strongest day at ${inr(best.avgGross)} average, <b>${esc(worst.name)}</b> the weakest at ${inr(worst.avgGross)}${
+        wk.length&&wd.length?` — weekends run <b>${gap>=0?"+":""}${gap.toFixed(0)}%</b> against weekdays`:""
+      }. ${Math.abs(gap)>=15?"That is a big enough gap to plan around: concentrate coupons, budget and launches on the strong days rather than spreading them evenly.":"The spread is modest, so day-of-week targeting is unlikely to move much — spend the effort on price and ads instead."}</div>
+      <div class="tblwrap" style="margin-top:12px"><table class="sa">
+        <thead><tr><th>Day</th><th class="num">Times in period</th><th class="num">Orders</th><th class="num">Units</th><th class="num">Gross sales</th><th class="num">Avg per day</th></tr></thead>
+        <tbody>${D.map(d=>`<tr${d.name===best.name?' class="rec-done"':""}>
+          <td>${esc(d.name)}</td><td class="num">${d.days}</td><td class="num">${d.orders}</td>
+          <td class="num">${d.units}</td><td class="num">${inr(d.gross)}</td><td class="num"><b>${inr(d.avgGross)}</b></td></tr>`).join("")}
+        </tbody></table></div></div>`;
+  }
   // Per-SKU trend picker.
   if(t.skus.length){
     const sel=t.skus.some(s=>s.sku===trSku)?trSku:"";
