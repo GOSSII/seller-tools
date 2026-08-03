@@ -2211,8 +2211,8 @@ const PW_MOCKS={
     <div class="row"><span>SKUs ads turn to a loss</span><b class="big">7</b></div>`,
   reconcile:`<div class="row"><span>Referral fee not returned</span><b class="amt pos">+₹1,242</b></div>
     <div class="row"><span>SAFE-T-eligible refunds</span><b class="amt pos">+₹3,940</b></div>
-    <div class="row"><span>Shipped but not paid</span><b class="amt pos">+₹2,118</b></div>
-    <div class="row"><span>Worth chasing</span><b class="big">₹7,300</b></div>`,
+    <div class="row"><span>Shipped, not yet paid</span><b class="amt">₹2,118</b></div>
+    <div class="row"><span>Claimable</span><b class="big">₹5,182</b></div>`,
   trends:`<div class="row"><span>Apr net payout</span><b class="amt pos">₹41,210</b></div>
     <div class="row"><span>May net payout</span><b class="amt pos">₹48,760</b></div>
     <div class="row"><span>Jun net payout</span><b class="amt pos">₹55,390</b></div>
@@ -4023,8 +4023,16 @@ window.parseMtr=parseMtr; // exposed for verification/debugging
 
 /* Pure cross-check over parsed settlements + MTR rows, so it is testable.
    Returns {issues:{refundFee,safeT,shipped,negative}, ordersChecked,
-   refundsChecked, recovery}. Amounts follow the settlement sign convention
-   (each issue's `amount` is the positive ₹ at stake; null = unknown). */
+   refundsChecked, recovery, unpaid, notes}. Amounts follow the settlement
+   sign convention (each issue's `amount` is the positive ₹ at stake;
+   null = unknown). `recovery` counts only claimable money (refund fee +
+   SAFE-T); unpaid shipments are timing as often as they are money, so they
+   are totalled separately in `unpaid` and never inflate the headline. */
+const REC_PAY_LAG_DAYS=14;      // a shipment can take a fortnight to reach a statement
+const REC_FEE_ITEMISED_MIN=0.2; // below this share of orders carrying a referral fee,
+                                // the statements simply aren't itemising selling fees
+const recDayNo=iso=>{const t=Date.parse(iso+"T00:00:00Z");return Number.isFinite(t)?Math.floor(t/86400000):null;};
+const recShiftDays=(iso,n)=>{const d=recDayNo(iso);return d===null?null:new Date((d+n)*86400000).toISOString().slice(0,10);};
 function recCompute(settlements,mtrRows){
   const records=[]; for(const p of settlements) records.push(...p.records);
   const ordersById=new Map(); let refundsChecked=0;
@@ -4037,9 +4045,19 @@ function recCompute(settlements,mtrRows){
   const referralOf=rec=>{let s=0;for(const l of rec.amounts){
     if(/^principal$/i.test(l.amountDescription))continue;
     if(saBucketOf(l.amountDescription||l.amountType,l.amount)==="referral")s+=l.amount;}return s;};
+  /* Do these statements itemise selling fees per order at all? Amazon bills
+     some sellers' referral/closing fees on a separate invoice, leaving the
+     settlement with no fee lines — then "no referral credit on this refund"
+     and "this order netted negative" are not findings, they are the absence
+     of data. Say so instead of flagging every single refund. */
+  let ordersWithFee=0;
+  for(const list of ordersById.values()) if(list.some(o=>referralOf(o)<-0.005)) ordersWithFee++;
+  const feesItemised=ordersById.size>0&&(ordersWithFee/ordersById.size)>=REC_FEE_ITEMISED_MIN;
+  let refundsNoOriginal=0,refundsNoFee=0;
   for(const rec of records){
     const isRefund=/refund/i.test(rec.transactionType);
     if(rec.transactionType==="Order"){
+      if(!feesItemised) continue; // no fee lines to net against — the check can't run
       const total=rec.amounts.reduce((s,l)=>s+l.amount,0);
       if(total<-0.005) negative.push({check:"negative",orderId:rec.orderId,sku:rec.sku,
         date:rec.postedDate,amount:Math.round(Math.abs(total)*100)/100,
@@ -4050,53 +4068,95 @@ function recCompute(settlements,mtrRows){
     refundsChecked++;
     if(rec.principal>=-0.005) continue; // nothing actually refunded to the buyer
     const refunded=Math.round(Math.abs(rec.principal)*100)/100;
-    // Referral-fee credit missing entirely on this refund?
-    if(referralOf(rec)<=0.005){
-      let feePaid=null;
+    /* Referral-fee credit missing on this refund? Only a real finding when we
+       can SEE the fee that should come back: the original order has to be in
+       the loaded files and has to have been charged one. */
+    let feePaid=null;
+    if(feesItemised&&referralOf(rec)<=0.005){
+      let sawOriginal=false;
       for(const o of (ordersById.get(rec.orderId)||[])){
         if(rec.sku&&o.sku&&o.sku!==rec.sku) continue;
+        sawOriginal=true;
         const rf=referralOf(o); if(rf<-0.005) feePaid=Math.round(Math.abs(rf)*100)/100;
       }
-      refundFee.push({check:"refundFee",orderId:rec.orderId,sku:rec.sku,date:rec.postedDate,
-        amount:feePaid,note:feePaid===null?"Original order not in the loaded file(s) — fee amount unknown":"Referral fee paid on the original order"});
+      if(feePaid===null){ if(sawOriginal) refundsNoFee++; else refundsNoOriginal++; }
     }
-    // Seller-fulfilled refund → SAFE-T candidate.
+    // Seller-fulfilled refund → SAFE-T candidate. A refund is listed once: an
+    // MFN refund that ALSO lost its referral credit says so in its note rather
+    // than appearing again in the refund-fee list.
     if(rec.fulfillmentId==="MFN"){
       let days=null; const d=saParseDate(rec.postedDate);
       if(d) days=Math.floor((Date.now()-new Date(d+"T00:00:00Z").getTime())/86400000);
+      let note=days!==null&&days>60?"Refund is "+days+" days old — the 60-day SAFE-T window has likely closed":"Item value refunded (excl. tax)";
+      if(feePaid!==null) note+=" · its ₹"+feePaid.toFixed(2)+" referral fee was never credited back either";
       safeT.push({check:"safeT",orderId:rec.orderId,sku:rec.sku,date:rec.postedDate,
-        amount:refunded,days,
-        note:days!==null&&days>60?"Refund is "+days+" days old — the 60-day SAFE-T window has likely closed":"Item value refunded (excl. tax)"});
+        amount:refunded,days,note});
+    }
+    else if(feePaid!==null){
+      refundFee.push({check:"refundFee",orderId:rec.orderId,sku:rec.sku,date:rec.postedDate,
+        amount:feePaid,note:"Referral fee charged on the original order, never credited back"});
     }
   }
-  // MTR shipments with no Order payment line in any loaded settlement.
+  /* What period do the loaded statements actually pay for? A shipment can only
+     be called unpaid once the statement that would have paid it exists — so
+     find the covered window, the holes in it, and stop short of the most
+     recent fortnight. */
+  const wins=[];
+  for(const p of settlements){
+    if(!p.summary) continue;
+    const a=saParseDate(p.summary.settlementStartDate),b=saParseDate(p.summary.settlementEndDate);
+    if(a&&b) wins.push([a,b]);
+  }
+  wins.sort((x,y)=>x[0]<y[0]?-1:x[0]>y[0]?1:0);
+  const gaps=[];
+  for(let i=1;i<wins.length;i++){
+    const prevEnd=wins[i-1][1],start=wins[i][0];
+    const g=recDayNo(start)-recDayNo(prevEnd);
+    if(Number.isFinite(g)&&g>1) gaps.push({from:prevEnd,to:start,days:g});
+  }
+  const covEnd=wins.length?wins[wins.length-1][1]:null;
+  const cutoff=covEnd?recShiftDays(covEnd,-REC_PAY_LAG_DAYS):null;
+  // Cancelled or refunded per the MTR itself → no payment is ever coming.
+  const settled=new Set();
+  for(const m of (mtrRows||[])){
+    if(!m.orderId) continue;
+    if(m.type==="Cancel"||/refund/i.test(m.type)) settled.add(m.orderId+"|"+(m.sku||""));
+  }
+  let skippedCancelled=0,skippedRecent=0;
   const byOrder=new Map();
   for(const m of (mtrRows||[])){
     if(m.type!=="Shipment"||!m.orderId) continue;
     if(ordersById.has(m.orderId)) continue;
+    if(settled.has(m.orderId+"|"+(m.sku||""))){skippedCancelled++;continue;}
+    const sd=saParseDate(m.shipDate)||saParseDate(m.orderDate);
+    if(cutoff&&sd&&sd>cutoff){skippedRecent++;continue;}
     const e=byOrder.get(m.orderId)||{check:"shipped",orderId:m.orderId,sku:m.sku,
-      date:m.shipDate||m.orderDate,amount:0,note:"Invoice value from the MTR"};
+      date:sd||m.shipDate||m.orderDate,amount:0,note:"Invoice value from the MTR"};
     e.amount=Math.round((e.amount+Math.abs(m.amount))*100)/100;
     if(m.sku&&e.sku&&m.sku!==e.sku)e.sku=e.sku+", "+m.sku;
     byOrder.set(m.orderId,e);
   }
   for(const e of byOrder.values()) shipped.push(e);
-  const recovery=[...refundFee,...safeT,...shipped].reduce((s,x)=>s+(x.amount||0),0);
+  const recovery=[...refundFee,...safeT].reduce((s,x)=>s+(x.amount||0),0);
+  const unpaid=shipped.reduce((s,x)=>s+(x.amount||0),0);
   return {issues:{refundFee,safeT,shipped,negative},
     ordersChecked:ordersById.size,refundsChecked,
-    recovery:Math.round(recovery*100)/100};
+    recovery:Math.round(recovery*100)/100,
+    unpaid:Math.round(unpaid*100)/100,
+    notes:{feesItemised,ordersWithFee,refundsNoOriginal,refundsNoFee,
+      skippedCancelled,skippedRecent,gaps,covEnd,cutoff}};
 }
 window.recCompute=recCompute; // exposed for verification/debugging
 
 const REC_CHECKS={
   refundFee:{icon:"💸",title:"Refunds where the referral fee wasn't returned",
-    why:"When Amazon refunds a buyer it normally credits back most of the referral fee it charged you. These refunds have no referral-fee credit at all.",
+    why:"When Amazon refunds a buyer it normally credits back most of the referral fee it charged you. On these refunds the original order was charged a referral fee and the refund credits none of it back.",
     claim:`<b>Seller Central → Help → Get Support → Selling on Amazon</b> → describe it as "Referral fee not credited back on refund" and quote the Order ID and refund date. Ask them to compare the refund's fee lines with the original order.`},
   safeT:{icon:"🛡️",title:"SAFE-T-eligible refunds (seller-fulfilled)",
     why:"Amazon refunded the buyer on these Easy Ship / Self Ship orders. If the item never came back, came back damaged or the refund was against policy, claim reimbursement through SAFE-T.",
     claim:`<b>Seller Central → Help → Get Support → Selling on Amazon → search "SAFE-T"</b> → File a SAFE-T claim → enter the Order ID. File within <b>60 days</b> of the refund date — older rows are marked.`},
   shipped:{icon:"📦",title:"Shipped but no payment line",
-    why:"These orders are shipments in your MTR but have no Order payment in any settlement you loaded. Most often the payment sits in the next statement — load it before raising a claim.",
+    why:"These orders are shipments in your MTR with no Order payment in any settlement you loaded. Cancelled and refunded shipments, and anything shipped in the last fortnight of the loaded period, are already excluded — but the payment still most often sits in a statement you haven't loaded. Load every statement covering the period before raising a claim.",
     claim:`First search the Order ID in <b>Payments → Transaction View</b>. If the shipment is over 30 days old and still unpaid: <b>Help → Get Support → Selling on Amazon → Payments</b>, quoting the Order ID and ship date.`},
   negative:{icon:"🔻",title:"Orders that netted negative",
     why:"Fees exceeded what the buyer paid — you shipped these at a loss. Not a claim, but fix the cause: weight slab, fee category, or a price below the fee floor.",
@@ -4177,16 +4237,35 @@ function recRenderResults(){
   const done=loadRecDone();
   const allIssues=REC_ORDER.flatMap(k=>res.issues[k]);
   const openCount=allIssues.filter(x=>!done[recKey(x)]).length;
+  const n=res.notes||{};
   h+=`<div class="stats">
     <div class="stat blue"><div class="k">Checked</div><div class="v">${res.ordersChecked} orders · ${res.refundsChecked} refunds</div></div>
     <div class="stat ${allIssues.length?"red":"green"}"><div class="k">Issues flagged</div><div class="v">${allIssues.length}</div></div>
-    <div class="stat green"><div class="k">Worth chasing (upper bound)</div><div class="v">${inr(res.recovery)}</div></div>
+    <div class="stat green"><div class="k">Claimable (upper bound)</div><div class="v">${inr(res.recovery)}</div></div>
+    <div class="stat"><div class="k">Shipped, not yet paid</div><div class="v">${inr(res.unpaid)}</div></div>
     <div class="stat"><div class="k">Still to action</div><div class="v">${openCount}</div></div>
   </div>`;
+  h+=`<div class="banner info"><b>Claimable</b> is refund-fee credits and SAFE-T claims — money Amazon owes you. <b>Shipped, not yet paid</b> is kept out of that total on purpose: most of it is settlement timing, not lost money.</div>`;
+  if(!n.feesItemised&&res.ordersChecked)
+    h+=`<div class="banner warn">These statements don't itemise selling fees per order — only ${n.ordersWithFee||0} of ${res.ordersChecked} orders carry a referral-fee line, so Amazon is billing your fees elsewhere (usually a separate monthly fee invoice). Two checks are switched off because the data isn't there to run them: <b>refunds missing their referral-fee credit</b> and <b>orders that netted negative</b>. Everything else below still applies.</div>`;
+  else if(n.refundsNoOriginal||n.refundsNoFee){
+    const bits=[];
+    if(n.refundsNoOriginal) bits.push(`${n.refundsNoOriginal} refund${n.refundsNoOriginal>1?"s":""} whose original order isn't in the loaded files — load the statement that paid it to check ${n.refundsNoOriginal>1?"them":"it"}`);
+    if(n.refundsNoFee) bits.push(`${n.refundsNoFee} where the original order was never charged a referral fee, so there is nothing to credit back`);
+    h+=`<div class="banner info">Not flagged: ${bits.join("; ")}.</div>`;
+  }
+  if(n.gaps&&n.gaps.length)
+    h+=`<div class="banner warn">Your statements have a gap — nothing loaded for ${n.gaps.map(g=>`<b>${esc(saFmtDay(g.from))} → ${esc(saFmtDay(g.to))}</b>`).join(", ")}. Orders paid in the missing statement${n.gaps.length>1?"s":""} will look unpaid below. Load ${n.gaps.length>1?"those statements":"that statement"} before chasing anything in the shipped-but-not-paid list.</div>`;
+  if(n.skippedCancelled||n.skippedRecent){
+    const bits=[];
+    if(n.skippedCancelled) bits.push(`${n.skippedCancelled} shipment line${n.skippedCancelled>1?"s":""} the MTR itself cancels or refunds`);
+    if(n.skippedRecent) bits.push(`${n.skippedRecent} shipped after ${esc(saFmtDay(n.cutoff))}, too recent to have reached a statement`);
+    h+=`<div class="banner info">Left out of the unpaid list: ${bits.join("; ")}.</div>`;
+  }
   if(!mtrRows.length)
     h+=`<div class="banner info">No MTR loaded — the <b>shipped-but-not-paid</b> check needs one. Get it from <b>Reports → Tax Document Library → Merchant Tax Reports → B2C</b> and drop it here too.</div>`;
   if(!allIssues.length)
-    h+=`<div class="banner good">✅ Nothing to chase — every refund credited its referral fee, no negative orders${mtrRows.length?", and every MTR shipment has a payment line":""}.</div>`;
+    h+=`<div class="banner good">✅ Nothing to chase — ${n.feesItemised?"every refund credited its referral fee, no negative orders":"no SAFE-T-eligible refunds"}${mtrRows.length?", and every MTR shipment has a payment line":""}.</div>`;
   else
     h+=`<div style="display:flex;justify-content:flex-end;margin:14px 0 2px"><button type="button" class="fbtn" id="rec-csv">⬇ Export checklist CSV</button></div>`;
   for(const k of REC_ORDER){
