@@ -7127,7 +7127,7 @@ function adpRender(){
        month of ads against two months of payout and every ACOS reads low. */
     if(r.unattributed.total>0&&t.spend>0&&Math.abs(t.spend-r.unattributed.total)/r.unattributed.total>0.2)
       h+=`<div class="banner warn">Your ad report accounts for <b>${inr0(t.spend)}</b> of spend, but these statements were charged <b>${inr0(r.unattributed.total)}</b> of advertising — the two files cover different periods. Every ACOS and TACOS below is measured against whichever is shorter, so export the ad report for <b>exactly the dates these statements cover</b> before drawing conclusions.</div>`;
-    if(!r.costed) h+=`<div class="banner info">No product costs saved yet, so the table shows <b>payout</b>, not profit. Add costs in the <a href="#/sku-report">SKU Profitability Report</a> — they're stored in this browser and picked up here automatically.</div>`;
+    if(!r.costed) h+=`<div class="banner info">No product costs yet, so the table shows <b>payout</b> — what Amazon paid you — rather than profit. Type a cost per unit into the <b>Cost/unit</b> column below (or set one for everything at once) and the break-even ACOS and true profit appear. Costs save in this browser and the <a href="#/sku-report">SKU Profitability Report</a> uses the same ones.</div>`;
     if(r.asinOnly) h+=`<div class="banner info">That ad report has ASINs but no SKU column, so rows only match if your settlement uses the same identifier. Re-export it with the <b>Advertised SKU</b> column for an exact match.</div>`;
     const unmatched=r.rows.filter(x=>x.orphan);
     /* An "orphan" that Amazon credits with ad sales is usually not a wasted
@@ -7147,9 +7147,15 @@ function adpRender(){
         .map(([k,t2])=>`<button type="button" class="fbtn${adpSort===k?" on":""}" data-adpsort="${k}">${t2}</button>`).join("")}
       <button type="button" class="fbtn" id="adp-csv">⬇ Export CSV</button>
     </div>
+    <div class="sku-costall">
+      <span>Product cost per unit —</span>
+      <input id="adp-cost-all" type="number" min="0" inputmode="decimal" placeholder="apply to all" style="max-width:150px">
+      <button class="fbtn" id="adp-apply-all">Apply to all SKUs</button>
+      <span class="sa-sub">saved in this browser, shared with the SKU Profitability Report</span></div>
     <div class="tblwrap"><table class="sa">
       <thead><tr><th>SKU</th><th class="num">Units</th><th class="num">Sales</th>
-        <th class="num">Payout after fees</th><th class="num">Ad spend</th><th class="num">ACOS</th>
+        <th class="num">Payout after fees</th><th class="num">Ad spend</th>
+        <th class="num" title="Your cost per unit. Type it here — it saves in this browser and the SKU Profitability Report picks it up too.">Cost/unit ₹</th><th class="num">ACOS</th>
         <th class="num" title="How much of a sale can go on ads before this SKU stops making money. Needs a product cost.">Break-even ACOS</th><th class="num">After ads${r.costed?" &amp; cost":""}</th><th>Verdict</th></tr></thead>
       <tbody>${rows.map(x=>{
         const bottom=x.hasCost?x.profit:x.afterAds;
@@ -7161,11 +7167,12 @@ function adpRender(){
         const vc=verdict[1]==="good"?"var(--green)":verdict[1]==="bad"?"var(--red)":verdict[1]==="warn"?"var(--orange)":"var(--muted)";
         const over=x.acos!==null&&x.breakEven!==null&&x.acos>x.breakEven;
         return `<tr>
-          <td>${esc(x.sku)}${x.hasCost?"":` <span class="sa-sub" title="No product cost saved — this row shows payout, not profit">·no cost</span>`}</td>
+          <td>${esc(x.sku)}</td>
           <td class="num">${x.units||"—"}</td>
           <td class="num">${x.sales?inr0(x.sales):"—"}</td>
           <td class="num">${x.payout?inr0(x.payout):"—"}</td>
           <td class="num">${x.spend?inr0(-x.spend):"—"}</td>
+          <td class="num"><input type="number" min="0" inputmode="decimal" class="sku-cost-in" data-cost-sku="${esc(x.sku)}" value="${x.cost?x.cost:""}" placeholder="0" aria-label="Product cost per unit for ${esc(x.sku)}"></td>
           <td class="num"${over?' style="color:var(--red);font-weight:700"':""}>${x.acos===null?"—":x.acos.toFixed(1)+"%"}</td>
           <td class="num"${x.breakEven===null&&x.spend>0?' title="Add this SKU\'s product cost to see the break-even ACOS"':""}>${x.breakEven===null?"—":x.breakEven.toFixed(1)+"%"}</td>
           <td class="num" style="font-weight:700;color:${bottom>0?"var(--green)":"var(--red)"}">${inr0(bottom)}</td>
@@ -7182,6 +7189,20 @@ function adpWire(out,rows){
   out.querySelectorAll("[data-adpsort]").forEach(b=>b.addEventListener("click",()=>{
     adpSort=b.dataset.adpsort; adpRender();
   }));
+  /* Costs are entered here rather than only in the SKU report: this is where
+     the seller is looking when they need to know whether a campaign pays. */
+  out.querySelectorAll(".sku-cost-in").forEach(inp=>inp.addEventListener("change",()=>{
+    const c=loadSkuCosts(), v=inp.value.trim();
+    if(v===""||Number(v)===0) delete c[inp.dataset.costSku]; else c[inp.dataset.costSku]=Number(v)||0;
+    saveSkuCosts(c); adpRender();
+  }));
+  const applyAll=out.querySelector("#adp-apply-all");
+  if(applyAll&&rows) applyAll.addEventListener("click",()=>{
+    const el=out.querySelector("#adp-cost-all"), v=el?el.value.trim():"";
+    const c=loadSkuCosts();
+    rows.forEach(x=>{ if(v===""||Number(v)===0) delete c[x.sku]; else c[x.sku]=Number(v)||0; });
+    saveSkuCosts(c); adpRender();
+  });
   const csv=out.querySelector("#adp-csv");
   if(csv&&rows) csv.addEventListener("click",()=>{
     const q=v=>`"${String(v??"").replace(/"/g,'""')}"`;
