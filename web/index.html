@@ -670,29 +670,41 @@
 const GST = 0.18;
 
 const CATS = [
-  ["electronics","Electronics",[[1000,0],[null,9]],[4,9,16],8,"",0,"std"],
-  ["mobile-phones","Mobile Phones & Tablets",[[1000,0],[null,5]],[2,5,9],5,"",0,"std"],
-  ["computers","Computers & Laptops",[[1000,0],[null,6]],[3,7,12],6,"",0,"std"],
-  ["clothing","Clothing & Apparel",[[1000,0],[null,15]],[6,14,24],12,"Apparel – Sarees and Dress Materials",1,"bd"],
-  ["footwear","Footwear",[[1000,0],[null,8]],[6,13,22],12,"Shoes",1,"std"],
-  ["watches","Watches",[[1000,0],[null,15]],[8,17,28],14,"Watches",1,"std"],
-  ["beauty","Beauty & Cosmetics",[[1000,0],[null,7]],[10,20,32],15,"Beauty – Make-up",1,"std"],
-  ["personal-care","Personal Care Appliances",[[1000,0],[null,9.5]],[6,13,22],12,"Personal Care Appliances – Grooming and Styling",1,"std"],
-  ["grocery","Grocery & Gourmet",[[1000,0],[null,8]],[3,7,12],6,"Grocery – Herbs and Spices",1,"bd"],
-  ["home-kitchen","Home & Kitchen",[[1000,0],[null,12.5]],[6,14,24],11,"Kitchen – Glassware and Ceramicware",1,"std"],
+  // Each row names the exact Amazon fee category it is priced from. Where our
+  // one friendly label spans several of Amazon's, we take the "Other products"
+  // row for that family rather than the cheapest sibling — a calculator that
+  // flatters the margin is worse than one that is slightly cautious.
+  ["electronics","Electronics (devices)",[[1000,9],[null,11]],[4,9,16],8,"Electronic Devices (excluding TV, camera, GPS, speakers)",1,"std"],
+  ["mobile-phones","Mobile Phones",[[null,5]],[2,5,9],5,"Mobile Phones",1,"std"],
+  ["computers","Laptops",[[null,6]],[3,7,12],6,"Laptops",1,"std"],
+  ["phone-cases","Cases, Covers & Screen Guards",[[1000,0],[null,25]],[4,9,16],10,"Cases, Covers, Skins and Screen Guards",1,"ac"],
+  ["cables","Cables, Chargers & Adapters",[[1000,0],[null,20]],[4,9,16],10,"Cables and Adapters – Electronics, PC and Wireless",1,"bd"],
+  ["headphones","Headphones & Earphones",[[1000,0],[null,18]],[4,9,16],10,"Headsets, Headphones and Earphones",1,"std"],
+  ["smart-watches","Smart Watches & Wearables",[[300,0],[1000,5],[null,17]],[8,17,28],14,"Smart Watches and Accessories",1,"std"],
+  ["watches","Watches (non-smart)",[[1000,0],[null,15]],[8,17,28],14,"Watches",1,"std"],
+  ["clothing","Clothing & Apparel",[[1000,0],[null,19]],[6,14,24],12,"Apparel – Other products",1,"ac"],
+  ["footwear","Shoes (adult)",[[1000,0],[null,8]],[6,13,22],12,"Shoes",1,"std"],
+  ["footwear-other","Kids, Sports & Casual Footwear",[[1000,0],[null,16]],[6,13,22],12,"Kids Shoes",1,"std"],
+  ["beauty","Beauty & Cosmetics",[[500,0],[null,9]],[10,20,32],15,"Beauty – Other products",1,"ac"],
+  ["personal-care","Personal Care Appliances (grooming)",[[1000,0],[null,9.5]],[6,13,22],12,"Personal Care Appliances – Grooming and Styling",1,"std"],
+  ["grocery","Grocery & Gourmet",[[1000,0],[null,9]],[3,7,12],6,"Grocery and Gourmet – Other products",1,"bd"],
+  ["home-kitchen","Kitchen (cookware, glassware, tools)",[[1000,0],[null,12.5]],[6,14,24],11,"Kitchen – Other products",1,"std"],
+  ["home-decor","Home, Decor & Storage",[[1000,0],[null,18]],[6,14,24],11,"Home – Other products",1,"ac"],
   ["furniture","Furniture",[[1000,0],[15000,15.5],[null,11]],[5,12,20],10,"Furniture – Other products",1,"std"],
   ["toys","Toys & Games",[[1000,0],[null,12.5]],[7,15,25],12,"Toys – Games and Puzzles, Boards Games, Adult Games and Building Sets",1,"std"],
-  ["sports","Sports & Fitness",[[1000,0],[null,10.5]],[7,14,23],11,"Toys – Outdoor, Activity and Sports Toys",1,"std"],
+  ["sports","Sports & Fitness",[[1000,0],[null,13]],[7,14,23],11,"Sports – Other products",1,"std"],
   ["books","Books",[[250,0],[500,2],[1000,4],[null,13.5]],[4,9,16],7,"Books",1,"bd"],
-  ["jewellery","Fashion Jewellery",[[1000,0],[null,13]],[8,18,30],16,"Silver Jewellery",1,"bd"],
-  ["baby-products","Baby Products",[[1000,0],[null,9]],[7,14,23],11,"Baby Strollers",1,"std"],
-  ["automotive","Automotive",[[1000,0],[null,8.5]],[6,12,20],9,"Automotive – Batteries and Air Fresheners",1,"std"],
-  ["pet-supplies","Pet Supplies",[[300,0],[1000,6.5],[null,9.5]],[8,16,25],12,"Pet Foods",1,"bd"],
-  ["health","Health & Nutrition",[[300,0],[null,11.5]],[9,18,28],13,"Health and Household – Other products",1,"bd"],
-  ["large-appliances","Large Appliances",[[1000,0],[null,5.5]],[3,7,12],6,"",0,"big"],
-  ["small-appliances","Small Appliances",[[1000,0],[5000,7.5],[null,8.5]],[4,9,15],7,"Cleaning and Home Appliances",1,"std"],
-  ["headphones","Headphones & Earphones",[[1000,0],[null,18]],[4,9,16],10,"Headsets, Headphones and Earphones",1,"std"],
-  ["industrial","Business & Industrial Supplies",[[1000,0],[null,12]],[5,11,18],9,"Business & Scientific Supplies",1,"ac"],
+  ["jewellery","Fashion Jewellery",[[1000,0],[null,22.5]],[8,18,30],16,"Fashion Jewellery",1,"bd"],
+  ["jewellery-fine","Silver & Fine Jewellery (studded)",[[1000,0],[null,13]],[8,18,30],16,"Silver Jewellery",1,"b"],
+  ["baby-products","Baby Products (strollers, diapers)",[[1000,0],[null,9]],[7,14,23],11,"Baby Strollers",1,"std"],
+  ["automotive","Automotive",[[1000,0],[null,16]],[6,12,20],9,"Automotive – Other products",1,"ac"],
+  ["pet-supplies","Pet Supplies",[[1000,0],[null,12]],[8,16,25],12,"Pet – Other products",1,"ac"],
+  ["health","Health & Nutrition",[[300,0],[null,11.5]],[9,18,28],13,"Health and Household – Other products",1,"d"],
+  ["large-appliances","Large Appliances",[[null,5.5]],[3,7,12],6,"Major Appliances – Other products",1,"big"],
+  ["small-appliances","Small Appliances",[[1000,0],[5000,4.5],[null,8]],[4,9,15],7,"Small Appliances",1,"std"],
+  ["cleaning-appliances","Cleaning & Home Appliances",[[1000,0],[5000,7.5],[null,8.5]],[4,9,15],7,"Cleaning and Home Appliances",1,"std"],
+  ["industrial","Business & Industrial Supplies",[[1000,0],[15000,8],[null,5]],[5,11,18],9,"Business and Industrial Supplies – Other products",1,"ac"],
+  ["office","Office Products",[[1000,0],[null,11.5]],[5,11,18],9,"Office – Other products",1,"ac"],
   ["other","Other",[[1000,0],[null,11.5]],[5,12,20],10,"Toys – Other products",1,"std"],
 ].map(([key,name,referral,b,tacos,amzCat,verified,closeGroup])=>({key,name,referral,bench:{low:b[0],median:b[1],high:b[2]},tacos,amzCat,verified:!!verified,closeGroup:closeGroup||"std"}));
 
@@ -715,6 +727,8 @@ const CLOSING_FBA_GROUPS={
   std:[26,22,27,52],
   ac:[20,18,27,52],
   bd:[13,14,27,52],
+  b:[13,22,27,52],             // in the Rs 0-300 list only
+  d:[26,14,27,52],             // in the Rs 301-500 list only, standard below that
   big:[26,22,27,72],           // Refrigerators, Chimneys, Major Appliances, Home Entertainment
 };
 const SLABS = [
@@ -3213,11 +3227,22 @@ function saSplit(line,delim){
   out.push(f);return out;
 }
 function saParseAmount(raw,decimal="dot"){
-  const s=(raw??"").trim(); if(s==="")return 0;
+  let s=String(raw??"").trim(); if(s==="")return 0;
+  /* Excel writes negatives in brackets — "(123.45)" — and we tell people to
+     re-save Amazon's .xlsx exports as CSV, so this really does arrive. Read
+     the brackets as the minus sign they are; stripping them silently turned
+     every fee into income. */
+  let neg=false;
+  if(/^\(.*\)$/.test(s)){ neg=true; s=s.slice(1,-1).trim(); }
+  // Letters in a money cell mean it isn't money: say so rather than salvaging
+  // digits out of it ("1e3" used to come back as 13).
+  if(/[A-Za-z]/.test(s.replace(/^(inr|rs\.?)\s*/i,"")))return NaN;
   let c=s.replace(/[^\d.,-]/g,"");
   if(decimal==="comma")c=c.replace(/\./g,"").replace(",","."); else c=c.replace(/,/g,"");
   if(c===""||c==="-"||c===".")return NaN;
-  const n=Number(c);return Number.isFinite(n)?n:NaN;
+  const n=Number(c);
+  if(!Number.isFinite(n))return NaN;
+  return neg?-n:n;
 }
 const saCell=(fields,index,key)=>{const i=index[key];return i===undefined?"":(fields[i]??"").trim();};
 /* Amazon's older report consoles hand out .xlsx. Read as text that is just zip
@@ -3338,7 +3363,9 @@ function parseUnifiedTransaction(text){
   if(I.type===-1||I.total===-1||I.sales===-1) return null;
   const errors=[],records=[];
   const cell=(f,i)=>i>=0&&i<f.length?String(f[i]||"").trim():"";
-  const money=(f,i)=>{const v=parseFloat(cell(f,i).replace(/,/g,"").replace(/[^0-9.\-]/g,""));return isFinite(v)?v:0;};
+  // Same money reader as the flat file, so bracketed negatives and junk cells
+  // behave identically wherever they turn up.
+  const money=(f,i)=>{const v=saParseAmount(cell(f,i));return Number.isFinite(v)?v:0;};
   for(let i=hln+1;i<lines.length;i++){
     const raw=lines[i]; if(raw.trim()==="") continue;
     const f=saSplit(raw,",");
@@ -3363,8 +3390,13 @@ function parseUnifiedTransaction(text){
     add("TDS (Section 194-O)",money(f,I.tds));
     add("Commission",money(f,I.selling));
     add("FBA Fees",money(f,I.fba));
-    add(desc||"Other transaction fee",money(f,I.otherFee));
-    add(desc||"Other",money(f,I.other));
+    /* The "description" column in this report is the PRODUCT TITLE, not a fee
+       name — using it as a label put 200-character product names in the fee
+       breakdown, and saBucketOf() reads labels, so any title containing "FBA"
+       or "storage" was filed as a fulfilment fee. Label these by the column
+       they came from. */
+    add("Other transaction fee",money(f,I.otherFee));
+    add("Other",money(f,I.other));
     if(!amounts.length) continue;
     const ful=cell(f,I.fulfil).toLowerCase();
     const qty=parseInt(cell(f,I.qty).replace(/,/g,""),10);
@@ -6703,7 +6735,9 @@ function parseAdReport(text){
     orders:adpFind(norm,ADP_ORDER_ALIASES),clicks:adpFind(norm,["clicks"]),
     impressions:adpFind(norm,["impressions"])};
   const cell=(f,i)=>i>=0&&i<f.length?String(f[i]||"").trim():"";
-  const money=(f,i)=>{const v=parseFloat(cell(f,i).replace(/,/g,"").replace(/[^0-9.\-]/g,""));return isFinite(v)?v:0;};
+  // Same money reader as the flat file, so bracketed negatives and junk cells
+  // behave identically wherever they turn up.
+  const money=(f,i)=>{const v=saParseAmount(cell(f,i));return Number.isFinite(v)?v:0;};
   const bySku=new Map(); let rows=0,noKey=0;
   for(let i=hln+1;i<lines.length;i++){
     if(!lines[i].trim()) continue;
