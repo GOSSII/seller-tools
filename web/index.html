@@ -3377,8 +3377,13 @@ function parseUnifiedTransaction(text){
     add("TDS (Section 194-O)",money(f,I.tds));
     add("Commission",money(f,I.selling));
     add("FBA Fees",money(f,I.fba));
-    add(desc||"Other transaction fee",money(f,I.otherFee));
-    add(desc||"Other",money(f,I.other));
+    /* The "description" column in this report is the PRODUCT TITLE, not a fee
+       name — using it as a label put 200-character product names in the fee
+       breakdown, and saBucketOf() reads labels, so any title containing "FBA"
+       or "storage" was filed as a fulfilment fee. Label these by the column
+       they came from. */
+    add("Other transaction fee",money(f,I.otherFee));
+    add("Other",money(f,I.other));
     if(!amounts.length) continue;
     const ful=cell(f,I.fulfil).toLowerCase();
     const qty=parseInt(cell(f,I.qty).replace(/,/g,""),10);
