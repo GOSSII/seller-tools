@@ -4608,7 +4608,7 @@ const trFmtMonth=m=>new Date(m+"-01T00:00:00Z").toLocaleDateString("en-IN",{mont
 /* Pure: parsed settlements -> {months, skus, skipped}. Each record lands in
    the month of its posted-date, falling back to the statement's start month;
    lines with no usable date at all are counted in `skipped`, never guessed. */
-function trendCompute(settlements){
+function trendCompute(settlements,mtrRows){
   const zeros=()=>({gross:0,refunded:0,fees:0,taxes:0,credits:0,net:0,orders:0,units:0,refunds:0});
   const months=new Map(), skus=new Map(); let skipped=0;
   for(const p of settlements){
@@ -4704,13 +4704,41 @@ function trendCompute(settlements){
     // one with four.
     for(const e of dow){ e.avgGross=e.days?e.gross/e.days:0; e.avgOrders=e.days?e.orders/e.days:0; }
   }
+  /* The same months counted on ORDER date, straight from the MTR. Amazon's
+     SKU page and business reports count this way, so this is the column that
+     will agree with them — while the money stays on settlement dates, because
+     that is when it was actually paid. */
+  const ordered=new Map(), orderedSku=new Map();
+  let orderedFrom=null, orderedTo=null;
+  for(const m of (mtrRows||[])){
+    if(m.type!=="Shipment"||!m.sku) continue;
+    const d=saParseDate(m.orderDate)||saParseDate(m.shipDate); if(!d) continue;
+    if(!orderedFrom||d<orderedFrom) orderedFrom=d;
+    if(!orderedTo||d>orderedTo) orderedTo=d;
+    const key=d.slice(0,7), q=m.quantity||0, v=Math.abs(m.amount||0);
+    const e=ordered.get(key)||{units:0,sales:0}; e.units+=q; e.sales+=v; ordered.set(key,e);
+    let sm=orderedSku.get(m.sku); if(!sm){sm=new Map();orderedSku.set(m.sku,sm);}
+    const se=sm.get(key)||{units:0,sales:0}; se.units+=q; se.sales+=v; sm.set(key,se);
+  }
+  const haveOrdered=ordered.size>0;
+  for(const e of out){
+    const o=ordered.get(e.m); e.orderedUnits=o?o.units:0; e.orderedSales=o?o.sales:0;
+    /* The MTR has its own date range — a custom export can start mid-month.
+       A month it only half covers is not a small month, and saying so is the
+       whole point of this column. */
+    const [Y,Mo]=e.m.split("-").map(Number);
+    const first=`${e.m}-01`, last=`${e.m}-${String(new Date(Date.UTC(Y,Mo,0)).getUTCDate()).padStart(2,"0")}`;
+    e.orderedPartial=!haveOrdered||!orderedFrom||!orderedTo||orderedFrom>first||orderedTo<last;
+  }
   const skuList=[...skus.values()].map(s=>({
     sku:s.sku,
     sales:[...s.byMonth.values()].reduce((t,x)=>t+x.sales,0),
     months:out.map(e=>{const x=s.byMonth.get(e.m);
-      return {m:e.m,units:x?x.units:0,sales:x?x.sales:0,net:x?x.net:0};}),
+      const o=(orderedSku.get(s.sku)||new Map()).get(e.m);
+      return {m:e.m,units:x?x.units:0,sales:x?x.sales:0,net:x?x.net:0,
+        orderedUnits:o?o.units:0,orderedSales:o?o.sales:0,orderedPartial:e.orderedPartial};}),
   })).sort((a,b)=>b.sales-a.sales);
-  return {months:out,skus:skuList,skipped,dow};
+  return {months:out,skus:skuList,skipped,dow,haveOrdered,orderedFrom,orderedTo};
 }
 window.trendCompute=trendCompute; // exposed for verification/debugging
 
@@ -4729,7 +4757,7 @@ function trendsBody(){
       <label class="sa-drop" id="tr-drop">
         <div class="ico">📈</div>
         <h3>Drop your settlement files here</h3>
-        <p>or click to choose — several files at once is fine (.csv or .txt)</p>
+        <p>or click to choose — several statements, plus your MTR for order-date units (.csv or .txt)</p>
         <input type="file" id="tr-file" multiple accept=".csv,.txt,text/plain,text/csv">
       </label>
       <div class="sa-priv">🔒 Private by design — your files never leave your device. All charts are computed locally on this page.</div>
@@ -4749,13 +4777,19 @@ function trAddFiles(list){
     const rd=new FileReader();
     rd.onload=()=>{
       const txt=String(rd.result);
-      const p=parseUnifiedTransaction(txt)||parseSettlement(txt);
       trFiles=trFiles.filter(x=>x.name!==f.name); // re-drop replaces
+      /* An MTR carries the ORDER date, which is what Amazon's own SKU and
+         business reports count by — take one if it is offered so the months
+         can be shown on the same basis. */
+      const mtr=parseMtr(txt);
+      if(mtr){ trFiles.push({name:f.name,kind:"mtr",rows:mtr.rows}); if(--pending===0) trRenderResults(); return; }
+      if(saLooksExcel(txt,f.name)){ trFiles.push({name:f.name,kind:"error",msg:SA_EXCEL_MSG}); if(--pending===0) trRenderResults(); return; }
+      const p=parseUnifiedTransaction(txt)||parseSettlement(txt);
       if(p.records.length||p.summary){
         const dup=p.summary&&trFiles.some(x=>x.kind==="settlement"&&x.parsed.summary&&x.parsed.summary.settlementId===p.summary.settlementId);
         if(dup) trFiles.push({name:f.name,kind:"error",msg:"same settlement ID as a file already loaded — skipped to avoid double counting"});
         else trFiles.push({name:f.name,kind:"settlement",parsed:p});
-      } else trFiles.push({name:f.name,kind:"error",msg:"not recognised as a settlement flat file"});
+      } else trFiles.push({name:f.name,kind:"error",msg:"not recognised as a settlement flat file or MTR"});
       if(--pending===0) trRenderResults();
     };
     rd.onerror=()=>{trFiles.push({name:f.name,kind:"error",msg:"could not read the file"});if(--pending===0)trRenderResults();};
@@ -4772,7 +4806,8 @@ function trRenderResults(){
     if(trFiles.length) h+=`<div class="banner info">Add at least one <b>settlement flat file</b> (Payments → All Statements → Download Flat File V2).</div>`;
     out.innerHTML=h; trWire(out); return;
   }
-  const t=trendCompute(settlements);
+  const trMtr=trFiles.filter(f=>f.kind==="mtr").flatMap(f=>f.rows);
+  const t=trendCompute(settlements,trMtr);
   /* A month with no statement days behind it isn't a zero month, it's an
      artefact of one stray line posting outside the period — drawing it as a
      Rs 0 bar reads as "we sold nothing", which is false. */
@@ -4805,9 +4840,9 @@ function trRenderResults(){
       saBarChart("Refund rate (by value)",M,"refundPct","#f5872b",v=>v.toFixed(1)+"%",mo)
     }</div>
     <div class="tblwrap" style="margin-top:12px"><table class="sa">
-      <thead><tr><th>Month</th><th class="num">Orders</th><th class="num">Units</th><th class="num">Gross sales</th><th class="num">Refunds</th><th class="num">Fees</th><th class="num">Fee %</th><th class="num">Refund %</th><th class="num">Net payout</th></tr></thead>
+      <thead><tr><th>Month</th><th class="num">Orders</th><th class="num" title="Units whose settlement landed in this month">Units settled</th>${t.haveOrdered?`<th class="num" title="Units ordered in this month, from the MTR — this is the basis Amazon's own reports use">Units ordered</th>`:""}<th class="num">Gross sales</th><th class="num">Refunds</th><th class="num">Fees</th><th class="num">Fee %</th><th class="num">Refund %</th><th class="num">Net payout</th></tr></thead>
       <tbody>${M.map(e=>`<tr>
-        <td>${esc(trFmtMonth(e.m))}${e.partial?` <span class="sa-sub" title="Statements cover only ${e.coverDays} of ${e.monthDays} days of this month">· ${e.coverDays}/${e.monthDays} days</span>`:""}</td><td class="num">${e.orders}</td><td class="num">${e.units}</td>
+        <td>${esc(trFmtMonth(e.m))}${e.partial?` <span class="sa-sub" title="Statements cover only ${e.coverDays} of ${e.monthDays} days of this month">· ${e.coverDays}/${e.monthDays} days</span>`:""}</td><td class="num">${e.orders}</td><td class="num">${e.units}</td>${t.haveOrdered?`<td class="num"${e.orderedPartial?' title="Your MTR does not cover this whole month"':""}><b>${e.orderedUnits||"—"}</b>${e.orderedPartial?'<span class="sa-sub"> ·part</span>':""}</td>`:""}
         <td class="num">${inr(e.gross)}</td><td class="num">${sv(e.refunded)}</td><td class="num">${sv(e.fees)}</td>
         <td class="num">${e.feePct.toFixed(1)}%</td><td class="num ${e.refundPct>10?'amt-neg':''}">${e.refundPct.toFixed(1)}%</td>
         <td class="num"><b>${sv(e.net)}</b></td></tr>`).join("")}
@@ -4851,16 +4886,17 @@ function trRenderResults(){
       const s0=t.skus.find(x=>x.sku===sel);
       const s=Object.assign({},s0,{months:s0.months.filter(x=>covered.has(x.m))});
       h+=`<div class="vizgrid">${
-          saBarChart("Units sold",s.months,"units","#2f5af0",v=>v+(v===1?" unit":" units"),mo)
+          saBarChart(t.haveOrdered?"Units ordered (Amazon's basis)":"Units settled",s.months,t.haveOrdered?"orderedUnits":"units","#2f5af0",v=>v+(v===1?" unit":" units"),mo)
         }${
           saBarChart("Gross sales",s.months,"sales","#16a34a",v=>inr(v),mo)
         }</div>
         <div class="tblwrap" style="margin-top:12px"><table class="sa">
-          <thead><tr><th>Month</th><th class="num">Units</th><th class="num">Gross sales</th><th class="num">Net</th><th class="num">Net / unit</th></tr></thead>
-          <tbody>${s.months.map(x=>`<tr><td>${esc(trFmtMonth(x.m))}</td><td class="num">${x.units}</td>
+          <thead><tr><th>Month</th>${t.haveOrdered?`<th class="num" title="Units ordered in this month — the basis Amazon's SKU page uses">Ordered</th>`:""}<th class="num" title="Units whose settlement landed in this month">Settled</th><th class="num">Gross sales</th><th class="num">Net</th><th class="num">Net / unit</th></tr></thead>
+          <tbody>${s.months.map(x=>`<tr><td>${esc(trFmtMonth(x.m))}</td>${t.haveOrdered?`<td class="num"${x.orderedPartial?' title="Your MTR does not cover this whole month"':""}><b>${x.orderedUnits||"—"}</b>${x.orderedPartial?'<span class="sa-sub"> ·part</span>':""}</td>`:""}<td class="num">${x.units}</td>
             <td class="num">${inr(x.sales)}</td><td class="num"><b>${sv(x.net)}</b></td>
             <td class="num">${x.units?inr(x.net/x.units):"—"}</td></tr>`).join("")}
-          </tbody></table></div>`;
+          </tbody></table></div>
+          ${t.haveOrdered?`<div class="banner info" style="margin-top:10px"><b>Ordered</b> counts the month the buyer bought, from your MTR (${esc(saFmtDay(t.orderedFrom))} – ${esc(saFmtDay(t.orderedTo))}) — that is the column that will match Amazon's SKU page. Months marked <b>·part</b> fall outside that range, so their Ordered figure is only the days the MTR covers. <b>Settled</b> counts the month Amazon paid for it. A SKU that sells late in the month can look half its size in the settled column, so judge sales on Ordered and money on Settled.</div>`:`<div class="banner info" style="margin-top:10px">These units are counted by <b>settlement</b> month — when Amazon paid, not when the buyer ordered, so they will not match Amazon's SKU page. Drop your <b>MTR</b> (Reports → Tax Document Library → Merchant Tax Reports → B2C) in here as well and an <b>Ordered</b> column appears on Amazon's own basis.</div>`}`;
     } else h+=`<p class="sa-sub">Pick a SKU to see its own monthly units, sales and net.</p>`;
     h+=`</div>`;
   }
