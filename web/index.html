@@ -3309,11 +3309,23 @@ function parseSettlement(text,opts={}){
     }
     const desc=saCell(fields,index,"amountDescription");
     if(rec.sku==="")rec.sku=saCell(fields,index,"sku");
-    if(rec.quantity===0){const qr=saCell(fields,index,"quantityPurchased"),qty=qr===""?0:Number(qr.replace(/,/g,""));if(Number.isFinite(qty))rec.quantity=qty;}
+    /* Amazon reports a multi-unit order as the SAME line group repeated once
+       per unit — same order-item-code, same shipment, quantity-purchased 1 on
+       each. Those rows all land in one record here, so the record's quantity
+       has to be the sum over the principal rows; taking the first row's
+       quantity counted a two-unit order as one, which undercounted every unit
+       figure in the app and made per-unit fees look doubled. */
+    {const qr=saCell(fields,index,"quantityPurchased"),qty=qr===""?0:Number(qr.replace(/,/g,""));
+     if(Number.isFinite(qty)&&qty>0){
+       if(/^principal$/i.test(desc)) rec._qtyPrincipal=(rec._qtyPrincipal||0)+qty;
+       else if(!rec._qtyOther||qty>rec._qtyOther) rec._qtyOther=qty;
+     }}
     gAmt.get(key).push({amountType:saCell(fields,index,"amountType"),amountDescription:desc,amount});
   }
   const records=order.map(key=>{
     const rec=groups.get(key),lines=gAmt.get(key);rec.amounts=lines;
+    rec.quantity=rec._qtyPrincipal||rec._qtyOther||rec.quantity||0;
+    delete rec._qtyPrincipal; delete rec._qtyOther;
     for(const l of lines){
       if(/^principal$/i.test(l.amountDescription))rec.principal+=l.amount;
       else{rec.fees.push(l);const d=l.amountDescription||l.amountType||"(unlabelled)";rec.feeMap[d]=(rec.feeMap[d]??0)+l.amount;}
@@ -4096,6 +4108,16 @@ const REC_UNMATCHED_WARN=0.15;  // unmatched share above which a missing stateme
                                 // (a real account missing its COD series sat at 0.22)
 const recDayNo=iso=>{const t=Date.parse(iso+"T00:00:00Z");return Number.isFinite(t)?Math.floor(t/86400000):null;};
 const recShiftDays=(iso,n)=>{const d=recDayNo(iso);return d===null?null:new Date((d+n)*86400000).toISOString().slice(0,10);};
+/* The most Amazon's published schedule allows as a closing fee for a price
+   band. At a fulfilment centre the select-fee groups only ever charge less
+   (Rs 20/13 and Rs 18/14 in the two lowest bands), and above Rs 1,000 the
+   large-appliance list pays MORE (Rs 72), so that is the ceiling there. Off
+   the fulfilment centre we cannot tell Easy Ship from Self-Ship, so take the
+   higher of the two. */
+function recClosingCeiling(price,afn){
+  const band=price<=300?0:price<=500?1:price<=1000?2:3;
+  return afn?[26,22,27,72][band]:[20,26,51,101][band];
+}
 function recCompute(settlements,mtrRows){
   const records=[]; for(const p of settlements) records.push(...p.records);
   const ordersById=new Map(); let refundsChecked=0;
@@ -4104,7 +4126,7 @@ function recCompute(settlements,mtrRows){
       const a=ordersById.get(rec.orderId)||[]; a.push(rec); ordersById.set(rec.orderId,a);
     }
   }
-  const refundFee=[],safeT=[],negative=[],shipped=[];
+  const refundFee=[],safeT=[],negative=[],shipped=[],feeOver=[],feeDup=[];
   /* The referral (commission) fee specifically — NOT saBucketOf's "referral &
      closing" bucket. Amazon credits the referral fee back when it refunds a
      buyer; the fixed closing fee it generally keeps, and "Refund commission"
@@ -4148,6 +4170,59 @@ function recCompute(settlements,mtrRows){
     if(total<-0.005) negative.push({check:"negative",orderId:oid,sku,date,
       amount:Math.round(Math.abs(total)*100)/100,
       note:"Order netted "+"−₹"+Math.abs(total).toFixed(2)+" after fees"});
+  }
+  /* ---- Fee audit -------------------------------------------------------
+     Amazon's closing fee depends only on the price band and the channel, so we
+     can name the most it is allowed to be. The select-fee categories only ever
+     make it CHEAPER and real charges sometimes come in under the card, so only
+     a charge ABOVE the ceiling is evidence of anything.
+
+     This runs per ORDER ITEM, not per order: a basket of two different
+     products is two prices and two correct fees, and averaging them across the
+     order invented overcharges. Records are already one per order-item, and a
+     record's quantity is the units within it. Amazon's schedule requires fee
+     claims within 30 calendar days, so each row carries its age. */
+  for(const rec of records){
+    if(rec.transactionType!=="Order") continue;
+    const afn=rec.fulfillmentId==="AFN", mfn=rec.fulfillmentId==="MFN";
+    if(!afn&&!mfn) continue;                    // channel unknown — no ceiling to use
+    const units=Math.max(1,rec.quantity||0);
+    let buyerPaid=0,closing=0; const feeCount=new Map();
+    for(const l of rec.amounts){
+      const lab=(l.amountDescription||"").trim();
+      /* The band is on what the BUYER paid for the item: principal plus any
+         shipping or gift wrap they were charged, plus the GST inside that
+         price — Indian listings are tax-inclusive — less the promotions you
+         funded. Excluding tax put items priced just under Rs 300 in the wrong
+         band and read Amazon's correct Rs 22 as a Rs 2 overcharge. */
+      if(/^(principal|shipping|gift ?wrap)$/i.test(lab)) buyerPaid+=l.amount;
+      else if(/^(product tax|shipping tax|gift ?wrap tax)$/i.test(lab)) buyerPaid+=l.amount;
+      else if(/^(promo rebates|shipping (discount|promo discount)|gift ?wrap discount|product tax discount|shipping tax discount)$/i.test(lab)) buyerPaid+=l.amount;
+      if(/^fixed closing fee$/i.test(lab)) closing+=l.amount;
+      if(l.amount<-0.005&&/^(fixed closing fee|commission|fba pick & pack fee|fba weight handling fee)$/i.test(lab)){
+        const e=feeCount.get(lab)||{n:0,amt:0}; e.n++; e.amt+=Math.abs(l.amount); feeCount.set(lab,e);
+      }
+    }
+    const age=()=>{const d=saParseDate(rec.postedDate);
+      return d?Math.floor((Date.now()-new Date(d+"T00:00:00Z").getTime())/86400000):null;};
+    /* Charged more times than there are units in this line? Only judgeable
+       when the line carries its revenue: a fee-only record (the sale settled
+       in another statement) has no principal rows to count units from, so a
+       second charge there may simply be a second unit. */
+    if(rec.quantity>0&&buyerPaid>0) for(const [lab,e] of feeCount) if(e.n>units)
+      feeDup.push({check:"feeDup",orderId:rec.orderId,sku:rec.sku,
+      date:rec.postedDate,amount:Math.round((e.amt/e.n)*(e.n-units)*100)/100,
+      note:lab+" charged "+e.n+" times for "+units+" unit"+(units>1?"s":"")+" of this item"});
+    if(buyerPaid<=0||Math.abs(closing)<=0.005) continue;
+    const unitPrice=buyerPaid/units, charged=Math.abs(closing)/units;
+    const ceiling=recClosingCeiling(unitPrice,afn);
+    if(charged-ceiling>0.51){
+      const days=age();
+      feeOver.push({check:"feeOver",orderId:rec.orderId,sku:rec.sku,date:rec.postedDate,days,
+        amount:Math.round((charged-ceiling)*units*100)/100,
+        note:"Closing fee ₹"+charged.toFixed(2)+" per unit on a ₹"+unitPrice.toFixed(2)+" item — the published maximum for that band is ₹"+ceiling
+          +(days!==null?(days>30?". Over 30 days old, so Amazon may refuse the claim":". "+(30-days)+" days left to claim"):"")});
+    }
   }
   for(const rec of records){
     const isRefund=/refund/i.test(rec.transactionType);
@@ -4235,10 +4310,10 @@ function recCompute(settlements,mtrRows){
   /* "Claimable" is only what the files prove Amazon owes. SAFE-T rows are
      candidates to review — most seller-fulfilled refunds are ordinary returns
      — so they are counted separately and never inflate the headline. */
-  const recovery=refundFee.reduce((s,x)=>s+(x.amount||0),0);
+  const recovery=[...refundFee,...feeOver,...feeDup].reduce((s,x)=>s+(x.amount||0),0);
   const review=safeT.reduce((s,x)=>s+(x.amount||0),0);
   const unpaid=shipped.reduce((s,x)=>s+(x.amount||0),0);
-  return {issues:{refundFee,safeT,shipped,negative},
+  return {issues:{feeOver,feeDup,refundFee,safeT,shipped,negative},
     ordersChecked:ordersById.size,refundsChecked,
     recovery:Math.round(recovery*100)/100,
     review:Math.round(review*100)/100,
@@ -4249,6 +4324,12 @@ function recCompute(settlements,mtrRows){
 window.recCompute=recCompute; // exposed for verification/debugging
 
 const REC_CHECKS={
+  feeOver:{icon:"⚠️",title:"Closing fee charged above Amazon's own rate card",
+    why:"The fixed closing fee depends only on the item's price band and how it was fulfilled — the fee category can only make it cheaper. These orders were charged more than the published maximum for their band, which is a billing error, not a category difference.",
+    claim:`<b>Seller Central → Help → Get Support → Selling on Amazon → Payments</b> → "Incorrect closing fee charged". Quote the Order ID, the item price and the fee charged, and cite the fee schedule (Selling on Amazon fee schedule, Table 1 and Table 2). <b>Amazon requires fee claims within 30 calendar days of the order</b> — rows older than that are marked and may be refused.`},
+  feeDup:{icon:"👯",title:"The same fee charged twice on one order",
+    why:"An identical fee line appears twice against the same order and item. Occasionally that is a genuine second unit, so check the quantity before claiming — but a duplicate on a single-unit order is money back.",
+    claim:`<b>Seller Central → Help → Get Support → Selling on Amazon → Payments</b> → describe it as a duplicate fee charge, quoting the Order ID, the fee name and the amount. Same <b>30-day</b> claim window as any other fee dispute.`},
   refundFee:{icon:"💸",title:"Refunds where the referral fee wasn't returned",
     why:"When Amazon refunds a buyer it normally credits back most of the referral fee it charged you. On these refunds the original order was charged a referral fee and the refund credits none of it back.",
     claim:`<b>Seller Central → Help → Get Support → Selling on Amazon</b> → describe it as "Referral fee not credited back on refund" and quote the Order ID and refund date. Ask them to compare the refund's fee lines with the original order.`},
@@ -4262,7 +4343,7 @@ const REC_CHECKS={
     why:"Fees exceeded what the buyer paid — you shipped these at a loss. Not a claim, but fix the cause: weight slab, fee category, or a price below the fee floor.",
     claim:`Re-check the maths with the <a href="#/profit">profit calculator</a> and <b>Reports → Fee Preview</b>. If the charged weight or category is wrong: <b>Help → Get Support</b> → ask for a fee correction with the Order ID.`},
 };
-const REC_ORDER=["refundFee","safeT","shipped","negative"];
+const REC_ORDER=["feeOver","feeDup","refundFee","safeT","shipped","negative"];
 
 function renderReconcile(){
   setMeta("Reconciliation & SAFE-T Finder — Seller Tools India",
