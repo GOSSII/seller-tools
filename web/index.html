@@ -1506,7 +1506,7 @@ const HELP={
     steps:["Drop the settlement file.","Sort by Net to see which products actually make money after fees, taxes and refunds.","Sort by Refund % to spot problem products. Units ÷ days gives the daily sales rate for the Restock Planner."]},
   "ad-profit":{input:`Two files. <b>Payments → All Statements → Flat File V2</b> (or a Monthly Unified Transaction report) for what each SKU actually earned — and, from the <b>Advertising console → Sponsored Ads → Reports</b>, a <b>Sponsored Products “Advertised product”</b> report for the same period, which is the only place ad spend is broken down per SKU.`,
     steps:["Drop the settlement (or unified transaction) file, and the advertised-product report for the same dates.","Fill in product costs for your main SKUs — without them the table shows payout, not profit.","Read the “ads turn profit into loss” list first: those SKUs earn money until the advertising is counted.","Compare each SKU's ACOS against its break-even ACOS — anything above it is being advertised at a loss."]},
-  "reconcile":{input:`Settlement file(s): <b>Payments → All Statements → Download Flat File V2</b> — drop every statement for the period you're checking. Optional but recommended: the matching MTR — <b>Reports → Tax Document Library → Merchant Tax Reports → B2C</b> (.csv) — so shipped-but-unpaid orders can be caught too.`,
+  "reconcile":{input:`Settlement file(s): <b>Payments → All Statements → Download Flat File V2</b> — drop every statement for the period you're checking, <b>from both Account Types</b>: All Statements keeps a separate weekly series for <i>Electronic Transactions</i> and for <i>Cash On Delivery Transactions and Non-Transactional Fees</i>, and orders paid through the series you skip will look unpaid. Optional but recommended: the matching MTR — <b>Reports → Tax Document Library → Merchant Tax Reports → B2C</b> (.csv) — so shipped-but-unpaid orders can be caught too.`,
     steps:["Drop your settlement file(s), and the MTR for the same months if you have it.","Work through each issue list — every row shows the order, the amount at stake and the exact Seller Central path to claim it.","Tick rows off as you raise them (ticks are saved in your browser), and export the checklist as CSV to track claims."]},
   "fnsku-labels":{input:`Your FNSKU (starts with X0) is in <b>Inventory → FBA Inventory</b> — the FNSKU column — or on the <b>Print item labels</b> page (<b>Manage Inventory</b> → tick your FBA listings → <b>Print item labels</b>). Copy it from either place; the product name can be anything your packers will recognise.`,
     steps:["Add a row per product: FNSKU/code, product name, condition (defaults to New) and how many stickers you need.","Pick the paper: A4 sticker sheets with 65, 40 or 24 labels per page, or a 4×6 thermal sheet (12 per page).","Generate, check the preview, download — and print at 100% scale (never \"fit to page\", or the barcode dimensions shift).","Stick one label per unit, covering any existing barcode on the retail packaging."]},
@@ -3220,10 +3220,14 @@ function saParseAmount(raw,decimal="dot"){
   const n=Number(c);return Number.isFinite(n)?n:NaN;
 }
 const saCell=(fields,index,key)=>{const i=index[key];return i===undefined?"":(fields[i]??"").trim();};
-function saGroupKey(fields,index){
-  return [saCell(fields,index,"settlementId"),saCell(fields,index,"transactionType"),
+function saGroupKey(fields,index,tt){
+  const ids=saCell(fields,index,"orderId")+saCell(fields,index,"shipmentId")+saCell(fields,index,"adjustmentId");
+  return [saCell(fields,index,"settlementId"),tt??saCell(fields,index,"transactionType"),
     saCell(fields,index,"orderId"),saCell(fields,index,"orderItemCode")||saCell(fields,index,"sku"),
-    saCell(fields,index,"shipmentId"),saCell(fields,index,"adjustmentId")].join("");
+    saCell(fields,index,"shipmentId"),saCell(fields,index,"adjustmentId"),
+    /* Account-level charges carry no ids at all — keep separate charges apart
+       by when they posted instead of collapsing them into one blob. */
+    ids===""?saCell(fields,index,"postedDateTime")||saCell(fields,index,"postedDate"):""].join("");
 }
 function parseSettlement(text,opts={}){
   const errors=[],rawLines=text.split(/\r\n|\r|\n/);
@@ -3251,13 +3255,20 @@ function parseSettlement(text,opts={}){
       continue;
     }
     if(missingReq){errors.push({line:lineNo,reason:`Cannot parse row: missing required column(s) ${missingColumns.join(", ")}`,raw});continue;}
-    if(tt===""){errors.push({line:lineNo,reason:"Row has no transaction-type",raw});continue;}
+    /* Amazon posts account-level charges — FBA inbound transportation, storage,
+       and the GST on them — with NO transaction-type at all: just an
+       amount-type, a description and an amount. They usually land in the
+       "Non-Transactional Fees" statement, and they are real money, so file
+       them under their amount-type rather than dropping the row (which used to
+       leave the statement total thousands of rupees out). */
+    const ttEff=tt||(saCell(fields,index,"amount")!==""?(saCell(fields,index,"amountType")||"other-transaction"):"");
+    if(ttEff===""){errors.push({line:lineNo,reason:"Row has no transaction-type",raw});continue;}
     const amount=saParseAmount(saCell(fields,index,"amount"),decimal);
     if(Number.isNaN(amount)){errors.push({line:lineNo,reason:`Unparseable amount "${saCell(fields,index,"amount")}"`,raw});continue;}
-    const key=saGroupKey(fields,index); let rec=groups.get(key);
+    const key=saGroupKey(fields,index,ttEff); let rec=groups.get(key);
     if(!rec){
       const qr=saCell(fields,index,"quantityPurchased"),qty=qr===""?0:Number(qr.replace(/,/g,""));
-      rec={settlementId:saCell(fields,index,"settlementId"),transactionType:tt,orderId,
+      rec={settlementId:saCell(fields,index,"settlementId"),transactionType:ttEff,orderId,
         sku:saCell(fields,index,"sku"),quantity:Number.isFinite(qty)?qty:0,
         marketplaceName:saCell(fields,index,"marketplaceName"),fulfillmentId:saCell(fields,index,"fulfillmentId"),
         postedDate:saCell(fields,index,"postedDate")||saCell(fields,index,"postedDateTime"),
@@ -4031,6 +4042,9 @@ window.parseMtr=parseMtr; // exposed for verification/debugging
 const REC_PAY_LAG_DAYS=14;      // a shipment can take a fortnight to reach a statement
 const REC_FEE_ITEMISED_MIN=0.2; // below this share of orders carrying a referral fee,
                                 // the statements simply aren't itemising selling fees
+const REC_UNMATCHED_WARN=0.15;  // unmatched share above which a missing statement
+                                // series is the likelier explanation than unpaid money
+                                // (a real account missing its COD series sat at 0.22)
 const recDayNo=iso=>{const t=Date.parse(iso+"T00:00:00Z");return Number.isFinite(t)?Math.floor(t/86400000):null;};
 const recShiftDays=(iso,n)=>{const d=recDayNo(iso);return d===null?null:new Date((d+n)*86400000).toISOString().slice(0,10);};
 function recCompute(settlements,mtrRows){
@@ -4042,28 +4056,52 @@ function recCompute(settlements,mtrRows){
     }
   }
   const refundFee=[],safeT=[],negative=[],shipped=[];
+  /* The referral (commission) fee specifically — NOT saBucketOf's "referral &
+     closing" bucket. Amazon credits the referral fee back when it refunds a
+     buyer; the fixed closing fee it generally keeps, and "Refund commission"
+     is the admin fee it charges FOR the refund. Lumping those together turned
+     every ordinary refund into a claim. */
   const referralOf=rec=>{let s=0;for(const l of rec.amounts){
-    if(/^principal$/i.test(l.amountDescription))continue;
-    if(saBucketOf(l.amountDescription||l.amountType,l.amount)==="referral")s+=l.amount;}return s;};
+    const lab=(l.amountDescription||l.amountType||"").trim();
+    if(!/^(commission|referral fee)/i.test(lab))continue;
+    s+=l.amount;}return s;};
   /* Do these statements itemise selling fees per order at all? Amazon bills
      some sellers' referral/closing fees on a separate invoice, leaving the
      settlement with no fee lines — then "no referral credit on this refund"
      and "this order netted negative" are not findings, they are the absence
      of data. Say so instead of flagging every single refund. */
-  let ordersWithFee=0;
-  for(const list of ordersById.values()) if(list.some(o=>referralOf(o)<-0.005)) ordersWithFee++;
+  let ordersWithFee=0,ordersWithAnyFee=0;
+  const isSellingFee=l=>{const b=saBucketOf(l.amountDescription||l.amountType,l.amount);
+    return l.amount<-0.005&&(b==="referral"||b==="fulfil");};
+  for(const list of ordersById.values()){
+    if(list.some(o=>referralOf(o)<-0.005)) ordersWithFee++;
+    if(list.some(o=>o.amounts.some(isSellingFee))) ordersWithAnyFee++;
+  }
+  // Two different questions: is the REFERRAL fee itemised (needed to judge a
+  // refund's credit), and is ANY selling fee itemised (needed to net an order).
   const feesItemised=ordersById.size>0&&(ordersWithFee/ordersById.size)>=REC_FEE_ITEMISED_MIN;
+  const feeLinesPresent=ordersById.size>0&&(ordersWithAnyFee/ordersById.size)>=REC_FEE_ITEMISED_MIN;
   let refundsNoOriginal=0,refundsNoFee=0;
+  /* Loss-making orders, netted per ORDER. An order's lines can be split over
+     several records — and even over two statements — so a record holding only
+     the FBA fees always looks like a loss on its own. */
+  let negativeNoRevenue=0;
+  if(feeLinesPresent) for(const [oid,list] of ordersById){
+    let total=0,gross=0,sku="",date="";
+    for(const o of list){
+      for(const l of o.amounts){ total+=l.amount; if(/^principal$/i.test(l.amountDescription)) gross+=l.amount; }
+      if(!sku) sku=o.sku; if(!date) date=o.postedDate;
+    }
+    /* Fulfilment fees can post in one statement while the sale posts in
+       another. An order with fees but no revenue in the loaded files isn't a
+       loss — it's half a picture. */
+    if(gross<=0.005){negativeNoRevenue++;continue;}
+    if(total<-0.005) negative.push({check:"negative",orderId:oid,sku,date,
+      amount:Math.round(Math.abs(total)*100)/100,
+      note:"Order netted "+"−₹"+Math.abs(total).toFixed(2)+" after fees"});
+  }
   for(const rec of records){
     const isRefund=/refund/i.test(rec.transactionType);
-    if(rec.transactionType==="Order"){
-      if(!feesItemised) continue; // no fee lines to net against — the check can't run
-      const total=rec.amounts.reduce((s,l)=>s+l.amount,0);
-      if(total<-0.005) negative.push({check:"negative",orderId:rec.orderId,sku:rec.sku,
-        date:rec.postedDate,amount:Math.round(Math.abs(total)*100)/100,
-        note:"Order netted "+"−₹"+Math.abs(total).toFixed(2)+" after fees"});
-      continue;
-    }
     if(!isRefund) continue;
     refundsChecked++;
     if(rec.principal>=-0.005) continue; // nothing actually refunded to the buyer
@@ -4137,14 +4175,27 @@ function recCompute(settlements,mtrRows){
     byOrder.set(m.orderId,e);
   }
   for(const e of byOrder.values()) shipped.push(e);
-  const recovery=[...refundFee,...safeT].reduce((s,x)=>s+(x.amount||0),0);
+  /* A big unmatched share usually means statements are missing rather than
+     that Amazon hasn't paid: All Statements keeps a SEPARATE weekly series per
+     Account Type (Electronic vs Cash On Delivery), and sellers routinely
+     download only one of them. */
+  let mtrOrders=0; {const seen=new Set();
+    for(const m of (mtrRows||[])) if(m.type==="Shipment"&&m.orderId) seen.add(m.orderId);
+    mtrOrders=seen.size;}
+  const manyUnmatched=mtrOrders>20&&(shipped.length/mtrOrders)>REC_UNMATCHED_WARN;
+  /* "Claimable" is only what the files prove Amazon owes. SAFE-T rows are
+     candidates to review — most seller-fulfilled refunds are ordinary returns
+     — so they are counted separately and never inflate the headline. */
+  const recovery=refundFee.reduce((s,x)=>s+(x.amount||0),0);
+  const review=safeT.reduce((s,x)=>s+(x.amount||0),0);
   const unpaid=shipped.reduce((s,x)=>s+(x.amount||0),0);
   return {issues:{refundFee,safeT,shipped,negative},
     ordersChecked:ordersById.size,refundsChecked,
     recovery:Math.round(recovery*100)/100,
+    review:Math.round(review*100)/100,
     unpaid:Math.round(unpaid*100)/100,
-    notes:{feesItemised,ordersWithFee,refundsNoOriginal,refundsNoFee,
-      skippedCancelled,skippedRecent,gaps,covEnd,cutoff}};
+    notes:{feesItemised,feeLinesPresent,ordersWithFee,refundsNoOriginal,refundsNoFee,negativeNoRevenue,
+      skippedCancelled,skippedRecent,gaps,covEnd,cutoff,mtrOrders,manyUnmatched}};
 }
 window.recCompute=recCompute; // exposed for verification/debugging
 
@@ -4242,12 +4293,15 @@ function recRenderResults(){
     <div class="stat blue"><div class="k">Checked</div><div class="v">${res.ordersChecked} orders · ${res.refundsChecked} refunds</div></div>
     <div class="stat ${allIssues.length?"red":"green"}"><div class="k">Issues flagged</div><div class="v">${allIssues.length}</div></div>
     <div class="stat green"><div class="k">Claimable (upper bound)</div><div class="v">${inr(res.recovery)}</div></div>
+    <div class="stat"><div class="k">Refunds to review</div><div class="v">${inr(res.review)}</div></div>
     <div class="stat"><div class="k">Shipped, not yet paid</div><div class="v">${inr(res.unpaid)}</div></div>
     <div class="stat"><div class="k">Still to action</div><div class="v">${openCount}</div></div>
   </div>`;
-  h+=`<div class="banner info"><b>Claimable</b> is refund-fee credits and SAFE-T claims — money Amazon owes you. <b>Shipped, not yet paid</b> is kept out of that total on purpose: most of it is settlement timing, not lost money.</div>`;
+  h+=`<div class="banner info"><b>Claimable</b> is only what these files prove Amazon owes you — referral fees charged and never credited back. The other two totals are deliberately kept out of it: <b>refunds to review</b> are SAFE-T <i>candidates</i> (most seller-fulfilled refunds are ordinary returns you won't get back), and <b>shipped, not yet paid</b> is usually settlement timing.</div>`;
+  if(n.manyUnmatched)
+    h+=`<div class="banner warn">${res.issues.shipped.length} of ${n.mtrOrders} shipped orders have no payment line — that is a lot, and the usual cause is missing statements rather than missing money. <b>Payments → All Statements keeps a separate weekly series for each Account Type</b> — <i>Electronic Transactions</i> and <i>Cash On Delivery Transactions and Non-Transactional Fees</i>. Switch the Account Type dropdown and download both series for the period, then drop them here too.</div>`;
   if(!n.feesItemised&&res.ordersChecked)
-    h+=`<div class="banner warn">These statements don't itemise selling fees per order — only ${n.ordersWithFee||0} of ${res.ordersChecked} orders carry a referral-fee line, so Amazon is billing your fees elsewhere (usually a separate monthly fee invoice). Two checks are switched off because the data isn't there to run them: <b>refunds missing their referral-fee credit</b> and <b>orders that netted negative</b>. Everything else below still applies.</div>`;
+    h+=`<div class="banner warn">These statements don't itemise the referral fee per order — only ${n.ordersWithFee||0} of ${res.ordersChecked} orders carry one, so Amazon is billing it elsewhere (usually the monthly fee invoice under <b>Tax Document Library → Seller Fee Invoices</b>). The <b>refunds missing their referral-fee credit</b> check is switched off: the data to run it isn't here. ${n.feeLinesPresent?"Loss-making orders are still checked, but only against the fees that <i>do</i> appear here — anything on the separate invoice isn't counted, so a thin order can look profitable.":"<b>Orders that netted negative</b> is switched off too — there are no selling-fee lines at all to net against."}</div>`;
   else if(n.refundsNoOriginal||n.refundsNoFee){
     const bits=[];
     if(n.refundsNoOriginal) bits.push(`${n.refundsNoOriginal} refund${n.refundsNoOriginal>1?"s":""} whose original order isn't in the loaded files — load the statement that paid it to check ${n.refundsNoOriginal>1?"them":"it"}`);
@@ -4262,6 +4316,8 @@ function recRenderResults(){
     if(n.skippedRecent) bits.push(`${n.skippedRecent} shipped after ${esc(saFmtDay(n.cutoff))}, too recent to have reached a statement`);
     h+=`<div class="banner info">Left out of the unpaid list: ${bits.join("; ")}.</div>`;
   }
+  if(n.negativeNoRevenue)
+    h+=`<div class="banner info">${n.negativeNoRevenue} order${n.negativeNoRevenue>1?"s carry":" carries"} fulfilment fees here but no sale — the revenue is in a statement you haven't loaded, so ${n.negativeNoRevenue>1?"they were":"it was"} left out of the loss-making check rather than counted as a loss.</div>`;
   if(!mtrRows.length)
     h+=`<div class="banner info">No MTR loaded — the <b>shipped-but-not-paid</b> check needs one. Get it from <b>Reports → Tax Document Library → Merchant Tax Reports → B2C</b> and drop it here too.</div>`;
   if(!allIssues.length)
