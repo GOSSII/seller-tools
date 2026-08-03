@@ -737,7 +737,13 @@ const SLABS = [
   {max:5,esL:130,esN:195,fbL:110,fbN:160},{max:10,esL:200,esN:300,fbL:170,fbN:250},
   {max:20,esL:350,esN:500,fbL:300,fbN:420},{max:999,esL:500,esN:750,fbL:450,fbN:650},
 ];
-const STORAGE_TIER = {standard:5,large:12,oversize:25};
+/* Amazon bills FBA storage per cubic foot per month, not per unit sold, and
+   never against an order. These two helpers give the calculators the real
+   figure from the parcel's own dimensions. */
+const volWeight = (l,w,h) => (Math.max(0,l||0)*Math.max(0,w||0)*Math.max(0,h||0))/5000;
+const billingWeight = (kg,l,w,h) => Math.max(Math.max(0,kg)||0, volWeight(l,w,h)) || 0.5;
+const unitStorage = (l,w,h,peak) => ((Math.max(0,l||0)*Math.max(0,w||0)*Math.max(0,h||0))/CM3_CUFT)
+  * (peak?STORAGE_CUFT.peak:STORAGE_CUFT.std);
 const STORAGE_CUFT = {std:45,peak:48,aged:300};
 const CM3_CUFT = 28316.8466;
 
@@ -853,7 +859,9 @@ const CALCS = [
     {k:"cost",label:"Product Cost (₹)",t:"num",d:400},
     {k:"cat",label:"Category",t:"sel",o:catOptions,d:"electronics",full:1},
     {k:"kg",label:"Weight (kg)",t:"num",dec:1,d:0.5},
-    {k:"size",label:"Size",t:"seg",o:[{v:"standard",l:"Standard"},{v:"large",l:"Large"},{v:"oversize",l:"Oversize"}],d:"standard"},
+    {k:"L",label:"Length (cm)",t:"num",dec:1,d:20},
+    {k:"W",label:"Width (cm)",t:"num",dec:1,d:15},
+    {k:"H",label:"Height (cm)",t:"num",dec:1,d:8},
     {k:"ful",label:"Fulfillment",t:"seg",o:[{v:"self",l:"Self"},{v:"easyship",l:"Easy Ship"},{v:"fba",l:"FBA"}],d:"self",full:1},
     {k:"zone",label:"Zone",t:"seg",o:[{v:"local",l:"Local"},{v:"national",l:"National"}],d:"local",full:1},
     {k:"pack",label:"Packaging (₹)",t:"num",d:15},
@@ -865,18 +873,24 @@ const CALCS = [
     const sp=v.sp, rate=refRate(v.cat,sp);
     const referral=sp*rate;
     const closing=sp>0?closingFee(sp,v.ful,v.cat):0;
-    const shipping=sp>0?shipFee(sp,v.ful,v.zone,v.kg||0.5):0;
-    const pp = (v.ful==="fba"&&sp>0)?pickPack(v.kg||0.5):0;
-    const st = (v.ful==="fba"&&sp>0)?STORAGE_TIER[v.size]:0;
-    const feeSum=referral+closing+shipping+pp+st;
+    /* Amazon bills weight handling on the GREATER of actual and volumetric
+       weight, so a light bulky parcel costs more than its scales say. */
+    const billKg=billingWeight(v.kg,v.L,v.W,v.H);
+    const shipping=sp>0?shipFee(sp,v.ful,v.zone,billKg):0;
+    const pp = (v.ful==="fba"&&sp>0)?pickPack(billKg):0;
+    /* Storage is NOT part of an order's settlement — Amazon bills it monthly
+       against the account, and it never appears on an order line in a
+       settlement file. It is a holding cost, charged below. */
+    const feeSum=referral+closing+shipping+pp;
     const gst=feeSum*GST, fees=feeSum+gst;
     const settle=sp-fees;
     // ACOS % and Returns % apply to what's left after Amazon's
     // settlement and product+packaging cost (owner's convention).
     const landed=v.cost+v.pack;
+    const st=(v.ful==="fba"&&sp>0)?unitStorage(v.L,v.W,v.H):0;   // one month at Rs 45/cu ft
     const remain=Math.max(0,settle-landed);
     const mkt=remain*v.acos/100, ret=remain*v.ret/100;
-    const net=settle-landed-mkt-ret;
+    const net=settle-landed-st-mkt-ret;
     const margin=sp>0?net/sp*100:0;
     const inv=landed+mkt+ret;
     const roi=inv>0?net/inv*100:0;
@@ -892,7 +906,8 @@ const CALCS = [
       ["ref",`Amazon referral (${(rate*100).toFixed(1)}%)`,"#ef4444",referral],
       ["cl","Closing fee","#f59e0b",closing],
       ["sh","Shipping","#eab308",shipping],
-      ["fba","FBA pick&pack + storage","#0ea5e9",pp+st],
+      ["fba","FBA pick & pack","#0ea5e9",pp],
+      ["st","FBA storage (1 month)","#38bdf8",st],
       ["gst","GST on Amazon fees","#8b5cf6",gst],
       ["mkt","Marketing / ads","#6366f1",mkt],
       ["rt","Return loss","#a855f7",ret],
@@ -917,6 +932,7 @@ const CALCS = [
         {l:`Amazon Fees (${sp>0?(fees/sp*100).toFixed(2):"0.00"}% of SP)`,v:"-"+inr(fees),neg:1,mut:1},
         {l:"Settlement from Amazon",v:inr(settle),hl:1},
         {l:"Product + Packaging",v:"-"+inr0(landed),neg:1,mut:1},
+        ...(st>0?[{l:"FBA storage while it sits (1 month)",v:"-"+inr(st),neg:1,mut:1}]:[]),
         {l:`Marketing (${v.acos}%) + Returns (${v.ret}%) of remaining`,v:"-"+inr(mkt+ret),neg:1,mut:1},
         {l:`Net ${loss?"Loss":"Profit"} per Unit`,v:inr(net),fin:1,loss:loss},
         ...(gstReg?[
@@ -956,17 +972,21 @@ const CALCS = [
     {k:"sp",label:"Selling Price (₹)",t:"num",d:999,full:1},
     {k:"cat",label:"Category",t:"sel",o:catOptions,d:"electronics",full:1},
     {k:"kg",label:"Weight (kg)",t:"num",dec:1,d:0.5},
-    {k:"size",label:"Size",t:"seg",o:[{v:"standard",l:"Standard"},{v:"large",l:"Large"},{v:"oversize",l:"Oversize"}],d:"standard"},
+    {k:"L",label:"Length (cm)",t:"num",dec:1,d:20},
+    {k:"W",label:"Width (cm)",t:"num",dec:1,d:15},
+    {k:"H",label:"Height (cm)",t:"num",dec:1,d:8},
     {k:"zone",label:"Zone",t:"seg",o:[{v:"local",l:"Local"},{v:"national",l:"National"}],d:"national",full:1},
   ],
   compute(v){
     const sp=v.sp, rate=refRate(v.cat,sp);
     const referral=sp*rate;
     const closing=sp>0?closingFee(sp,"fba",v.cat):0;
-    const wh=sp>0?shipFee(sp,"fba",v.zone,v.kg||0.5):0;
-    const pp=sp>0?pickPack(v.kg||0.5):0;
-    const st=sp>0?STORAGE_TIER[v.size]:0;
-    const feeSum=referral+closing+wh+pp+st;
+    const billKg=billingWeight(v.kg,v.L,v.W,v.H);
+    const wh=sp>0?shipFee(sp,"fba",v.zone,billKg):0;
+    const pp=sp>0?pickPack(billKg):0;
+    // Storage is billed monthly against the account, never against an order.
+    const st=sp>0?unitStorage(v.L,v.W,v.H):0;
+    const feeSum=referral+closing+wh+pp;
     const gst=feeSum*GST, fees=feeSum+gst, settle=sp-fees;
     const fpc=sp>0?fees/sp*100:0;
     return {
@@ -984,7 +1004,7 @@ const CALCS = [
         {l:"Closing fee",v:"-"+inr0(closing),neg:1,mut:1},
         {l:"Weight handling",v:"-"+inr0(wh),neg:1,mut:1},
         {l:"FBA pick & pack",v:"-"+inr0(pp),neg:1,mut:1},
-        {l:"FBA storage",v:"-"+inr0(st),neg:1,mut:1},
+        {l:"FBA storage (monthly, per unit held — not deducted from this order)",v:"-"+inr(st),neg:1,mut:1},
         {l:"GST on fees (18%)",v:"-"+inr(gst),neg:1,mut:1},
         {l:"Net Settlement",v:inr(settle),fin:1,loss:settle<0},
       ],
@@ -1316,8 +1336,7 @@ const CALCS = [
       const closing=closingFee(p,v.ful,v.cat);
       const shipping=shipFee(p,v.ful,v.zone,v.kg||0.5);
       const pp=v.ful==="fba"?pickPack(v.kg||0.5):0;
-      const st=v.ful==="fba"?STORAGE_TIER[v.size]:0;
-      const fees=(referral+closing+shipping+pp+st)*(1+GST);
+      const fees=(referral+closing+shipping+pp)*(1+GST);   // storage is monthly, not per order
       const remain=p-fees-(v.cost+v.pack);
       return remain>0?remain*(1-(v.acos+v.ret)/100):remain;
     };
@@ -1379,9 +1398,8 @@ const CALCS = [
       const closing=closingFee(p,v.ful,v.cat);
       const shipping=shipFee(p,v.ful,v.zone,v.kg||0.5);
       const pp=v.ful==="fba"?pickPack(v.kg||0.5):0;
-      const st=v.ful==="fba"?STORAGE_TIER[v.size]:0;
-      const feeSum=referral+closing+shipping+pp+st;
-      return {referral,closing,shipping,pp,st,gst:feeSum*GST,total:feeSum*(1+GST),rate};
+      const feeSum=referral+closing+shipping+pp;   // storage is billed monthly, not per order
+      return {referral,closing,shipping,pp,st:0,gst:feeSum*GST,total:feeSum*(1+GST),rate};
     };
     const netAt=p=>{const r=p-feesAt(p).total-(v.cost+v.pack);return r>0?r*(1-(v.acos+v.ret)/100):r;};
     const MAX=49999;
@@ -1413,7 +1431,7 @@ const CALCS = [
         {l:`Referral fee (${(f.rate*100).toFixed(1)}%)`,v:"-"+inr(f.referral),neg:1,mut:1},
         {l:"Closing fee",v:"-"+inr0(f.closing),neg:1,mut:1},
         {l:"Shipping / weight handling",v:"-"+inr0(f.shipping),neg:1,mut:1},
-        ...(f.pp+f.st>0?[{l:"FBA pick & pack + storage",v:"-"+inr0(f.pp+f.st),neg:1,mut:1}]:[]),
+        ...(f.pp>0?[{l:"FBA pick & pack",v:"-"+inr0(f.pp),neg:1,mut:1}]:[]),
         {l:"GST on fees (18%)",v:"-"+inr(f.gst),neg:1,mut:1},
         {l:"Product + packaging",v:"-"+inr0(v.cost+v.pack),neg:1,mut:1},
         {l:`Marketing (${v.acos}%) + Returns (${v.ret}%)`,v:"-"+inr(mkt+ret),neg:1,mut:1},
