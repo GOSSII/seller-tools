@@ -6658,13 +6658,16 @@ async function gstinvGenerate(){
    which SKUs actually make money? Everything stays local.
    ============================================================ */
 let adpFiles=[], adpSort="damage";
-const ADP_SKU_ALIASES=["advertised sku","seller sku","sku"];
-const ADP_ASIN_ALIASES=["advertised asin","asin"];
-const ADP_SPEND_ALIASES=["spend","total spend","cost","spend(inr)","spend (inr)"];
+/* Amazon's unified reporting renamed every one of these columns — an export
+   from the current console calls spend "Total cost", the SKU "Advertised
+   product SKU" and orders "Purchases". Keep both vocabularies. */
+const ADP_SKU_ALIASES=["advertised sku","advertised product sku","seller sku","sku"];
+const ADP_ASIN_ALIASES=["advertised asin","advertised product id","asin"];
+const ADP_SPEND_ALIASES=["spend","total spend","total cost","cost","spend(inr)","spend (inr)"];
 const ADP_SALES_ALIASES=["7 day total sales","14 day total sales","30 day total sales",
   "7 day total sales (inr)","total sales","sales","attributed sales"];
 const ADP_ORDER_ALIASES=["7 day total orders (#)","14 day total orders (#)","30 day total orders (#)",
-  "7 day total orders","total orders","orders"];
+  "7 day total orders","total orders","orders","purchases"];
 function adpNorm(h){return String(h||"").toLowerCase().replace(/[₹"]/g,"").replace(/\s+/g," ").trim();}
 function adpFind(norm,aliases){
   for(const a of aliases){ const i=norm.indexOf(a); if(i!==-1) return i; }
@@ -6857,7 +6860,13 @@ function adpRender(){
     if(!r.costed) h+=`<div class="banner info">No product costs saved yet, so the table shows <b>payout</b>, not profit. Add costs in the <a href="#/sku-report">SKU Profitability Report</a> — they're stored in this browser and picked up here automatically.</div>`;
     if(r.asinOnly) h+=`<div class="banner info">That ad report has ASINs but no SKU column, so rows only match if your settlement uses the same identifier. Re-export it with the <b>Advertised SKU</b> column for an exact match.</div>`;
     const unmatched=r.rows.filter(x=>x.orphan);
-    if(unmatched.length) h+=`<div class="banner warn"><b>${inr0(unmatched.reduce((s,x)=>s+x.spend,0))}</b> of ad spend went to ${unmatched.length} SKU(s) with no sales at all in this settlement — pure loss unless they sold outside the period.</div>`;
+    /* An "orphan" that Amazon credits with ad sales is usually not a wasted
+       campaign: the buyer bought a sibling listing of the same product (the
+       FBA one, say) so the money settled under a different SKU. Saying "pure
+       loss" there would talk a seller out of a campaign that is working. */
+    const sibling=unmatched.filter(x=>x.adSales>0),dead=unmatched.filter(x=>!(x.adSales>0));
+    if(dead.length) h+=`<div class="banner warn"><b>${inr0(dead.reduce((s,x)=>s+x.spend,0))}</b> of ad spend went to ${dead.length} SKU(s) with no sales <i>and</i> no ad-attributed sales in this settlement — pure loss unless they sold outside the period.</div>`;
+    if(sibling.length) h+=`<div class="banner info"><b>${inr0(sibling.reduce((s,x)=>s+x.spend,0))}</b> of ad spend sits on ${sibling.length} SKU(s) that have no settlement sales but <i>do</i> have ${inr0(sibling.reduce((s,x)=>s+x.adSales,0))} of ad-attributed sales — normally the buyer bought another listing of the same product (your FBA one, typically), so the revenue settled under that SKU instead. Judge those two rows together, not apart.</div>`;
   }
   const sorters={damage:(a,b)=>(a.hasCost?a.profit:a.afterAds)-(b.hasCost?b.profit:b.afterAds),
     spend:(a,b)=>b.spend-a.spend, acos:(a,b)=>(b.acos??-1)-(a.acos??-1), sales:(a,b)=>b.sales-a.sales};
@@ -6874,7 +6883,7 @@ function adpRender(){
         <th class="num" title="How much of a sale can go on ads before this SKU stops making money. Needs a product cost.">Break-even ACOS</th><th class="num">After ads${r.costed?" &amp; cost":""}</th><th>Verdict</th></tr></thead>
       <tbody>${rows.map(x=>{
         const bottom=x.hasCost?x.profit:x.afterAds;
-        const verdict=x.orphan?["Ad spend, no sales","bad"]
+        const verdict=x.orphan?(x.adSales>0?["Sales settled under another SKU","warn"]:["Ad spend, no sales","bad"])
           :x.flips?["Ads turn profit into a loss","bad"]
           :bottom>0?["Profitable after ads","good"]
           :x.spend>0?["Loss before ads too","warn"]
