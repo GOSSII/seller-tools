@@ -3788,7 +3788,7 @@ function gstRenderResults(){
         <td class="num">${a.count}</td><td class="num">${sv(a.total)}</td></tr>`).join("")}</tbody>
     </table></div></div>`;
 
-  h+=`<div class="banner info">These figures are read directly from the settlement file's own tax lines — nothing is estimated. Cross-check TCS against GSTR-2A and TDS against Form 26AS before filing; this report is an aid, not tax advice.</div>`;
+  h+=`<div class="banner info">These figures are read directly from the settlement file's own tax lines — nothing is estimated. <b>They follow settlement dates, not invoice dates</b>, so a month's total here won't equal the same month in your MTR or GSTR-1 — on a real account the gap was about 10%, purely because late-month orders settle in the next period. File from the MTR; use this to check what Amazon actually withheld. Cross-check TCS against GSTR-2A and TDS against Form 26AS before filing; this report is an aid, not tax advice.</div>`;
   if(r.errors.length) h+=`<div class="banner warn"><b>${r.errors.length} row(s) could not be parsed</b> and are excluded from these totals — open the Settlement Analyzer for details.</div>`;
   out.innerHTML=h;
 }
@@ -3808,9 +3808,21 @@ function loadSkuCosts(){try{return JSON.parse(localStorage.getItem(SKU_COSTS_KEY
 function saveSkuCosts(c){try{localStorage.setItem(SKU_COSTS_KEY,JSON.stringify(c));}catch(e){}}
 
 function skuCompute(r){
+  /* Amazon bills Easy Ship, postage and base fees against the ORDER, on rows
+     that carry no SKU. Left alone they pile into "(no SKU)" and every SKU
+     looks cheaper to fulfil than it is — on a real account that hid ₹1.8 lakh
+     of shipping cost. Map them back through the order id, but only when the
+     order carried a single SKU: on a mixed order there is no honest split. */
+  const skuOfOrder=new Map();
+  for(const rec of r.records){
+    if(!rec.orderId||!rec.sku) continue;
+    const cur=skuOfOrder.get(rec.orderId);
+    if(cur===undefined) skuOfOrder.set(rec.orderId,rec.sku);
+    else if(cur!==rec.sku) skuOfOrder.set(rec.orderId,null);
+  }
   const bySku={};
   for(const rec of r.records){
-    const key=rec.sku||"(no SKU)";
+    const key=rec.sku||(rec.orderId?skuOfOrder.get(rec.orderId):null)||"(no SKU)";
     const s=bySku[key]||(bySku[key]={sku:key,units:0,orders:0,refunds:0,unitsReturned:0,sales:0,refundValue:0,fees:0,taxes:0,other:0,net:0,b:{}});
     const isOrder=rec.transactionType==="Order";
     const isRefund=/refund/i.test(rec.transactionType);
@@ -3963,7 +3975,7 @@ function skuRenderResults(){
           <td class="num">${s.units?inr(s.net/s.units):"—"}</td>
           <td class="num ${rp>10?'amt-neg':''}">${rp.toFixed(1)}%</td></tr>`;}).join("")}
       </tbody></table></div>
-    <div class="banner info">"Net" is the sum of every settlement line for that SKU — principal, fees, taxes and refunds — i.e. what actually reached your bank for it this settlement. Service-level charges Amazon doesn't tie to a SKU (subscription, storage billed separately) appear under "(no SKU)".</div></div>`;
+    <div class="banner info">"Net" is the sum of every settlement line for that SKU — principal, fees, taxes and refunds — i.e. what actually reached your bank for it this settlement. Shipping charges billed against an order rather than a SKU (Easy Ship, postage, base fee) are traced back through the order id, except on mixed-SKU orders. What stays under <b>"(no SKU)"</b> is the account-level spend Amazon never ties to a product — advertising, FBA inbound transportation, storage, subscription — so it is <b>not</b> reflected in any single SKU's net. Judge a SKU on its own row, then check that this row isn't eating the profit.</div></div>`;
   }
 
   if(r.errors.length) h+=`<div class="banner warn"><b>${r.errors.length} row(s) could not be parsed</b> and are excluded — open the Settlement Analyzer for details.</div>`;
