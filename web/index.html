@@ -3220,6 +3220,11 @@ function saParseAmount(raw,decimal="dot"){
   const n=Number(c);return Number.isFinite(n)?n:NaN;
 }
 const saCell=(fields,index,key)=>{const i=index[key];return i===undefined?"":(fields[i]??"").trim();};
+/* Amazon's older report consoles hand out .xlsx. Read as text that is just zip
+   bytes, so every parser rejects it and the user is told the file "isn't
+   recognised" — true but useless. Spot it and say what to do instead. */
+const saLooksExcel=(text,name)=>/\.xlsx?$/i.test(name||"")||/^PK/.test(String(text||"").slice(0,8));
+const SA_EXCEL_MSG="that's an Excel file — these tools read text. Open it and use File → Save As → CSV, then drop the CSV here.";
 function saGroupKey(fields,index,tt){
   const ids=saCell(fields,index,"orderId")+saCell(fields,index,"shipmentId")+saCell(fields,index,"adjustmentId");
   return [saCell(fields,index,"settlementId"),tt??saCell(fields,index,"transactionType"),
@@ -4265,7 +4270,8 @@ function recAddFiles(list){
       recFiles=recFiles.filter(x=>x.name!==f.name); // re-drop replaces
       const mtr=parseMtr(text);
       const ut=mtr?null:parseUnifiedTransaction(text);
-      if(mtr){ recFiles.push({name:f.name,kind:"mtr",rows:mtr.rows,errors:mtr.errors}); }
+      if(!mtr&&!ut&&saLooksExcel(text,f.name)){ recFiles.push({name:f.name,kind:"error",msg:SA_EXCEL_MSG}); }
+      else if(mtr){ recFiles.push({name:f.name,kind:"mtr",rows:mtr.rows,errors:mtr.errors}); }
       else if(ut){ recFiles.push({name:f.name,kind:"settlement",parsed:ut}); }
       else{
         const p=parseSettlement(text);
@@ -6668,7 +6674,11 @@ const ADP_SALES_ALIASES=["7 day total sales","14 day total sales","30 day total 
   "7 day total sales (inr)","total sales","sales","attributed sales"];
 const ADP_ORDER_ALIASES=["7 day total orders (#)","14 day total orders (#)","30 day total orders (#)",
   "7 day total orders","total orders","orders","purchases"];
-function adpNorm(h){return String(h||"").toLowerCase().replace(/[₹"]/g,"").replace(/\s+/g," ").trim();}
+/* Amazon labels the money column "7 Day Total Sales (₹)". Stripping the symbol
+   used to leave "7 day total sales ()", which matched no alias — so sales came
+   back as zero and every ACOS silently showed "—". Drop the emptied brackets
+   as well. */
+function adpNorm(h){return String(h||"").toLowerCase().replace(/[₹"]/g,"").replace(/\(\s*\)/g,"").replace(/\s+/g," ").trim();}
 function adpFind(norm,aliases){
   for(const a of aliases){ const i=norm.indexOf(a); if(i!==-1) return i; }
   return -1;
@@ -6765,6 +6775,9 @@ function adpAddFiles(list){
       adpFiles=adpFiles.filter(x=>x.name!==f.name); // re-drop replaces
       const ad=parseAdReport(text);
       if(ad){ adpFiles.push({name:f.name,kind:"ads",ad}); }
+      else if(saLooksExcel(text,f.name)){
+        adpFiles.push({name:f.name,kind:"error",msg:SA_EXCEL_MSG+" (Sponsored ads reports hands out .xlsx; the newer reporting console offers CSV directly)"});
+      }
       else{
         const p=parseUnifiedTransaction(text)||parseSettlement(text);
         if(p&&(p.records.length||p.summary)) adpFiles.push({name:f.name,kind:"settlement",parsed:p});
@@ -6857,6 +6870,11 @@ function adpRender(){
   if(!r.haveAds){
     h+=`<div class="banner warn">No advertising report loaded, so nothing can be attributed to a SKU. ${r.unattributed.rows?`This settlement does show <b>${inr0(r.unattributed.total)}</b> of advertising across ${r.unattributed.rows} charge(s), but Amazon records it as one unattributed service fee — the per-SKU split only exists in <b>Advertising console → Sponsored Ads → Reports → Sponsored Products → Advertised product</b>. Export it for the same dates and drop it here.`:`Add the <b>Advertised product</b> report from the Advertising console.`}</div>`;
   }else{
+    /* The two files carry their own periods. If the ad report covers less
+       spend than the statements were charged, the seller is measuring one
+       month of ads against two months of payout and every ACOS reads low. */
+    if(r.unattributed.total>0&&t.spend>0&&Math.abs(t.spend-r.unattributed.total)/r.unattributed.total>0.2)
+      h+=`<div class="banner warn">Your ad report accounts for <b>${inr0(t.spend)}</b> of spend, but these statements were charged <b>${inr0(r.unattributed.total)}</b> of advertising — the two files cover different periods. Every ACOS and TACOS below is measured against whichever is shorter, so export the ad report for <b>exactly the dates these statements cover</b> before drawing conclusions.</div>`;
     if(!r.costed) h+=`<div class="banner info">No product costs saved yet, so the table shows <b>payout</b>, not profit. Add costs in the <a href="#/sku-report">SKU Profitability Report</a> — they're stored in this browser and picked up here automatically.</div>`;
     if(r.asinOnly) h+=`<div class="banner info">That ad report has ASINs but no SKU column, so rows only match if your settlement uses the same identifier. Re-export it with the <b>Advertised SKU</b> column for an exact match.</div>`;
     const unmatched=r.rows.filter(x=>x.orphan);
