@@ -3527,6 +3527,12 @@ function saParseDate(s){
   if(m) return `${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`;
   m=s.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})$/);
   if(m) return `${m[3]}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`;
+  /* Custom-range MTR exports write the year with two digits — "20/06/26".
+     Read as a whole date these are dd/mm/yy; left unparsed they silently
+     disabled every date-based check on that file. */
+  m=s.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2})$/);
+  if(m){ const yy=Number(m[3]); const year=yy<70?2000+yy:1900+yy;
+    return `${year}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`; }
   return null;
 }
 const saFmtDay=iso=>new Date(iso+"T00:00:00Z").toLocaleDateString("en-IN",{day:"numeric",month:"short",timeZone:"UTC"});
