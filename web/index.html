@@ -1567,7 +1567,7 @@ const HELP={
   "trends":{input:`Several settlement files: <b>Payments → All Statements → Download Flat File V2</b> for each statement — the more months you drop, the better the picture.`,
     steps:["Drop all your settlement files at once (or add them one by one — duplicates are skipped).","Read the month-by-month charts: sales, fees as % of sales, refund rate and net payout.","Pick a SKU to see its own monthly units, sales and net — is it growing, and is it still worth the fees?"]},
   "ads-optimizer":{input:`<b>Advertising console → Sponsored ads → Reports (or Measurement &amp; reporting) → Sponsored Products → Search term</b> — export for 30–60 days. The .xlsx it hands out drops straight in; CSV works too.`,
-    steps:["Drop the Search Term report (several files at once is fine — re-drops replace).","Export the negatives list and paste each term as a negative exact into the campaign it spent in.","Move the winners into their own exact-match keywords, then negate them where they came from so the two never bid against each other.","Check the campaign scoreboard monthly — and judge affordability per SKU in Ad Profitability, which knows each product's break-even ACOS."]},
+    steps:["Drop the Search Term report (several files at once is fine — re-drops replace). Optional but worth it: add the Advertised-product report for the same period, plus your settlement files — terms in single-SKU ad groups are then judged against that SKU's own break-even ACOS instead of a flat line.","Export the negatives list and paste each term as a negative exact into the campaign it spent in.","Move the winners into their own exact-match keywords, then negate them where they came from so the two never bid against each other.","Check the campaign scoreboard monthly — and judge affordability per SKU in Ad Profitability, which knows each product's break-even ACOS."]},
   "fee-bands":{input:`Settlement file(s): <b>Payments → All Statements → Download Flat File V2</b>. Drop as many as you have — the more units behind each SKU, the more certain its usual price and weight band are. Statements where Amazon bills your selling fees on a separate invoice can't be used for the price side: there is no fee line to read a band from.`,
     steps:["Drop your settlement file(s) — several at once is fine.","Work down the price-step list: each row is a SKU that nets more per unit at the lower price, with the revenue you give up already subtracted.","Test the price on one SKU before editing in bulk — a lower price can also mean fewer or more orders, which no settlement file can tell you.","On the weight list, weigh one packed parcel per SKU and type it in (dimensions too, if the box is large for its weight — volumetric weight often decides the band). The tool then says which of three things is true: Amazon is billing a band heavier than your parcel, so claim it; the band is a packaging change away; or the product itself is too heavy and no repacking reaches it. Weights are saved in your browser only."]},
 };
@@ -8620,6 +8620,40 @@ const ADS_BLEED_ACOS=100;     // converting, but every sale costs more than it b
 const ADS_CAMP_SCALE_ACOS=25; // campaign verdicts
 const ADS_CAMP_FIX_ACOS=60;
 
+/* Advertised-product report → which SKU each ad group advertises. The
+   Search Term report names no SKU, so this map is the only honest bridge
+   from a search term to a product — and only ad groups that advertise
+   exactly ONE SKU are used. Returns null when it isn't this report. */
+function parseApGroups(text){
+  const lines=String(text||"").replace(/^\ufeff/,"").split(/\r\n|\r|\n/);
+  let hln=-1,delim=",",norm=null;
+  for(let i=0;i<lines.length&&i<30;i++){
+    if(!lines[i].trim()) continue;
+    const d=lines[i].includes("\t")?"\t":",";
+    const n=saSplit(lines[i],d).map(adpNorm);
+    if(adpFind(n,ADP_SKU_ALIASES)!==-1&&adpFind(n,ADS_CAMP_ALIASES)!==-1&&adpFind(n,ADS_GROUP_ALIASES)!==-1){hln=i;delim=d;norm=n;break;}
+  }
+  if(hln===-1) return null;
+  const iC=adpFind(norm,ADS_CAMP_ALIASES),iG=adpFind(norm,ADS_GROUP_ALIASES),iS=adpFind(norm,ADP_SKU_ALIASES);
+  const cell=(f,i)=>i>=0&&i<f.length?String(f[i]||"").trim():"";
+  const m=new Map(); let rows=0;
+  for(let i=hln+1;i<lines.length;i++){
+    if(!lines[i].trim()) continue;
+    const f=saSplit(lines[i],delim);
+    const camp=cell(f,iC),group=cell(f,iG),sku=cell(f,iS);
+    if(!camp&&!group) continue;
+    rows++;
+    const k=camp+"\u0000"+group;
+    if(!m.has(k)) m.set(k,new Set());
+    if(sku) m.get(k).add(sku);
+  }
+  if(!m.size) return null;
+  const groupSku=new Map();     // only unambiguous groups make the map
+  for(const [k,set] of m) if(set.size===1) groupSku.set(k,[...set][0]);
+  return {groupSku,groups:m.size,rows};
+}
+window.parseApGroups=parseApGroups; // exposed for verification/debugging
+
 /* Search Term report → rows. Both consoles' vocabularies accepted, same as
    the advertised-product parser. Returns null when it isn't this report. */
 function parseSearchTermReport(text){
@@ -8671,17 +8705,41 @@ function parseSearchTermReport(text){
 window.parseSearchTermReport=parseSearchTermReport; // exposed for verification/debugging
 
 /* Rows → the four lists a seller can act on. Pure. */
-function adsCompute(terms){
+function adsCompute(terms,opts){
+  /* opts.groupSku: campaign\u0000adgroup → SKU (from the advertised-product
+     report). opts.breakEven: SKU → its break-even ACOS %, computed from the
+     seller's own statements and product costs. Where both exist a term is
+     judged against ITS OWN line; everywhere else the 100% fallback stands —
+     nothing is ever guessed onto a term. */
+  opts=opts||{};
+  const groupSku=opts.groupSku||new Map(), beOf=opts.breakEven||new Map();
+  let termsMatched=0, termsWithBE=0;
+  for(const r of terms){
+    const sku=groupSku.get(r.camp+"\u0000"+r.group);
+    r.sku=sku||null;
+    if(sku){ termsMatched++;
+      const be=beOf.get(sku);
+      if(be!==undefined&&be!==null){ r.breakEven=be; termsWithBE++; }
+    }
+  }
   const t={spend:0,sales:0,orders:0,clicks:0,impressions:0};
   for(const r of terms){t.spend+=r.spend;t.sales+=r.sales;t.orders+=r.orders;t.clicks+=r.clicks;t.impressions+=r.impressions;}
   const acos=r=>r.sales>0?r.spend/r.sales*100:null;
   const negate=terms.filter(r=>r.orders===0&&r.clicks>=ADS_NEG_CLICKS&&r.spend>=ADS_NEG_SPEND)
     .sort((a,b)=>b.spend-a.spend);
-  const promote=terms.filter(r=>r.orders>=ADS_PROMOTE_ORDERS&&acos(r)!==null&&acos(r)<=ADS_PROMOTE_ACOS
-      &&r.match!=="EXACT")
-    .sort((a,b)=>b.sales-a.sales);
-  const bleed=terms.filter(r=>r.orders>0&&acos(r)!==null&&acos(r)>=ADS_BLEED_ACOS)
-    .sort((a,b)=>(b.spend-b.sales)-(a.spend-a.sales));
+  const promote=terms.filter(r=>{
+    if(r.orders<ADS_PROMOTE_ORDERS||r.match==="EXACT") return false;
+    const a=acos(r); if(a===null||a>ADS_PROMOTE_ACOS) return false;
+    // "cheap" by the flat bar but above its own break-even is not a winner
+    if(r.breakEven!==undefined&&a>r.breakEven) return false;
+    return true;
+  }).sort((a,b)=>b.sales-a.sales);
+  const bleed=terms.filter(r=>{
+    const a=acos(r); if(r.orders<=0||a===null) return false;
+    // A term with its own break-even line is judged against it; the rest
+    // keep the only threshold that needs no margin data at all.
+    return r.breakEven!==undefined?a>r.breakEven:a>=ADS_BLEED_ACOS;
+  }).sort((a,b)=>(b.spend-b.sales)-(a.spend-a.sales));
   // Campaign scoreboard.
   const byCamp=new Map();
   for(const r of terms){
@@ -8700,6 +8758,7 @@ function adsCompute(terms){
   }).sort((a,b)=>b.spend-a.spend);
   const wasted=negate.reduce((s,r)=>s+r.spend,0);
   return {totals:t,negate,promote,bleed,campaigns,wasted,
+    termsMatched,termsWithBE,
     acosTotal:t.sales>0?t.spend/t.sales*100:null};
 }
 window.adsCompute=adsCompute; // exposed for verification/debugging
@@ -8740,21 +8799,44 @@ function adsAddFiles(list){
     saReadDropped(f,text=>{
       adsFiles=adsFiles.filter(x=>x.name!==f.name); // re-drop replaces
       const st=parseSearchTermReport(text);
-      if(st) adsFiles.push({name:f.name,kind:"st",st});
-      else if(parseAdReport(text)) adsFiles.push({name:f.name,kind:"error",msg:"this is the Advertised-product report — it has no search terms. Drop it into Ad Profitability instead; here you need the Search term report."});
-      else adsFiles.push({name:f.name,kind:"error",msg:"not recognised as a Sponsored Products Search Term report."+saDescribeColumns(text)});
+      if(st){ adsFiles.push({name:f.name,kind:"st",st}); finish(); return; }
+      const ap=parseApGroups(text);
+      if(ap){ adsFiles.push({name:f.name,kind:"ap",ap}); finish(); return; }
+      const p2=parseUnifiedTransaction(text)||parseSettlement(text);
+      if(p2&&(p2.records.length||p2.summary)) adsFiles.push({name:f.name,kind:"settlement",parsed:p2});
+      else adsFiles.push({name:f.name,kind:"error",msg:"not recognised as a Search Term report, an Advertised-product report or a settlement file."+saDescribeColumns(text)});
       finish();
     },msg=>{ adsFiles=adsFiles.filter(x=>x.name!==f.name); adsFiles.push({name:f.name,kind:"error",msg}); finish(); });
   });
 }
 function adsRenderResults(){
   const out=document.getElementById("ads-out"); if(!out) return;
-  let h=`<div class="rec-files">${adsFiles.map((f,i)=>`<span class="rec-file"${f.kind==="error"?` title="${esc(f.msg)}"`:""}><b>${esc(f.name)}</b><span class="rf-kind">${f.kind==="error"?"⚠ Skipped":"Search terms"}</span><button type="button" data-rm="${i}" aria-label="Remove ${esc(f.name)}">✕</button></span>`).join("")}</div>`;
+  let h=`<div class="rec-files">${adsFiles.map((f,i)=>`<span class="rec-file"${f.kind==="error"?` title="${esc(f.msg)}"`:""}><b>${esc(f.name)}</b><span class="rf-kind">${f.kind==="error"?"⚠ Skipped":f.kind==="ap"?"Advertised product":f.kind==="settlement"?"Settlement":"Search terms"}</span><button type="button" data-rm="${i}" aria-label="Remove ${esc(f.name)}">✕</button></span>`).join("")}</div>`;
   const bad=adsFiles.filter(f=>f.kind==="error");
   if(bad.length) h+=`<div class="banner warn">${bad.map(f=>`<b>${esc(f.name)}</b>: ${esc(f.msg)}`).join("<br>")}</div>`;
   const all=adsFiles.filter(f=>f.kind==="st").flatMap(f=>f.st.terms);
   if(!all.length){ out.innerHTML=h; adsWire(out); return; }
-  const r=adsCompute(all);
+  /* Optional deepening: the Advertised-product report bridges ad group → SKU,
+     and settlements + product costs give each SKU its own break-even ACOS —
+     the same formula Ad Profitability uses. Nothing loads → the flat
+     thresholds stand. */
+  const groupSku=new Map();
+  for(const f of adsFiles.filter(x=>x.kind==="ap")) for(const [k,v] of f.ap.groupSku) groupSku.set(k,v);
+  const beOf=new Map();
+  {
+    const settle=adsFiles.filter(x=>x.kind==="settlement").map(x=>x.parsed);
+    if(settle.length){
+      const rows=skuCompute({records:settle.flatMap(p2=>p2.records)});
+      const costs=loadSkuCosts();
+      for(const s2 of rows){
+        const cost=Number(costs[s2.sku])||0;
+        if(!(cost>0)||!(s2.sales>0)) continue;   // no cost → no break-even, never guessed
+        const netUnits=Math.max(0,(s2.units||0)-(s2.unitsReturned||0));
+        beOf.set(s2.sku,Math.round((s2.net-cost*netUnits)/s2.sales*1000)/10);
+      }
+    }
+  }
+  const r=adsCompute(all,{groupSku,breakEven:beOf});
   const t=r.totals;
   h+=`<div class="stats">
     <div class="stat"><div class="k">Ad spend in report</div><div class="v">${inr0(t.spend)}</div></div>
@@ -8762,6 +8844,8 @@ function adsRenderResults(){
     <div class="stat ${r.wasted>0?"red":"green"}"><div class="k">Going to words that never convert</div><div class="v">${inr0(r.wasted)}</div><div class="sa-sub" style="margin-top:3px">${r.negate.length} term${r.negate.length===1?"":"s"} to negate</div></div>
     <div class="stat green"><div class="k">Winners under broad/auto</div><div class="v">${r.promote.length}</div><div class="sa-sub" style="margin-top:3px">deserve their own exact match</div></div>
   </div>`;
+  if(groupSku.size||beOf.size)
+    h+=`<div class="banner ${r.termsWithBE?"good":"info"}">${r.termsMatched?`<b>${num(r.termsMatched)}</b> of ${num(all.length)} term rows sit in a single-SKU ad group and inherit that SKU`:"No term row could be matched to a single-SKU ad group — the two ad reports may cover different campaigns or periods"}${r.termsWithBE?`; <b>${num(r.termsWithBE)}</b> are judged against their SKU's <b>own break-even ACOS</b> (from your statements and product costs) instead of the flat ${ADS_BLEED_ACOS}% line`:beOf.size?"":groupSku.size?" — add settlement files and product costs and they get judged against each SKU's own break-even":""}.</div>`;
   h+=`<div class="banner info">These lists read the report you dropped — nothing is estimated. ACOS here is against <b>ad-attributed sales</b>; whether that ACOS is affordable for a given SKU depends on its margin, which lives in <a href="#/ad-profit">Ad Profitability</a> (break-even ACOS per SKU).</div>`;
   if(r.negate.length){
     h+=`<div class="panel"><h4>🚫 Negate these <span class="sa-sub">(${r.negate.length} — ${ADS_NEG_CLICKS}+ clicks, ₹${ADS_NEG_SPEND}+ spent, zero orders)</span></h4>
@@ -8789,14 +8873,14 @@ function adsRenderResults(){
       <div class="rec-claim"><b>How to act:</b> create (or reuse) a manual campaign → add the term as an <b>exact match</b> keyword → then add it as a <b>negative exact</b> in the campaign it came from, so the two never bid against each other.</div></div>`;
   }
   if(r.bleed.length){
-    h+=`<div class="panel"><h4>🩸 Converting at a loss <span class="sa-sub">(${r.bleed.length} — ACOS ≥ ${ADS_BLEED_ACOS}%)</span></h4>
+    h+=`<div class="panel"><h4>🩸 Converting at a loss <span class="sa-sub">(${r.bleed.length} — above ${r.termsWithBE?"their own break-even where known, else ":""}${ADS_BLEED_ACOS}% ACOS)</span></h4>
       <p class="sa-sub" style="margin:4px 0 10px">These do sell — but every rupee of sales costs ${ADS_BLEED_ACOS===100?"more than a rupee":"too much"} of ads. Lower the bid first; negate only if the term is clearly the wrong audience.</p>
       <div class="tblwrap"><table class="sa">
         <thead><tr><th>Search term</th><th>Campaign</th><th class="num">Orders</th><th class="num">Spent</th><th class="num">Sales</th><th class="num">ACOS</th></tr></thead>
         <tbody>${r.bleed.slice(0,30).map(x=>`<tr>
           <td>${esc(x.term)}</td><td class="sa-sub">${esc(x.camp)}</td>
           <td class="num">${num(x.orders)}</td><td class="num">${inr(x.spend)}</td><td class="num">${inr(x.sales)}</td>
-          <td class="num" style="color:var(--red);font-weight:700">${(x.spend/x.sales*100).toFixed(0)}%</td></tr>`).join("")}
+          <td class="num" style="color:var(--red);font-weight:700">${(x.spend/x.sales*100).toFixed(0)}%${x.breakEven!==undefined?`<span class="sa-sub" style="font-weight:400"> vs its ${x.breakEven.toFixed(0)}% break-even</span>`:""}</td></tr>`).join("")}
         </tbody></table></div></div>`;
   }
   h+=`<div class="panel"><h4>📋 Campaign scoreboard <span class="sa-sub">(${r.campaigns.length})</span></h4>
