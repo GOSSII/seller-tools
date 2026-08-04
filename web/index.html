@@ -1566,6 +1566,8 @@ const HELP={
     steps:["Enter the date of your last settlement, your cycle (7-day standard, 14-day, or daily), and average sales per day.","Adjust deductions %, reserve % and bank-credit delay if yours differ.","Read the headline for your next deposit, and the table for the next 6 settlement closes and estimated bank-credit dates."]},
   "trends":{input:`Several settlement files: <b>Payments → All Statements → Download Flat File V2</b> for each statement — the more months you drop, the better the picture.`,
     steps:["Drop all your settlement files at once (or add them one by one — duplicates are skipped).","Read the month-by-month charts: sales, fees as % of sales, refund rate and net payout.","Pick a SKU to see its own monthly units, sales and net — is it growing, and is it still worth the fees?"]},
+  "ads-optimizer":{input:`<b>Advertising console → Sponsored ads → Reports (or Measurement &amp; reporting) → Sponsored Products → Search term</b> — export for 30–60 days. The .xlsx it hands out drops straight in; CSV works too.`,
+    steps:["Drop the Search Term report (several files at once is fine — re-drops replace).","Export the negatives list and paste each term as a negative exact into the campaign it spent in.","Move the winners into their own exact-match keywords, then negate them where they came from so the two never bid against each other.","Check the campaign scoreboard monthly — and judge affordability per SKU in Ad Profitability, which knows each product's break-even ACOS."]},
   "fee-bands":{input:`Settlement file(s): <b>Payments → All Statements → Download Flat File V2</b>. Drop as many as you have — the more units behind each SKU, the more certain its usual price and weight band are. Statements where Amazon bills your selling fees on a separate invoice can't be used for the price side: there is no fee line to read a band from.`,
     steps:["Drop your settlement file(s) — several at once is fine.","Work down the price-step list: each row is a SKU that nets more per unit at the lower price, with the revenue you give up already subtracted.","Test the price on one SKU before editing in bulk — a lower price can also mean fewer or more orders, which no settlement file can tell you.","On the weight list, weigh one packed parcel per SKU and type it in (dimensions too, if the box is large for its weight — volumetric weight often decides the band). The tool then says which of three things is true: Amazon is billing a band heavier than your parcel, so claim it; the band is a packaging change away; or the product itself is too heavy and no repacking reaches it. Weights are saved in your browser only."]},
 };
@@ -2267,6 +2269,10 @@ const PW_MOCKS={
     <div class="row"><span>May net payout</span><b class="amt pos">₹48,760</b></div>
     <div class="row"><span>Jun net payout</span><b class="amt pos">₹55,390</b></div>
     <div class="row"><span>Fees % of sales</span><b class="big">21.4% ↓</b></div>`,
+  adsopt:`<div class="row"><span>"plastic dabba" · 43 clicks, 0 orders</span><b class="amt neg">−₹287</b></div>
+    <div class="row"><span>"lunch box steel" · 9 orders</span><b class="amt pos">12% ACOS</b></div>
+    <div class="row"><span>Terms to negate</span><b class="big">31</b></div>
+    <div class="row"><span>Spend they were eating</span><b class="amt neg">−₹4,812</b></div>`,
   feebands:`<div class="row"><span>KURTA-RED-M · ₹1,049 → ₹1,000</span><b class="amt pos">+₹157/u</b></div>
     <div class="row"><span>MUG-CERAMIC · ₹319 → ₹300</span><b class="amt pos">+₹6/u</b></div>
     <div class="row"><span>CABLE-USB-C · weight band 2 → 1</span><b class="amt pos">+₹20/u</b></div>
@@ -2302,6 +2308,11 @@ const TREND_INFO={route:"trends",title:"Multi-Month Trends",plan:"Pro",needPro:t
   desc:"Drop several settlement files and see your business month by month.",
   feats:["Sales, fees % and refund rate, month by month","Net payout trend — is the business growing?","Per-SKU trends: units, sales and net over time"],
   mock:PW_MOCKS.trends};
+const ADSO_INFO={route:"ads-optimizer",title:"Ads Optimizer",plan:"Pro",needPro:true,
+  price:"₹499/month — unlock with Pro",priceAlt:"or ₹2,499/year (save ~58%)",
+  desc:"The Search Term report shows what buyers actually typed. This turns it into the four lists worth acting on.",
+  feats:["Search terms eating spend with zero orders — a paste-ready negative list","Winners under broad/auto that earned their own exact match","Terms converting at a loss, campaign scoreboard with verdicts","Reads the .xlsx straight from the ads console"],
+  mock:PW_MOCKS.adsopt};
 const FB_INFO={route:"fee-bands",title:"Fee Band Optimizer",plan:"Pro",needPro:true,
   price:"₹499/month — unlock with Pro",priceAlt:"or ₹2,499/year (save ~58%)",
   desc:"Amazon's fees step at fixed prices and fixed weights. This finds the SKUs sitting a rupee or a gram the wrong side of a step.",
@@ -2480,6 +2491,7 @@ function renderAccount(){
             <a href="#/reconcile">🕵️ Reconciliation &amp; SAFE-T</a>
             <a href="#/ad-profit">📉 Ad Profitability by SKU</a>
             <a href="#/fee-bands">🪜 Fee Band Optimizer</a>
+            <a href="#/ads-optimizer">🎯 Ads Optimizer</a>
             <a href="#/trends">📈 Multi-Month Trends</a>
           </div>
         </div>
@@ -2954,6 +2966,7 @@ function renderHome(){
         <a class="tile" href="#/ad-profit"><span class="pill">Pro</span><div class="ico">📉</div><h3>Ad Profitability by SKU</h3><p>True ACOS per SKU — and which products only make money until the ads are paid for.</p></a>
         <a class="tile" href="#/trends"><span class="pill">Pro</span><div class="ico">📈</div><h3>Multi-Month Trends</h3><p>Sales, fees %, refund rate and net payout month by month — overall and per SKU.</p></a>
         <a class="tile" href="#/fee-bands"><span class="pill">Pro</span><div class="ico">🪜</div><h3>Fee Band Optimizer</h3><p>The SKUs sitting a rupee over a referral step or a gram over a weight band — and what moving under is worth.</p></a>
+        <a class="tile" href="#/ads-optimizer"><span class="pill">Pro</span><div class="ico">🎯</div><h3>Ads Optimizer</h3><p>Search terms to negate, winners that earned an exact match, and a campaign scoreboard — from the Search Term report.</p></a>
       </div>
 
       <section class="lp2-sec">
@@ -3089,6 +3102,7 @@ function renderPricing(){
             <li><span class="tick">✓</span> Reconciliation &amp; SAFE-T finder</li>
             <li><span class="tick">✓</span> Ad Profitability by SKU</li>
             <li><span class="tick">✓</span> Fee Band Optimizer</li>
+            <li><span class="tick">✓</span> Ads Optimizer</li>
             <li><span class="tick">✓</span> Multi-month Trends</li>
           </ul>
           ${paidBtn(pr," sec")}
@@ -8256,6 +8270,245 @@ function adpWire(out,rows){
     document.body.appendChild(a); a.click(); a.remove();
   });
 }
+/* ============================================================
+   ADS OPTIMIZER (Pro) — Sponsored Products Search Term report.
+   The one report that says WHAT BUYERS TYPED before your ad was
+   clicked. Everything here is that report read carefully: terms
+   that eat spend and never convert (negate them), terms that
+   convert cheaply under broad/auto (give them their own exact
+   bid), terms that convert at a loss, and a campaign scoreboard.
+   Same never-guess rules as everywhere: thresholds are printed,
+   zero denominators read "—", and nothing is estimated.
+   ============================================================ */
+let adsFiles=[];
+const ADS_TERM_ALIASES=["customer search term","search term"];
+const ADS_CAMP_ALIASES=["campaign name"];
+const ADS_GROUP_ALIASES=["ad group name","ad group"];
+const ADS_MATCH_ALIASES=["match type"];
+const ADS_TARGET_ALIASES=["targeting"];
+/* A search term needs this much evidence before it is judged at all. */
+const ADS_NEG_CLICKS=10;      // clicks with zero orders before "negate"
+const ADS_NEG_SPEND=100;      // …and at least this much spend, in rupees
+const ADS_PROMOTE_ORDERS=2;   // orders before a term earns its own exact match
+const ADS_PROMOTE_ACOS=30;    // …at or under this ACOS
+const ADS_BLEED_ACOS=100;     // converting, but every sale costs more than it brings
+const ADS_CAMP_SCALE_ACOS=25; // campaign verdicts
+const ADS_CAMP_FIX_ACOS=60;
+
+/* Search Term report → rows. Both consoles' vocabularies accepted, same as
+   the advertised-product parser. Returns null when it isn't this report. */
+function parseSearchTermReport(text){
+  const lines=String(text||"").replace(/^﻿/,"").split(/\r\n|\r|\n/);
+  let hln=-1,delim=",",norm=null;
+  for(let i=0;i<lines.length&&i<30;i++){
+    if(!lines[i].trim()) continue;
+    const d=lines[i].includes("\t")?"\t":",";
+    const n=saSplit(lines[i],d).map(adpNorm);
+    if(adpFind(n,ADS_TERM_ALIASES)!==-1&&adpFind(n,ADP_SPEND_ALIASES)!==-1){hln=i;delim=d;norm=n;break;}
+  }
+  if(hln===-1) return null;
+  const I={term:adpFind(norm,ADS_TERM_ALIASES),camp:adpFind(norm,ADS_CAMP_ALIASES),
+    group:adpFind(norm,ADS_GROUP_ALIASES),match:adpFind(norm,ADS_MATCH_ALIASES),
+    target:adpFind(norm,ADS_TARGET_ALIASES),
+    spend:adpFind(norm,ADP_SPEND_ALIASES),sales:adpFind(norm,ADP_SALES_ALIASES),
+    orders:adpFind(norm,ADP_ORDER_ALIASES),clicks:adpFind(norm,["clicks"]),
+    impressions:adpFind(norm,["impressions"])};
+  const cell=(f,i)=>i>=0&&i<f.length?String(f[i]||"").trim():"";
+  const money=(f,i)=>{const v=saParseAmount(cell(f,i));return Number.isFinite(v)?v:0;};
+  const byKey=new Map(); let rows=0;
+  for(let i=hln+1;i<lines.length;i++){
+    if(!lines[i].trim()) continue;
+    const f=saSplit(lines[i],delim);
+    if(f.length<4) continue;
+    const term=cell(f,I.term); if(!term) continue;
+    rows++;
+    /* One term can appear under several campaigns and match types, and the
+       action differs per placement — negatives are added to a campaign, not
+       to the account — so the key keeps all of it. */
+    const camp=cell(f,I.camp),group=cell(f,I.group);
+    let match=cell(f,I.match).toUpperCase();
+    const target=cell(f,I.target);
+    // Auto campaigns report "-" as match type; the targeting column carries
+    // close-match / loose-match / complements / substitutes instead.
+    if(!match||match==="-") match=/close|loose|complement|substitute/i.test(target)?"AUTO":(match||"—");
+    const key=term+" "+camp+" "+group+" "+match;
+    const e=byKey.get(key)||{term,camp,group,match,target,spend:0,sales:0,orders:0,clicks:0,impressions:0};
+    e.spend+=Math.abs(money(f,I.spend));
+    e.sales+=Math.abs(money(f,I.sales));
+    e.orders+=Math.abs(money(f,I.orders));
+    e.clicks+=Math.abs(money(f,I.clicks));
+    e.impressions+=Math.abs(money(f,I.impressions));
+    byKey.set(key,e);
+  }
+  if(!byKey.size) return null;
+  return {rows,terms:[...byKey.values()]};
+}
+window.parseSearchTermReport=parseSearchTermReport; // exposed for verification/debugging
+
+/* Rows → the four lists a seller can act on. Pure. */
+function adsCompute(terms){
+  const t={spend:0,sales:0,orders:0,clicks:0,impressions:0};
+  for(const r of terms){t.spend+=r.spend;t.sales+=r.sales;t.orders+=r.orders;t.clicks+=r.clicks;t.impressions+=r.impressions;}
+  const acos=r=>r.sales>0?r.spend/r.sales*100:null;
+  const negate=terms.filter(r=>r.orders===0&&r.clicks>=ADS_NEG_CLICKS&&r.spend>=ADS_NEG_SPEND)
+    .sort((a,b)=>b.spend-a.spend);
+  const promote=terms.filter(r=>r.orders>=ADS_PROMOTE_ORDERS&&acos(r)!==null&&acos(r)<=ADS_PROMOTE_ACOS
+      &&r.match!=="EXACT")
+    .sort((a,b)=>b.sales-a.sales);
+  const bleed=terms.filter(r=>r.orders>0&&acos(r)!==null&&acos(r)>=ADS_BLEED_ACOS)
+    .sort((a,b)=>(b.spend-b.sales)-(a.spend-a.sales));
+  // Campaign scoreboard.
+  const byCamp=new Map();
+  for(const r of terms){
+    const e=byCamp.get(r.camp)||{camp:r.camp,spend:0,sales:0,orders:0,clicks:0,impressions:0,terms:0};
+    e.spend+=r.spend;e.sales+=r.sales;e.orders+=r.orders;e.clicks+=r.clicks;e.impressions+=r.impressions;e.terms++;
+    byCamp.set(r.camp,e);
+  }
+  const campaigns=[...byCamp.values()].map(c=>{
+    const a=c.sales>0?c.spend/c.sales*100:null;
+    let verdict,vk;
+    if(c.sales<=0&&c.spend>=ADS_NEG_SPEND){verdict="Spend, no sales — check targeting";vk="bad";}
+    else if(a!==null&&a<=ADS_CAMP_SCALE_ACOS&&c.orders>=5){verdict="Working — room to scale";vk="good";}
+    else if(a!==null&&a>=ADS_CAMP_FIX_ACOS){verdict="ACOS too high — trim terms or bids";vk="warn";}
+    else {verdict="Steady";vk="muted";}
+    return Object.assign(c,{acos:a,verdict,vk});
+  }).sort((a,b)=>b.spend-a.spend);
+  const wasted=negate.reduce((s,r)=>s+r.spend,0);
+  return {totals:t,negate,promote,bleed,campaigns,wasted,
+    acosTotal:t.sales>0?t.spend/t.sales*100:null};
+}
+window.adsCompute=adsCompute; // exposed for verification/debugging
+
+function renderAdsOptimizer(){
+  setMeta("Ads Optimizer — Seller Tools India",
+    "Drop your Sponsored Products Search Term report and get the lists that matter: search terms to negate, terms that earned an exact-match campaign, terms converting at a loss, and a campaign scoreboard — computed in your browser.");
+  backBtn.hidden=false;
+  gatePremium(ADSO_INFO, adsBody);
+}
+function adsBody(){
+  app.innerHTML=`
+    <div class="wrap page">
+      <h2>Ads Optimizer</h2>
+      <p class="lede">The Search Term report is the only place Amazon shows <b>what buyers actually typed</b>. Drop it here and get the four lists that matter: spend going to words that never convert, winners that deserve their own exact-match bid, terms converting at a loss, and a campaign scoreboard.</p>
+      ${helpHtml("ads-optimizer")}
+      <label class="sa-drop" id="ads-drop">
+        <div class="ico">🎯</div>
+        <h3>Drop your Search Term report here</h3>
+        <p>or click to choose — .xlsx straight from the ads console works (.csv too)</p>
+        <input type="file" id="ads-file" multiple accept=".csv,.txt,.xlsx,text/plain,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+      </label>
+      <div class="sa-priv">🔒 Private by design — your file never leaves your device. Every figure is computed locally on this page.</div>
+      <div id="ads-out"></div>
+    </div>`;
+  const drop=document.getElementById("ads-drop"),file=document.getElementById("ads-file");
+  ["dragenter","dragover"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add("over");}));
+  ["dragleave","drop"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove("over");}));
+  drop.addEventListener("drop",ev=>{adsAddFiles(ev.dataTransfer.files);});
+  file.addEventListener("change",()=>{adsAddFiles(file.files);file.value="";});
+  if(adsFiles.length) adsRenderResults();
+}
+function adsAddFiles(list){
+  const files=[...(list||[])]; if(!files.length) return;
+  let pending=files.length;
+  files.forEach(f=>{
+    const finish=()=>{ if(--pending===0) adsRenderResults(); };
+    saReadDropped(f,text=>{
+      adsFiles=adsFiles.filter(x=>x.name!==f.name); // re-drop replaces
+      const st=parseSearchTermReport(text);
+      if(st) adsFiles.push({name:f.name,kind:"st",st});
+      else if(parseAdReport(text)) adsFiles.push({name:f.name,kind:"error",msg:"this is the Advertised-product report — it has no search terms. Drop it into Ad Profitability instead; here you need the Search term report."});
+      else adsFiles.push({name:f.name,kind:"error",msg:"not recognised as a Sponsored Products Search Term report."+saDescribeColumns(text)});
+      finish();
+    },msg=>{ adsFiles=adsFiles.filter(x=>x.name!==f.name); adsFiles.push({name:f.name,kind:"error",msg}); finish(); });
+  });
+}
+function adsRenderResults(){
+  const out=document.getElementById("ads-out"); if(!out) return;
+  let h=`<div class="rec-files">${adsFiles.map((f,i)=>`<span class="rec-file"${f.kind==="error"?` title="${esc(f.msg)}"`:""}><b>${esc(f.name)}</b><span class="rf-kind">${f.kind==="error"?"⚠ Skipped":"Search terms"}</span><button type="button" data-rm="${i}" aria-label="Remove ${esc(f.name)}">✕</button></span>`).join("")}</div>`;
+  const bad=adsFiles.filter(f=>f.kind==="error");
+  if(bad.length) h+=`<div class="banner warn">${bad.map(f=>`<b>${esc(f.name)}</b>: ${esc(f.msg)}`).join("<br>")}</div>`;
+  const all=adsFiles.filter(f=>f.kind==="st").flatMap(f=>f.st.terms);
+  if(!all.length){ out.innerHTML=h; adsWire(out); return; }
+  const r=adsCompute(all);
+  const t=r.totals;
+  h+=`<div class="stats">
+    <div class="stat"><div class="k">Ad spend in report</div><div class="v">${inr0(t.spend)}</div></div>
+    <div class="stat"><div class="k">Ad sales</div><div class="v">${inr0(t.sales)}</div><div class="sa-sub" style="margin-top:3px">ACOS ${r.acosTotal===null?"—":r.acosTotal.toFixed(1)+"%"}</div></div>
+    <div class="stat ${r.wasted>0?"red":"green"}"><div class="k">Going to words that never convert</div><div class="v">${inr0(r.wasted)}</div><div class="sa-sub" style="margin-top:3px">${r.negate.length} term${r.negate.length===1?"":"s"} to negate</div></div>
+    <div class="stat green"><div class="k">Winners under broad/auto</div><div class="v">${r.promote.length}</div><div class="sa-sub" style="margin-top:3px">deserve their own exact match</div></div>
+  </div>`;
+  h+=`<div class="banner info">These lists read the report you dropped — nothing is estimated. ACOS here is against <b>ad-attributed sales</b>; whether that ACOS is affordable for a given SKU depends on its margin, which lives in <a href="#/ad-profit">Ad Profitability</a> (break-even ACOS per SKU).</div>`;
+  if(r.negate.length){
+    h+=`<div class="panel"><h4>🚫 Negate these <span class="sa-sub">(${r.negate.length} — ${ADS_NEG_CLICKS}+ clicks, ₹${ADS_NEG_SPEND}+ spent, zero orders)</span></h4>
+      <p class="sa-sub" style="margin:4px 0 10px">Buyers typed these, clicked your ad, and never bought — over the whole report. Add each as a <b>negative exact</b> in its campaign and the spend stops tomorrow. Export gives you a paste-ready list.</p>
+      <div style="display:flex;justify-content:flex-end;margin:0 0 6px"><button type="button" class="fbtn" id="ads-neg-csv">⬇ Export negatives CSV</button></div>
+      <div class="tblwrap"><table class="sa">
+        <thead><tr><th>Search term</th><th>Campaign</th><th>Match</th><th class="num">Clicks</th><th class="num">Spent</th></tr></thead>
+        <tbody>${r.negate.slice(0,50).map(x=>`<tr>
+          <td>${esc(x.term)}</td><td class="sa-sub">${esc(x.camp)}</td><td>${esc(x.match)}</td>
+          <td class="num">${num(x.clicks)}</td><td class="num"><b>${inr(x.spend)}</b></td></tr>`).join("")}
+        </tbody></table></div>
+      ${r.negate.length>50?`<p class="sa-sub" style="margin-top:6px">Showing the worst 50 of ${r.negate.length} — the export has all of them.</p>`:""}
+      <div class="rec-claim"><b>How to act:</b> Advertising console → the campaign → <b>Negative keywords</b> → add as <b>negative exact</b>. Negate in the campaign the term spent in, not account-wide — the same words may convert elsewhere.</div></div>`;
+  }
+  if(r.promote.length){
+    h+=`<div class="panel"><h4>⭐ Give these their own exact match <span class="sa-sub">(${r.promote.length} — ${ADS_PROMOTE_ORDERS}+ orders at ≤${ADS_PROMOTE_ACOS}% ACOS, found under broad/phrase/auto)</span></h4>
+      <p class="sa-sub" style="margin:4px 0 10px">These convert cheaply while riding along inside broad or auto targeting. An exact-match keyword of its own gets a controlled bid, its own budget, and stops the auto campaign from paying discovery prices for a term you already know works.</p>
+      <div class="tblwrap"><table class="sa">
+        <thead><tr><th>Search term</th><th>Found under</th><th>Match</th><th class="num">Orders</th><th class="num">Sales</th><th class="num">ACOS</th></tr></thead>
+        <tbody>${r.promote.slice(0,30).map(x=>`<tr>
+          <td><b>${esc(x.term)}</b></td><td class="sa-sub">${esc(x.camp)}</td><td>${esc(x.match)}</td>
+          <td class="num">${num(x.orders)}</td><td class="num">${inr0(x.sales)}</td>
+          <td class="num" style="color:var(--green);font-weight:700">${(x.spend/x.sales*100).toFixed(1)}%</td></tr>`).join("")}
+        </tbody></table></div>
+      <div class="rec-claim"><b>How to act:</b> create (or reuse) a manual campaign → add the term as an <b>exact match</b> keyword → then add it as a <b>negative exact</b> in the campaign it came from, so the two never bid against each other.</div></div>`;
+  }
+  if(r.bleed.length){
+    h+=`<div class="panel"><h4>🩸 Converting at a loss <span class="sa-sub">(${r.bleed.length} — ACOS ≥ ${ADS_BLEED_ACOS}%)</span></h4>
+      <p class="sa-sub" style="margin:4px 0 10px">These do sell — but every rupee of sales costs ${ADS_BLEED_ACOS===100?"more than a rupee":"too much"} of ads. Lower the bid first; negate only if the term is clearly the wrong audience.</p>
+      <div class="tblwrap"><table class="sa">
+        <thead><tr><th>Search term</th><th>Campaign</th><th class="num">Orders</th><th class="num">Spent</th><th class="num">Sales</th><th class="num">ACOS</th></tr></thead>
+        <tbody>${r.bleed.slice(0,30).map(x=>`<tr>
+          <td>${esc(x.term)}</td><td class="sa-sub">${esc(x.camp)}</td>
+          <td class="num">${num(x.orders)}</td><td class="num">${inr(x.spend)}</td><td class="num">${inr(x.sales)}</td>
+          <td class="num" style="color:var(--red);font-weight:700">${(x.spend/x.sales*100).toFixed(0)}%</td></tr>`).join("")}
+        </tbody></table></div></div>`;
+  }
+  h+=`<div class="panel"><h4>📋 Campaign scoreboard <span class="sa-sub">(${r.campaigns.length})</span></h4>
+    <div class="tblwrap"><table class="sa">
+      <thead><tr><th>Campaign</th><th class="num">Spend</th><th class="num">Sales</th><th class="num">ACOS</th><th class="num">Orders</th><th class="num">CTR</th><th>Verdict</th></tr></thead>
+      <tbody>${r.campaigns.map(c=>`<tr>
+        <td>${esc(c.camp)}</td><td class="num">${inr0(c.spend)}</td><td class="num">${inr0(c.sales)}</td>
+        <td class="num">${c.acos===null?"—":c.acos.toFixed(1)+"%"}</td><td class="num">${num(c.orders)}</td>
+        <td class="num">${c.impressions>0?(c.clicks/c.impressions*100).toFixed(2)+"%":"—"}</td>
+        <td class="sa-sub" style="color:${c.vk==="good"?"var(--green)":c.vk==="bad"?"var(--red)":c.vk==="warn"?"var(--orange)":"var(--muted)"}">${esc(c.verdict)}</td></tr>`).join("")}
+      </tbody></table></div>
+    <p class="sa-sub" style="margin:8px 0 0">Verdicts: <b>scale</b> at ≤${ADS_CAMP_SCALE_ACOS}% ACOS with 5+ orders · <b>fix</b> at ≥${ADS_CAMP_FIX_ACOS}% · <b>check targeting</b> when there's spend and no sales at all. ACOS alone doesn't decide profit — that needs each SKU's margin, in <a href="#/ad-profit">Ad Profitability</a>.</p></div>`;
+  h+=`<details class="howto"><summary>How every number here is computed</summary><div class="hbody">
+    <span class="htag">Formulas &amp; thresholds</span>
+    <ol>
+      <li><b>ACOS</b> = spend ÷ ad-attributed sales, per term and per campaign. Zero sales reads "—", never 0%.</li>
+      <li><b>Negate</b> = ${ADS_NEG_CLICKS}+ clicks and ₹${ADS_NEG_SPEND}+ spend with <b>zero</b> orders across the whole report — enough evidence that the term looks, clicks and doesn't buy.</li>
+      <li><b>Promote</b> = ${ADS_PROMOTE_ORDERS}+ orders at ≤${ADS_PROMOTE_ACOS}% ACOS under broad, phrase or auto.</li>
+      <li><b>Converting at a loss</b> = orders exist but ACOS ≥ ${ADS_BLEED_ACOS}%.</li>
+      <li>Rows are summed per term × campaign × ad group × match type, because negatives are added per campaign. Auto targeting (close-match, loose-match, complements, substitutes) is shown as AUTO.</li>
+      <li>Attribution: sales figures are Amazon's 7-day window from the report itself — nothing here is joined to settlements or estimated.</li>
+    </ol>
+  </div></details>`;
+  out.innerHTML=h; adsWire(out,r);
+}
+function adsWire(out,r){
+  out.querySelectorAll("[data-rm]").forEach(b=>b.addEventListener("click",()=>{
+    adsFiles.splice(Number(b.dataset.rm),1); adsRenderResults();
+  }));
+  const neg=out.querySelector("#ads-neg-csv");
+  if(neg&&r) neg.addEventListener("click",()=>{
+    saCsvDownload("negative-keywords.csv",
+      ["Campaign","Ad Group","Customer search term","Add as","Clicks","Spend (INR)"],
+      r.negate.map(x=>[x.camp,x.group,x.term,"negative exact",x.clicks,x.spend.toFixed(2)]));
+  });
+}
+
 function route(){
   const h=location.hash.replace(/^#\/?/,"");
   renderAuthSlot();
@@ -8275,6 +8528,7 @@ function route(){
   if(h==="trends"){renderTrends();window.scrollTo(0,0);return;}
   if(h==="fee-bands"){renderFeeBands();window.scrollTo(0,0);return;}
   if(h==="changelog"){renderChangelog();window.scrollTo(0,0);return;}
+  if(h==="ads-optimizer"){renderAdsOptimizer();window.scrollTo(0,0);return;}
   if(h==="ad-profit"){renderAdProfit();window.scrollTo(0,0);return;}
   if(h==="link-builder"){renderLinkBuilder();window.scrollTo(0,0);return;}
   if(h==="keyword-combiner"){renderKeywordCombiner();window.scrollTo(0,0);return;}
@@ -8290,7 +8544,7 @@ function route(){
 window.addEventListener("hashchange",route);
 /* Premium tools re-check entitlement when the tab regains focus, so a session
    kicked on another device locks here within seconds of the user returning. */
-const PREMIUM_ROUTES=["settlement-analyzer","gst-report","sku-report","reconcile","trends","ad-profit","fee-bands"];
+const PREMIUM_ROUTES=["settlement-analyzer","gst-report","sku-report","reconcile","trends","ad-profit","fee-bands","ads-optimizer"];
 window.addEventListener("focus",()=>{
   const h=location.hash.replace(/^#\/?/,"");
   if(!PREMIUM_ROUTES.includes(h) || saUnlocked() || !sessionUser()) return;
