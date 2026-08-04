@@ -211,3 +211,20 @@ create table if not exists public.presence (
 );
 create index if not exists presence_last_seen_idx on public.presence (last_seen_at desc);
 alter table public.presence enable row level security;  -- service-role only
+
+-- ============================================================================
+-- Client errors (Phase 8): production JS errors reported by the page itself,
+-- shown in the hidden admin panel. No user identity, no IP — just what broke
+-- and where. (idempotent — re-run this whole file after pulling this change)
+-- ============================================================================
+create table if not exists public.client_errors (
+  id       uuid primary key default gen_random_uuid(),
+  at       timestamptz not null default now(),
+  route    text,
+  message  text,
+  source   text,
+  line     integer,
+  col      integer
+);
+create index if not exists client_errors_at_idx on public.client_errors (at desc);
+alter table public.client_errors enable row level security;  -- service-role only

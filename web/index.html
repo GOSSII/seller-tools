@@ -668,6 +668,7 @@
   <div class="wrap">
     <nav class="foot-nav" aria-label="Footer">
       <a href="#/pricing">Pricing</a>
+      <a href="#/changelog">What's new</a>
       <a href="/terms.html">Terms</a>
       <a href="/privacy.html">Privacy</a>
       <a href="/refunds.html">Refunds</a>
@@ -2725,6 +2726,17 @@ async function renderAdmin(){
           <td>${esc(o.route||"—")}</td>
           <td>${o.mins<1?"&lt;1 min":Math.round(o.mins)+" min"}</td></tr>`).join("")}</tbody></table></div>`
       :'<p class="lede" style="margin:4px 0 2px">No one is online right now.</p>'}</div>
+    <div class="panel" style="margin-bottom:16px"><h4>Production JS errors <span class="sa-sub">— ${stats.errors_available?num(stats.errors_24h||0)+" in the last 24h":"table missing"}</span></h4>
+      ${!stats.errors_available
+        ?'<p class="lede" style="margin:4px 0 2px">The <code>client_errors</code> table does not exist yet — re-run <code>web/db/schema.sql</code> in Supabase and errors thrown on visitors\' pages will show up here.</p>'
+        :(stats.recent_errors&&stats.recent_errors.length)?`<div class="pay-wrap"><table class="pay-table">
+        <thead><tr><th>When</th><th>Route</th><th>Message</th><th>Where</th></tr></thead>
+        <tbody>${stats.recent_errors.map(e2=>`<tr>
+          <td style="white-space:nowrap">${esc(fmtDate(e2.at))}</td>
+          <td>${esc(e2.route||"—")}</td>
+          <td>${esc((e2.message||"").slice(0,120))}</td>
+          <td class="sa-sub">${esc(((e2.source||"").split("/").pop()||"—")+(e2.line?":"+e2.line:""))}</td></tr>`).join("")}</tbody></table></div>`
+        :'<p class="lede" style="margin:4px 0 2px">✅ Nothing thrown in the last 30 days.</p>'}</div>
     <div style="margin:6px 0 10px"><input id="adm-search" type="search" placeholder="Search users by email…" style="max-width:360px"></div>
     <div id="adm-users"></div>
     <div id="adm-detail" style="margin-top:18px"></div>
@@ -3652,6 +3664,22 @@ function saFlow(records){
   return {B,orders,units,refunds};
 }
 
+/* When a dropped file matches no parser, say what WAS found — the first few
+   column names tell the seller instantly which report they exported, where a
+   bare "not recognised" leaves them guessing. Never fail silently. */
+function saDescribeColumns(text){
+  const lines=String(text||"").replace(/^﻿/,"").split(/\r\n|\r|\n/);
+  for(const l of lines){
+    if(!l.trim()) continue;
+    const d=l.includes("\t")?"\t":",";
+    const cols=saSplit(l,d).map(c=>c.trim()).filter(Boolean);
+    if(!cols.length) break;
+    const shown=cols.slice(0,8).join(", ");
+    return " Its columns are: "+shown+(cols.length>8?" … ("+cols.length+" in all)":"")
+      +". That doesn't match any report this tool reads — check the input note under “How to use this tool” above.";
+  }
+  return "";
+}
 /* Shared CSV download — quoting rules in one place. */
 function saCsvDownload(filename,header,rows){
   const q=v=>`"${String(v??"").replace(/"/g,'""')}"`;
@@ -4635,7 +4663,7 @@ function recAddFiles(list){
           if(dup) recFiles.push({name:f.name,kind:"error",msg:"same settlement ID as a file already loaded — skipped to avoid double counting"});
           else recFiles.push({name:f.name,kind:"settlement",parsed:p});
         }
-        else recFiles.push({name:f.name,kind:"error",msg:"not recognised as a settlement flat file or MTR"});
+        else recFiles.push({name:f.name,kind:"error",msg:"not recognised as a settlement flat file or MTR."+saDescribeColumns(text)});
       }
       if(--pending===0) recRenderResults();
     };
@@ -5149,7 +5177,7 @@ function fbAddFiles(list){
           if(dup) fbFiles.push({name:f.name,kind:"error",msg:"same settlement ID as a file already loaded — skipped to avoid double counting"});
           else fbFiles.push({name:f.name,kind:"settlement",parsed:p});
         }
-        else fbFiles.push({name:f.name,kind:"error",msg:"not recognised as a settlement flat file"});
+        else fbFiles.push({name:f.name,kind:"error",msg:"not recognised as a settlement flat file."+saDescribeColumns(text)});
       }
       if(--pending===0) fbRenderResults();
     };
@@ -5565,7 +5593,7 @@ function trAddFiles(list){
         const dup=p.summary&&trFiles.some(x=>x.kind==="settlement"&&x.parsed.summary&&x.parsed.summary.settlementId===p.summary.settlementId);
         if(dup) trFiles.push({name:f.name,kind:"error",msg:"same settlement ID as a file already loaded — skipped to avoid double counting"});
         else trFiles.push({name:f.name,kind:"settlement",parsed:p});
-      } else trFiles.push({name:f.name,kind:"error",msg:"not recognised as a settlement flat file or MTR"});
+      } else trFiles.push({name:f.name,kind:"error",msg:"not recognised as a settlement flat file or MTR."+saDescribeColumns(txt)});
       if(--pending===0) trRenderResults();
     };
     rd.onerror=()=>{trFiles.push({name:f.name,kind:"error",msg:"could not read the file"});if(--pending===0)trRenderResults();};
@@ -7926,7 +7954,7 @@ function adpAddFiles(list){
       else{
         const p=parseUnifiedTransaction(text)||parseSettlement(text);
         if(p&&(p.records.length||p.summary)) adpFiles.push({name:f.name,kind:"settlement",parsed:p});
-        else adpFiles.push({name:f.name,kind:"error",msg:"not recognised as a settlement, unified transaction or advertised-product report"});
+        else adpFiles.push({name:f.name,kind:"error",msg:"not recognised as a settlement, unified transaction or advertised-product report."+saDescribeColumns(text)});
       }
       if(--pending===0) adpRender();
     };
@@ -8158,6 +8186,7 @@ function route(){
   if(h==="reconcile"){renderReconcile();window.scrollTo(0,0);return;}
   if(h==="trends"){renderTrends();window.scrollTo(0,0);return;}
   if(h==="fee-bands"){renderFeeBands();window.scrollTo(0,0);return;}
+  if(h==="changelog"){renderChangelog();window.scrollTo(0,0);return;}
   if(h==="ad-profit"){renderAdProfit();window.scrollTo(0,0);return;}
   if(h==="link-builder"){renderLinkBuilder();window.scrollTo(0,0);return;}
   if(h==="keyword-combiner"){renderKeywordCombiner();window.scrollTo(0,0);return;}
@@ -8202,6 +8231,30 @@ let _lastPing=0;
 /* Skip the throttle — used right after login/logout so the online list
    reflects the change within seconds instead of a minute. */
 function pingNow(){ _lastPing=0; try{ sendPing(); }catch(e){} }
+/* ============================================================
+   WHAT'S NEW (#/changelog) — a plain array, newest first. One
+   entry per shipped change a seller can actually feel.
+   ============================================================ */
+const CHANGELOG=[
+  {d:"2026-08-04",t:"Trends reads the months out loud",n:"A new month-over-month panel says in words what changed — growth, refund spikes, fee squeeze — with gaining and fading SKUs named. Every comparison runs on the daily run-rate, so a part-covered month is never misread as a crash."},
+  {d:"2026-08-04",t:"Ad Profitability shows the funnel",n:"CTR, CPC, CVR and TACOS per SKU, plus a one-line account funnel: impressions → clicks → orders. A low CTR is an ad problem; a low CVR with a healthy CTR is a listing problem."},
+  {d:"2026-08-04",t:"Exports, filters and status labels",n:"The Settlement Analyzer and SKU report gained CSV exports, search filters, plain-worded formulas and per-SKU status labels. A SKU with no product cost now says 'needs cost' instead of showing a flattering profit."},
+  {d:"2026-08-04",t:"Reconciliation fee-check fix",n:"Since Amazon's June 2026 rate card, most items under ₹1,000 pay 0% referral fee — which made statements look fee-invoiced and silently switched off the refund-credit check. Fixed; claim amounts also no longer include the GST that comes back as ITC anyway."},
+  {d:"2026-08-04",t:"Fee Band Optimizer",n:"A new Pro tool: finds SKUs priced a rupee over a referral step or billed a weight band above what the parcel needs. Enter a packed weight and it says whether a band is claimable, one packaging change away, or physically out of reach — plus Amazon's full rate card for reference."},
+  {d:"2026-08-03",t:"Five tools verified on live accounts",n:"Every paid tool was run against three real seller accounts — 42 statements, 18,000+ records — and every parser bug found was fixed. Statements reconcile to the deposit to the paisa."},
+  {d:"2026-07-30",t:"Sign in with Google",n:"One-tap login, plus fixed password-reset links and friendlier auth screens."},
+  {d:"2026-07-29",t:"Paid plans launch",n:"Starter (₹199/mo) unlocks the Settlement Analyzer, GST & TCS Report and SKU Profitability; Pro (₹499/mo) adds Reconciliation & SAFE-T, Ad Profitability and Multi-Month Trends. No auto-renewal unless you ask for it."},
+];
+function renderChangelog(){
+  setMeta("What's new — Seller Tools India","Every shipped change to the Seller Tools India calculators and reports, newest first.");
+  backBtn.hidden=false;
+  app.innerHTML=`<div class="wrap page"><h2>What's new</h2>
+    <p class="lede">Every shipped change a seller can feel, newest first.</p>
+    ${CHANGELOG.map(c=>`<div class="panel"><h4>${esc(c.t)} <span class="sa-sub">— ${esc(fmtDate(c.d))}</span></h4>
+      <p class="sa-sub" style="margin:6px 0 0;font-size:13.5px;line-height:1.65">${esc(c.n)}</p></div>`).join("")}
+    <div class="banner info">Something broken, or something you wish existed? Tell us: <a href="/contact.html">contact</a>.</div>
+  </div>`;
+}
 function sendPing(){
   const sid=presenceSid(); if(!sid) return;
   if(document.visibilityState!=="visible") return;
@@ -8218,6 +8271,34 @@ function sendPing(){
 setInterval(sendPing,60000);
 window.addEventListener("hashchange",sendPing);
 document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") sendPing(); });
+
+/* Production error reporting (Phase 8). If this page's own code throws on a
+   visitor's machine, the admin panel should hear about it — otherwise the only
+   report channel is a customer caring enough to email. Anonymous by design
+   (message + route + position, no identity), deduped, and capped per session
+   so a render loop cannot flood the endpoint. */
+const _errSeen=new Set(); let _errBudget=5;
+function reportClientError(message,source,line,col){
+  try{
+    message=String(message||"").slice(0,300); if(!message) return;
+    const key=message+"|"+(line||0);
+    if(_errSeen.has(key)||_errBudget<=0) return;
+    _errSeen.add(key); _errBudget--;
+    fetch("/api/client-error",{method:"POST",headers:{"Content-Type":"application/json"},keepalive:true,
+      body:JSON.stringify({message,source:String(source||"").slice(0,200),
+        line:line||0,col:col||0,route:location.hash.replace(/^#\/?/,"").slice(0,60)||"home"})}).catch(()=>{});
+  }catch(e){}
+}
+window.addEventListener("error",e=>{
+  // Resource-load failures (an <img> 404) fire this too but carry no message —
+  // only script errors are worth a row.
+  if(e&&e.message) reportClientError(e.message,e.filename,e.lineno,e.colno);
+});
+window.addEventListener("unhandledrejection",e=>{
+  const r=e&&e.reason;
+  reportClientError(r&&r.message?("unhandled rejection: "+r.message):"unhandled rejection",
+    r&&r.stack?String(r.stack).split("\n")[1]:"",0,0);
+});
 (async()=>{
   let handled=false;
   try{ handled=await handleAuthRedirect(); }catch(e){}

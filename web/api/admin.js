@@ -75,11 +75,13 @@ module.exports = async (req, res) => {
     }).catch(() => {});
 
     if (action === 'stats') {
-      const [pRes, eRes, payRes, prRes] = await Promise.all([
+      const [pRes, eRes, payRes, prRes, ceRes] = await Promise.all([
         rest('GET', '/profiles?select=id,created_at&order=created_at.desc&limit=2000'),
         rest('GET', '/entitlements?select=user_id,plan,expires_at&limit=5000'),
         rest('GET', '/payments?select=amount_paise,status,created_at&status=eq.paid&limit=5000'),
-        rest('GET', '/presence?select=user_id,route,started_at,last_seen_at&order=last_seen_at.desc&limit=2000')
+        rest('GET', '/presence?select=user_id,route,started_at,last_seen_at&order=last_seen_at.desc&limit=2000'),
+        // client_errors may not exist until schema.sql is re-run — degrade, don't 500
+        rest('GET', '/client_errors?select=at,route,message,source,line&order=at.desc&limit=50').catch(() => null)
       ]);
       const profiles = (await jsonOf(pRes)) || [], ents = (await jsonOf(eRes)) || [], pays = (await jsonOf(payRes)) || [];
       const presence = (await jsonOf(prRes)) || [];
@@ -106,6 +108,16 @@ module.exports = async (req, res) => {
         route: r.route || '', mins: Math.round(durMin(r) * 10) / 10
       }));
 
+      // Production JS errors (Phase 8). errors_available:false = table missing,
+      // which the panel renders as "re-run schema.sql", not as zero errors.
+      let errorsAvailable = false, recentErrors = [], errors24h = 0;
+      if (ceRes && ceRes.ok) {
+        errorsAvailable = true;
+        recentErrors = (await jsonOf(ceRes)) || [];
+        errors24h = recentErrors.filter(e => now - new Date(e.at).getTime() < 24 * 3600000).length;
+        recentErrors = recentErrors.slice(0, 15);
+      }
+
       await audit('stats');
       return res.status(200).json({
         users_total: profiles.length,
@@ -116,7 +128,10 @@ module.exports = async (req, res) => {
         online_now: online.length,
         sessions_24h: day.length,
         avg_session_min: Math.round(avgSessionMin * 10) / 10,
-        online_list: onlineList
+        online_list: onlineList,
+        errors_available: errorsAvailable,
+        errors_24h: errors24h,
+        recent_errors: recentErrors
       });
     }
 
