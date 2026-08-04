@@ -1554,7 +1554,7 @@ const HELP={
     steps:["Drop the settlement file.","Sort by Net to see which products actually make money after fees, taxes and refunds.","Sort by Refund % to spot problem products. Units ÷ days gives the daily sales rate for the Restock Planner."]},
   "ad-profit":{input:`Two files. <b>Payments → All Statements → Flat File V2</b> (or a Monthly Unified Transaction report) for what each SKU actually earned — and, from the <b>Advertising console → Sponsored Ads → Reports</b>, a <b>Sponsored Products “Advertised product”</b> report for the same period, which is the only place ad spend is broken down per SKU.`,
     steps:["Drop the settlement (or unified transaction) file, and the advertised-product report for the same dates.","Fill in product costs for your main SKUs — without them the table shows payout, not profit.","Read the “ads turn profit into loss” list first: those SKUs earn money until the advertising is counted.","Compare each SKU's ACOS against its break-even ACOS — anything above it is being advertised at a loss."]},
-  "reconcile":{input:`Settlement file(s): <b>Payments → All Statements → Download Flat File V2</b> — drop every statement for the period you're checking, <b>from both Account Types</b>: All Statements keeps a separate weekly series for <i>Electronic Transactions</i> and for <i>Cash On Delivery Transactions and Non-Transactional Fees</i>, and orders paid through the series you skip will look unpaid. Optional but recommended: the matching MTR — <b>Reports → Tax Document Library → Merchant Tax Reports → B2C</b> (.csv) — so shipped-but-unpaid orders can be caught too.`,
+  "reconcile":{input:`Settlement file(s): <b>Payments → All Statements → Download Flat File V2</b> — drop every statement for the period you're checking, <b>from both Account Types</b>: All Statements keeps a separate weekly series for <i>Electronic Transactions</i> and for <i>Cash On Delivery Transactions and Non-Transactional Fees</i>, and orders paid through the series you skip will look unpaid. Optional: the <b>FBA customer returns</b> and <b>Reimbursements</b> reports (<b>Reports → Fulfilment</b>, Download tab, exact dates matching your statements — both together) unlock the refunded-never-returned and damaged-at-Amazon checks. Optional but recommended: the matching MTR — <b>Reports → Tax Document Library → Merchant Tax Reports → B2C</b> (.csv) — so shipped-but-unpaid orders can be caught too.`,
     steps:["Drop your settlement file(s), and the MTR for the same months if you have it.","Work through each issue list — every row shows the order, the amount at stake and the exact Seller Central path to claim it.","Tick rows off as you raise them (ticks are saved in your browser), and export the checklist as CSV to track claims."]},
   "fnsku-labels":{input:`Your FNSKU (starts with X0) is in <b>Inventory → FBA Inventory</b> — the FNSKU column — or on the <b>Print item labels</b> page (<b>Manage Inventory</b> → tick your FBA listings → <b>Print item labels</b>). Copy it from either place; the product name can be anything your packers will recognise.`,
     steps:["Add a row per product: FNSKU/code, product name, condition (defaults to New) and how many stickers you need.","Pick the paper: A4 sticker sheets with 65, 40 or 24 labels per page, or a 4×6 thermal sheet (12 per page).","Generate, check the preview, download — and print at 100% scale (never \"fit to page\", or the barcode dimensions shift).","Stick one label per unit, covering any existing barcode on the retail packaging."]},
@@ -4450,7 +4450,58 @@ function recClosingCeiling(price,afn){
   const band=price<=300?0:price<=500?1:price<=1000?2:3;
   return afn?[26,22,27,72][band]:[20,26,51,101][band];
 }
-function recCompute(settlements,mtrRows){
+/* FBA customer returns report (Reports → Fulfilment → FBA customer returns).
+   One row per returned unit. Returns null when the file isn't this report. */
+function parseFbaReturns(text){
+  const lines=String(text||"").replace(/^\ufeff/,"").split(/\r\n|\r|\n/);
+  let hln=-1; for(let i=0;i<lines.length;i++){if(lines[i].trim()!==""){hln=i;break;}}
+  if(hln===-1) return null;
+  const delim=lines[hln].includes("\t")?"\t":",";
+  const cols=saSplit(lines[hln],delim).map(h=>h.trim().toLowerCase().replace(/^"|"$/g,""));
+  const ix=n=>cols.indexOf(n);
+  const iDate=ix("return-date"),iOrder=ix("order-id"),iSku=ix("sku"),iQty=ix("quantity"),
+        iDisp=ix("detailed-disposition"),iReason=ix("reason");
+  if(iOrder<0||iDisp<0||iDate<0) return null;
+  const rows=[];
+  for(let i=hln+1;i<lines.length;i++){
+    if(!lines[i].trim()) continue;
+    const f=saSplit(lines[i],delim).map(x=>x.trim());
+    if(f.length<3) continue;
+    const q=Number(f[iQty]||1);
+    rows.push({orderId:f[iOrder]||"",sku:iSku>=0?(f[iSku]||""):"",
+      date:saParseDate((f[iDate]||"").slice(0,10)),
+      quantity:Number.isFinite(q)&&q>0?q:1,
+      disposition:(f[iDisp]||"").toUpperCase(),reason:(f[iReason]||"").toUpperCase()});
+  }
+  return rows.length?{rows}:null;
+}
+window.parseFbaReturns=parseFbaReturns; // exposed for verification/debugging
+/* Reimbursements report (Reports → Fulfilment → Payments → Reimbursements). */
+function parseReimbursements(text){
+  const lines=String(text||"").replace(/^\ufeff/,"").split(/\r\n|\r|\n/);
+  let hln=-1; for(let i=0;i<lines.length;i++){if(lines[i].trim()!==""){hln=i;break;}}
+  if(hln===-1) return null;
+  const delim=lines[hln].includes("\t")?"\t":",";
+  const cols=saSplit(lines[hln],delim).map(h=>h.trim().toLowerCase().replace(/^"|"$/g,""));
+  const ix=n=>cols.indexOf(n);
+  const iId=ix("reimbursement-id"),iOrder=ix("amazon-order-id"),iSku=ix("sku"),
+        iAmt=ix("amount-total"),iReason=ix("reason"),iDate=ix("approval-date");
+  if(iId<0||iAmt<0) return null;
+  const rows=[];
+  for(let i=hln+1;i<lines.length;i++){
+    if(!lines[i].trim()) continue;
+    const f=saSplit(lines[i],delim).map(x=>x.trim());
+    if(f.length<3) continue;
+    rows.push({orderId:iOrder>=0?(f[iOrder]||""):"",sku:iSku>=0?(f[iSku]||""):"",
+      date:iDate>=0?saParseDate((f[iDate]||"").slice(0,10)):null,
+      reason:iReason>=0?(f[iReason]||""):"",amount:saParseAmount(f[iAmt]||"0")||0});
+  }
+  return rows.length?{rows}:null;
+}
+window.parseReimbursements=parseReimbursements; // exposed for verification/debugging
+function recCompute(settlements,mtrRows,extra){
+  extra=extra||{};
+  const fbaReturns=extra.returns||[], reimbRows=extra.reimb||[];
   const records=[]; for(const p of settlements) records.push(...p.records);
   const ordersById=new Map(); let refundsChecked=0;
   for(const rec of records){
@@ -4458,7 +4509,7 @@ function recCompute(settlements,mtrRows){
       const a=ordersById.get(rec.orderId)||[]; a.push(rec); ordersById.set(rec.orderId,a);
     }
   }
-  const refundFee=[],safeT=[],negative=[],shipped=[],feeOver=[],feeDup=[],weightJump=[];
+  const refundFee=[],safeT=[],negative=[],shipped=[],feeOver=[],feeDup=[],weightJump=[],notReturned=[],fcDamaged=[];
   const bySkuSlab=new Map();   // SKU -> the weight bands Amazon billed it in
   /* The referral (commission) fee specifically — NOT saBucketOf's "referral &
      closing" bucket. Amazon credits the referral fee back when it refunds a
@@ -4688,23 +4739,73 @@ function recCompute(settlements,mtrRows){
     for(const m of (mtrRows||[])) if(m.type==="Shipment"&&m.orderId) seen.add(m.orderId);
     mtrOrders=seen.size;}
   const manyUnmatched=mtrOrders>20&&(shipped.length/mtrOrders)>REC_UNMATCHED_WARN;
+  /* ---- FBA returns × reimbursements, when those reports are loaded ----
+     Amazon's own policy: a buyer it refunds has 45 days to send the item back
+     to the fulfilment centre; if it never arrives, Amazon reimburses the
+     seller automatically. When that automation misses, nothing in any
+     settlement says so — only the join of three reports can: a refund with
+     no return row and no reimbursement row, 45+ days on. Matching is by
+     ORDER, deliberately: on a multi-item order a return of any line counts,
+     so a false claim is never generated at the cost of missing a few. */
+  const haveReturns=fbaReturns.length>0, haveReimb=reimbRows.length>0;
+  if(haveReturns&&haveReimb){
+    const returnedOrders=new Set(fbaReturns.map(r=>r.orderId).filter(Boolean));
+    const reimbOrders=new Set(reimbRows.map(r=>r.orderId).filter(Boolean));
+    for(const rec of records){
+      if(!/refund/i.test(rec.transactionType)||rec.fulfillmentId!=="AFN"||rec.principal>=-0.005) continue;
+      if(returnedOrders.has(rec.orderId)||reimbOrders.has(rec.orderId)) continue;
+      const d=saParseDate(rec.postedDate);
+      const days=d?Math.floor((Date.now()-new Date(d+"T00:00:00Z").getTime())/86400000):null;
+      if(days===null||days<45) continue;   // the buyer's return window is still open
+      notReturned.push({check:"notReturned",orderId:rec.orderId,sku:rec.sku,date:rec.postedDate,
+        amount:Math.round(Math.abs(rec.principal)*100)/100,days,
+        note:"Refunded "+days+" days ago — the item never reached a fulfilment centre and no reimbursement was ever issued"});
+    }
+    notReturned.sort((a,b)=>(b.amount||0)-(a.amount||0));
+    /* Returns damaged in Amazon's hands. CUSTOMER_DAMAGED and DEFECTIVE are
+       excluded on purpose — policy puts those on the buyer or the product,
+       and flagging them would invite claims Amazon will refuse. */
+    const refundBySku=new Map();
+    for(const rec of records){
+      if(!/refund/i.test(rec.transactionType)||rec.principal>=-0.005) continue;
+      refundBySku.set(rec.orderId+"|"+(rec.sku||""),Math.abs(rec.principal));
+    }
+    for(const r of fbaReturns){
+      if(r.disposition!=="CARRIER_DAMAGED"&&r.disposition!=="DAMAGED") continue;
+      if(reimbOrders.has(r.orderId)) continue;
+      const val=refundBySku.get(r.orderId+"|"+(r.sku||""));
+      fcDamaged.push({check:"fcDamaged",orderId:r.orderId,sku:r.sku,date:r.date,
+        amount:val!==undefined?Math.round(val*100)/100:null,
+        note:(r.disposition==="CARRIER_DAMAGED"?"Damaged by the carrier":"Damaged at the fulfilment centre")
+          +(r.reason?" ("+r.reason.toLowerCase().replace(/_/g," ")+")":"")
+          +(val===undefined?" — value not in the loaded statements":"")});
+    }
+  }
   /* "Claimable" is only what the files prove Amazon owes. SAFE-T rows are
      candidates to review — most seller-fulfilled refunds are ordinary returns
      — so they are counted separately and never inflate the headline. */
-  const recovery=[...refundFee,...feeOver,...feeDup,...weightJump].reduce((s,x)=>s+(x.amount||0),0);
+  const recovery=[...refundFee,...feeOver,...feeDup,...weightJump,...notReturned,...fcDamaged].reduce((s,x)=>s+(x.amount||0),0);
   const review=safeT.reduce((s,x)=>s+(x.amount||0),0);
   const unpaid=shipped.reduce((s,x)=>s+(x.amount||0),0);
-  return {issues:{feeOver,feeDup,weightJump,refundFee,safeT,shipped,negative},
+  return {issues:{notReturned,fcDamaged,feeOver,feeDup,weightJump,refundFee,safeT,shipped,negative},
     ordersChecked:ordersById.size,refundsChecked,
     recovery:Math.round(recovery*100)/100,
     review:Math.round(review*100)/100,
     unpaid:Math.round(unpaid*100)/100,
     notes:{feesItemised,feeLinesPresent,ordersWithFee,refundsNoOriginal,refundsNoFee,negativeNoRevenue,feeLinesAudited,weightLinesAudited,
-      skippedCancelled,skippedRecent,gaps,covEnd,cutoff,mtrOrders,manyUnmatched}};
+      skippedCancelled,skippedRecent,gaps,covEnd,cutoff,mtrOrders,manyUnmatched,
+      haveReturns:fbaReturns.length>0,haveReimb:reimbRows.length>0,
+      returnRows:fbaReturns.length,reimbRows:reimbRows.length}};
 }
 window.recCompute=recCompute; // exposed for verification/debugging
 
 const REC_CHECKS={
+  notReturned:{icon:"👻",title:"Refunded, never returned, never reimbursed",
+    why:"Amazon's FBA policy gives a refunded buyer 45 days to send the item back to the fulfilment centre; when it never arrives, Amazon reimburses the seller automatically. On these orders 45+ days have passed with no return in the FBA customer returns report and no line in the Reimbursements report — the automation missed them.",
+    claim:`<b>Seller Central → Help → Get Support → Fulfilment by Amazon</b> → "Customer refunded, item not returned, no reimbursement received". Quote the Order ID and the refund date, and note that 45 days have passed. Amazon checks the same two reports you just did.`},
+  fcDamaged:{icon:"📦",title:"Returned damaged — in Amazon's hands",
+    why:"These returns came back marked damaged by the carrier or at the fulfilment centre — damage that happened while Amazon was responsible for the unit, which its policy reimburses. Customer-damaged and defective returns are deliberately not listed: policy puts those on the buyer or the product, and Amazon will refuse them.",
+    claim:`<b>Seller Central → Help → Get Support → Fulfilment by Amazon</b> → quote the Order ID, the return date and the disposition (carrier-damaged / warehouse-damaged) from the FBA customer returns report, and ask for reimbursement under the FBA lost and damaged inventory policy.`},
   feeOver:{icon:"⚠️",title:"Closing fee charged above Amazon's own rate card",
     why:"The fixed closing fee depends only on the item's price band and how it was fulfilled — the fee category can only make it cheaper. These orders were charged more than the published maximum for their band, which is a billing error, not a category difference.",
     claim:`<b>Seller Central → Help → Get Support → Selling on Amazon → Payments</b> → "Incorrect closing fee charged". Quote the Order ID, the item price and the fee charged, and cite the fee schedule (Selling on Amazon fee schedule, Table 1 and Table 2). <b>Amazon requires fee claims within 30 calendar days of the order</b> — rows older than that are marked and may be refused.`},
@@ -4727,7 +4828,7 @@ const REC_CHECKS={
     why:"Fees exceeded what the buyer paid — you shipped these at a loss. Not a claim, but fix the cause: weight slab, fee category, or a price below the fee floor.",
     claim:`Re-check the maths with the <a href="#/profit">profit calculator</a> and <b>Reports → Fee Preview</b>. If the charged weight or category is wrong: <b>Help → Get Support</b> → ask for a fee correction with the Order ID.`},
 };
-const REC_ORDER=["feeOver","feeDup","weightJump","refundFee","safeT","shipped","negative"];
+const REC_ORDER=["notReturned","fcDamaged","feeOver","feeDup","weightJump","refundFee","safeT","shipped","negative"];
 
 function renderReconcile(){
   setMeta("Reconciliation & SAFE-T Finder — Seller Tools India",
@@ -4764,6 +4865,10 @@ function recAddFiles(list){
     const finish=()=>{ if(--pending===0) recRenderResults(); };
     saReadDropped(f,text=>{
       recFiles=recFiles.filter(x=>x.name!==f.name); // re-drop replaces
+      const ret=parseFbaReturns(text);
+      if(ret){ recFiles.push({name:f.name,kind:"returns",rows:ret.rows}); finish(); return; }
+      const rb=parseReimbursements(text);
+      if(rb){ recFiles.push({name:f.name,kind:"reimb",rows:rb.rows}); finish(); return; }
       const mtr=parseMtr(text);
       const ut=mtr?null:parseUnifiedTransaction(text);
       if(!mtr&&!ut&&saLooksExcel(text,f.name)){ recFiles.push({name:f.name,kind:"error",msg:SA_EXCEL_MSG}); }
@@ -4784,7 +4889,7 @@ function recAddFiles(list){
 }
 function recRenderResults(){
   const out=document.getElementById("rec-out"); if(!out) return;
-  const kindLabel={settlement:"Settlement",mtr:"MTR",error:"Skipped"};
+  const kindLabel={settlement:"Settlement",mtr:"MTR",returns:"FBA returns",reimb:"Reimbursements",error:"Skipped"};
   const kindOf=f=>f.kind==="error"?"⚠ "+kindLabel.error
     :f.kind==="settlement"&&f.parsed&&f.parsed.source==="unified"?"Unified txn":kindLabel[f.kind];
   let h=`<div class="rec-files">${recFiles.map((f,i)=>`<span class="rec-file"${f.kind==="error"?` title="${esc(f.msg)}"`:""}><b>${esc(f.name)}</b><span class="rf-kind">${kindOf(f)}</span><button type="button" data-rm="${i}" aria-label="Remove ${esc(f.name)}">✕</button></span>`).join("")}</div>`;
@@ -4796,7 +4901,9 @@ function recRenderResults(){
     if(recFiles.length) h+=`<div class="banner info">Add at least one <b>settlement flat file</b> (Payments → All Statements → Download Flat File V2) — that's the file the checks run against.</div>`;
     out.innerHTML=h; recWire(out); return;
   }
-  const res=recCompute(settlements,mtrRows);
+  const fbaReturns=recFiles.filter(f=>f.kind==="returns").flatMap(f=>f.rows);
+  const reimbRows=recFiles.filter(f=>f.kind==="reimb").flatMap(f=>f.rows);
+  const res=recCompute(settlements,mtrRows,{returns:fbaReturns,reimb:reimbRows});
   const done=loadRecDone();
   const allIssues=REC_ORDER.flatMap(k=>res.issues[k]);
   const openCount=allIssues.filter(x=>!done[recKey(x)]).length;
@@ -4841,6 +4948,12 @@ function recRenderResults(){
   }
   if(n.negativeNoRevenue)
     h+=`<div class="banner info">${n.negativeNoRevenue} order${n.negativeNoRevenue>1?"s carry":" carries"} fulfilment fees here but no sale — the revenue is in a statement you haven't loaded, so ${n.negativeNoRevenue>1?"they were":"it was"} left out of the loss-making check rather than counted as a loss.</div>`;
+  if(n.haveReturns&&n.haveReimb)
+    h+=`<div class="banner info">FBA returns (${num(n.returnRows)} rows) and Reimbursements (${num(n.reimbRows)} rows) loaded — the <b>refunded-never-returned</b> and <b>damaged-in-Amazon's-hands</b> checks ran against every FBA refund.</div>`;
+  else if(n.haveReturns||n.haveReimb)
+    h+=`<div class="banner warn">Only ${n.haveReturns?"the FBA returns report":"the Reimbursements report"} is loaded — the returns checks need <b>both</b>, or a missing reimbursement can't be told from an unloaded one. Add ${n.haveReturns?"<b>Payments → Reimbursements</b>":"<b>Fulfilment → FBA customer returns</b>"} (Reports → Fulfilment, Download tab, same date range as your statements).</div>`;
+  else
+    h+=`<div class="banner info">Two more checks are available: drop the <b>FBA customer returns</b> and <b>Reimbursements</b> reports (Reports → Fulfilment → Download, exact dates matching your statements) and every FBA refund is checked for <b>never returned, never reimbursed</b> — the money Amazon's own 45-day policy owes you.</div>`;
   if(!mtrRows.length)
     h+=`<div class="banner info">No MTR loaded — the <b>shipped-but-not-paid</b> check needs one. Get it from <b>Reports → Tax Document Library → Merchant Tax Reports → B2C</b> and drop it here too.</div>`;
   if(!allIssues.length)
