@@ -4785,7 +4785,8 @@ function recCompute(settlements,mtrRows,extra){
        one). Raising those would be filing claims on another account's
        refunds, so the whole list is demoted to suspicion and kept out of
        the claimable total. */
-    nrSuspicious=notReturned.length>=5&&nrJudged>0&&(notReturned.length/nrJudged)>0.10;
+    nrSuspicious=nrJudged>0&&((notReturned.length>=5&&(notReturned.length/nrJudged)>0.10)
+      ||(notReturned.length>=3&&(notReturned.length/nrJudged)>0.30));
     /* One order can carry a refund record per unit; a claim quotes the order
        once, so merge them and sum the money. */
     {const m=new Map();
@@ -4796,6 +4797,25 @@ function recCompute(settlements,mtrRows,extra){
        else m.set(k,x);
      }
      notReturned.length=0; notReturned.push(...m.values());}
+    /* Amazon.in often refunds WITHOUT requiring a return: goodwill partial
+       refunds, and returnless refunds on low-value items. Neither owes the
+       seller anything, and both look exactly like a ghost. A refund well
+       below the order's own principal, or a small full refund, is therefore
+       demoted to review — listed, explained, never claimed. */
+    for(const x of notReturned){
+      let orderPrincipal=0;
+      for(const o of (ordersById.get(x.orderId)||[])){
+        if(x.sku&&o.sku&&o.sku!==x.sku) continue;
+        orderPrincipal+=o.principal;
+      }
+      if(orderPrincipal>0.005&&x.amount<orderPrincipal*0.9){
+        x.soft=true;
+        x.note+=" — but this is a PARTIAL refund ("+Math.round(x.amount/orderPrincipal*100)+"% of the order), which Amazon often issues without asking for the item back; review before claiming";
+      } else if(x.amount<300){
+        x.soft=true;
+        x.note+=" — low-value refunds are often issued returnless on Amazon.in; review before claiming";
+      }
+    }
     notReturned.sort((a,b)=>(b.amount||0)-(a.amount||0));
     /* Returns damaged in Amazon's hands. CUSTOMER_DAMAGED and DEFECTIVE are
        excluded on purpose — policy puts those on the buyer or the product,
@@ -4805,22 +4825,44 @@ function recCompute(settlements,mtrRows,extra){
       if(!/refund/i.test(rec.transactionType)||rec.principal>=-0.005) continue;
       refundBySku.set(rec.orderId+"|"+(rec.sku||""),Math.abs(rec.principal));
     }
-    for(const r of fbaReturns){
+    /* Amazon reimburses damaged-in-its-hands stock on its own clock — often
+       weeks after disposition — and inventory-side reimbursements frequently
+       carry NO order id, only the SKU. So: give Amazon 30 days before
+       calling a reimbursement missing (measured against the report's own
+       coverage, the same proxy the ghosts use), and treat a reimbursement
+       for the same SKU within 60 days of the return as settling it. A
+       contaminated file set (nrSuspicious) suppresses this list entirely —
+       the damage rows come from the same wrong-account report. */
+    const reimbBySkuDate=[];
+    for(const rr of reimbRows) if(rr.sku) reimbBySkuDate.push({sku:rr.sku,day:rr.date?recDayNo(rr.date):null});
+    const skuReimbursedNear=(sku,retDay)=>reimbBySkuDate.some(e=>e.sku===sku&&
+      (e.day===null||retDay===null||(e.day>=retDay-7&&e.day<=retDay+60)));
+    if(!nrSuspicious) for(const r of fbaReturns){
       if(r.disposition!=="CARRIER_DAMAGED"&&r.disposition!=="DAMAGED") continue;
       if(reimbOrders.has(r.orderId)) continue;
+      const retDay=r.date?recDayNo(r.date):null;
+      if(r.sku&&skuReimbursedNear(r.sku,retDay)) continue;
+      // 30-day processing lag, provable only inside the report's coverage
+      if(coverDay===null||retDay===null||retDay+30>coverDay) continue;
       const val=refundBySku.get(r.orderId+"|"+(r.sku||""));
       fcDamaged.push({check:"fcDamaged",orderId:r.orderId,sku:r.sku,date:r.date,
         amount:val!==undefined?Math.round(val*100)/100:null,
         note:(r.disposition==="CARRIER_DAMAGED"?"Damaged by the carrier":"Damaged at the fulfilment centre")
           +(r.reason?" ("+r.reason.toLowerCase().replace(/_/g," ")+")":"")
-          +(val===undefined?" — value not in the loaded statements":"")});
+          +" — 30+ days on, no reimbursement for this order or SKU"
+          +(val===undefined?"; value not in the loaded statements":"")});
     }
   }
   /* "Claimable" is only what the files prove Amazon owes. SAFE-T rows are
      candidates to review — most seller-fulfilled refunds are ordinary returns
      — so they are counted separately and never inflate the headline. */
-  const recovery=[...refundFee,...feeOver,...feeDup,...weightJump,...(nrSuspicious?[]:notReturned),...fcDamaged].reduce((s,x)=>s+(x.amount||0),0);
-  const review=safeT.reduce((s,x)=>s+(x.amount||0),0);
+  const hardGhosts=nrSuspicious?[]:notReturned.filter(x=>!x.soft);
+  const softGhosts=nrSuspicious?[]:notReturned.filter(x=>x.soft);
+  const recovery=[...refundFee,...feeOver,...feeDup,...weightJump,...hardGhosts].reduce((s,x)=>s+(x.amount||0),0);
+  /* fcDamaged values are review, not claimable: the return report proves the
+     damage happened in Amazon's hands, but only Amazon's answer proves the
+     money — its reimbursement clock is not fully knowable from outside. */
+  const review=[...safeT,...softGhosts,...fcDamaged].reduce((s,x)=>s+(x.amount||0),0);
   const unpaid=shipped.reduce((s,x)=>s+(x.amount||0),0);
   return {issues:{notReturned,fcDamaged,feeOver,feeDup,weightJump,refundFee,safeT,shipped,negative},
     ordersChecked:ordersById.size,refundsChecked,
@@ -4836,10 +4878,10 @@ window.recCompute=recCompute; // exposed for verification/debugging
 
 const REC_CHECKS={
   notReturned:{icon:"👻",title:"Refunded, never returned, never reimbursed",
-    why:"Amazon's FBA policy gives a refunded buyer 45 days to send the item back to the fulfilment centre; when it never arrives, Amazon reimburses the seller automatically. On these orders 45+ days have passed with no return in the FBA customer returns report and no line in the Reimbursements report — the automation missed them.",
-    claim:`<b>Seller Central → Help → Get Support → Fulfilment by Amazon</b> → "Customer refunded, item not returned, no reimbursement received". Quote the Order ID and the refund date, and note that 45 days have passed. Amazon checks the same two reports you just did.`},
+    why:"A refunded FBA buyer has 45 days to send the item back to the fulfilment centre, after which Amazon normally reimburses the seller. On these orders 45+ days have passed with no return in the FBA customer returns report and no line in the Reimbursements report. Partial and low-value refunds — which Amazon.in often issues without asking for the item back — are marked for review instead of claimed.",
+    claim:`<b>Seller Central → Help → Get Support → Fulfilment by Amazon</b> → "Customer refunded, item not returned, no reimbursement received". Quote the Order ID and the refund date, and note that 45 days have passed. Check the refund amount first — a partial or goodwill refund may never have required a return.`},
   fcDamaged:{icon:"📦",title:"Returned damaged — in Amazon's hands",
-    why:"These returns came back marked damaged by the carrier or at the fulfilment centre — damage that happened while Amazon was responsible for the unit, which its policy reimburses. Customer-damaged and defective returns are deliberately not listed: policy puts those on the buyer or the product, and Amazon will refuse them.",
+    why:"These returns came back marked damaged by the carrier or at the fulfilment centre — damage that happened while Amazon was responsible for the unit, which its policy reimburses. Only returns 30+ days old are listed (Amazon reimburses on its own clock), reimbursements are matched by order AND by SKU, and customer-damaged / defective returns are deliberately excluded: policy puts those on the buyer or the product. Counted under Refunds to review, not Claimable — only Amazon's answer proves the money.",
     claim:`<b>Seller Central → Help → Get Support → Fulfilment by Amazon</b> → quote the Order ID, the return date and the disposition (carrier-damaged / warehouse-damaged) from the FBA customer returns report, and ask for reimbursement under the FBA lost and damaged inventory policy.`},
   feeOver:{icon:"⚠️",title:"Closing fee charged above Amazon's own rate card",
     why:"The fixed closing fee depends only on the item's price band and how it was fulfilled — the fee category can only make it cheaper. These orders were charged more than the published maximum for their band, which is a billing error, not a category difference.",
@@ -4983,6 +5025,8 @@ function recRenderResults(){
   }
   if(n.negativeNoRevenue)
     h+=`<div class="banner info">${n.negativeNoRevenue} order${n.negativeNoRevenue>1?"s carry":" carries"} fulfilment fees here but no sale — the revenue is in a statement you haven't loaded, so ${n.negativeNoRevenue>1?"they were":"it was"} left out of the loss-making check rather than counted as a loss.</div>`;
+  if(n.haveReturns&&n.haveReimb&&!n.retCoverEnd)
+    h+=`<div class="banner warn">The returns report's dates could not be read (an .xlsx export stores them as serial numbers), so the returned-item checks cannot judge anything. Re-export the FBA customer returns report as <b>.csv</b> and drop it again.</div>`;
   if(n.nrSuspicious)
     h+=`<div class="banner warn"><b>${res.issues.notReturned.length} refunds look "never returned" — that is too many to be real.</b> Across real accounts Amazon's automation misses under 1%; a share this size almost always means these settlement files and the returns/reimbursements reports are <b>not from the same seller account</b> (statements from several accounts in one folder is the usual cause — the returns report only ever covers one account). The list is shown below for checking but <b>excluded from Claimable</b>. Load one account's files at a time.</div>`;
   if(n.haveReturns&&n.haveReimb)
@@ -5780,8 +5824,10 @@ function trendInsights(months,skus){
     notes.push({k:"bad",t:`Fees are taking a growing share of every sale — ${squeeze3?`up three straight months to <b>${L.feePct.toFixed(1)}%</b>`:`up ${L.dFeePp.toFixed(1)} points to <b>${L.feePct.toFixed(1)}%</b>`}. Run <a href="#/reconcile">Reconciliation</a>'s fee audit and check weight bands in the <a href="#/fee-bands">Fee Band Optimizer</a>.`});
   if(rows.length>=3){
     const best=rows.reduce((m,r)=>r.netD>m.netD?r:m,rows[0]);
-    const trendUp=rows.every((r,i)=>i===0||r.netD>=rows[i-1].netD*0.95);
-    const trendDn=rows.every((r,i)=>i===0||r.netD<=rows[i-1].netD*1.05);
+    // Additive tolerance: a multiplicative one flips sign on a negative month.
+    const tol=r2=>Math.abs(r2.netD)*0.05;
+    const trendUp=rows.every((r,i)=>i===0||r.netD>=rows[i-1].netD-tol(rows[i-1]));
+    const trendDn=rows.every((r,i)=>i===0||r.netD<=rows[i-1].netD+tol(rows[i-1]));
     if(trendUp&&L.netD>rows[0].netD) notes.push({k:"good",t:`The daily payout rate has climbed across all ${rows.length} months (${inr0(rows[0].netD)}/day → ${inr0(L.netD)}/day) — the business is compounding.`});
     else if(trendDn&&L.netD<rows[0].netD) notes.push({k:"bad",t:`The daily payout rate has slid across all ${rows.length} months (${inr0(rows[0].netD)}/day → ${inr0(L.netD)}/day).`});
     else notes.push({k:"info",t:`Best month so far by payout rate: <b>${name(best.m)}</b> at ${inr0(best.netD)}/day.`});
@@ -8590,7 +8636,7 @@ function adsRenderResults(){
   h+=`<div class="banner info">These lists read the report you dropped — nothing is estimated. ACOS here is against <b>ad-attributed sales</b>; whether that ACOS is affordable for a given SKU depends on its margin, which lives in <a href="#/ad-profit">Ad Profitability</a> (break-even ACOS per SKU).</div>`;
   if(r.negate.length){
     h+=`<div class="panel"><h4>🚫 Negate these <span class="sa-sub">(${r.negate.length} — ${ADS_NEG_CLICKS}+ clicks, ₹${ADS_NEG_SPEND}+ spent, zero orders)</span></h4>
-      <p class="sa-sub" style="margin:4px 0 10px">Buyers typed these, clicked your ad, and never bought — over the whole report. Add each as a <b>negative exact</b> in its campaign and the spend stops tomorrow. Export gives you a paste-ready list.</p>
+      <p class="sa-sub" style="margin:4px 0 10px">Buyers typed these, clicked your ad, and never bought — over the whole report. Add each as a <b>negative exact</b> in its campaign and that exact term stops spending (close variants may still need their own negatives). Export gives you a paste-ready list.</p>
       <div style="display:flex;justify-content:flex-end;margin:0 0 6px"><button type="button" class="fbtn" id="ads-neg-csv">⬇ Export negatives CSV</button></div>
       <div class="tblwrap"><table class="sa">
         <thead><tr><th>Search term</th><th>Campaign</th><th>Match</th><th class="num">Clicks</th><th class="num">Spent</th></tr></thead>
