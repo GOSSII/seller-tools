@@ -7850,11 +7850,17 @@ function adpCompute(){
     const profit=afterAds-cogs;            // only meaningful once a cost is set
     const beforeAdsProfit=payout-cogs;
     const sales=s.sales||0;
+    const clicks=a?a.clicks:0,impressions=a?a.impressions:0,adOrders=a?a.adOrders:0;
     return {sku:s.sku,units:s.units,orders:s.orders,sales,payout,spend,afterAds,
       cost,cogs,profit,beforeAdsProfit,hasCost:cost>0,
-      adSales:a?a.adSales:0,adOrders:a?a.adOrders:0,clicks:a?a.clicks:0,
+      adSales:a?a.adSales:0,adOrders,clicks,impressions,
+      /* Click metrics come straight off the ad report's own counts — never
+         derived from settlement figures. A zero denominator reads "—". */
+      ctr:impressions>0?clicks/impressions*100:null,
+      cpc:clicks>0?spend/clicks:null,
+      cvr:clicks>0?adOrders/clicks*100:null,
       acos:a&&a.adSales>0?spend/a.adSales*100:null,
-      tacos:sales>0?spend/sales*100:null,
+      tacos:sales>0&&spend>0?spend/sales*100:null,
       // Break-even ACOS: the share of a sale you can spend on ads before the
       // SKU stops making money. Uses profit when a cost is known.
       breakEven:(cost>0&&sales>0)?beforeAdsProfit/sales*100:null,
@@ -7865,16 +7871,22 @@ function adpCompute(){
   const orphans=[...ads.values()].filter(a=>!seen.has(a.key))
     .map(a=>({sku:a.key,units:0,orders:0,sales:0,payout:0,spend:a.spend,afterAds:-a.spend,
       cost:0,cogs:0,profit:-a.spend,beforeAdsProfit:0,hasCost:false,
-      adSales:a.adSales,adOrders:a.adOrders,clicks:a.clicks,
+      adSales:a.adSales,adOrders:a.adOrders,clicks:a.clicks,impressions:a.impressions,
+      ctr:a.impressions>0?a.clicks/a.impressions*100:null,
+      cpc:a.clicks>0?a.spend/a.clicks:null,
+      cvr:a.clicks>0?a.adOrders/a.clicks*100:null,
       acos:a.adSales>0?a.spend/a.adSales*100:null,tacos:null,breakEven:null,
       flips:false,matched:false,orphan:true}));
   const all=out.concat(orphans);
   const totals=all.reduce((t,r)=>{
     t.sales+=r.sales; t.payout+=r.payout; t.spend+=r.spend; t.cogs+=r.cogs;
     t.afterAds+=r.afterAds; t.profit+=r.profit; t.units+=r.units;
+    t.clicks+=r.clicks||0; t.impressions+=r.impressions||0;
+    t.adOrders+=r.adOrders||0; t.adSales+=r.adSales||0;
     if(r.flips){ t.flipCount++; t.flipLoss+=Math.abs(r.hasCost?r.profit:r.afterAds); }
     return t;
-  },{sales:0,payout:0,spend:0,cogs:0,afterAds:0,profit:0,units:0,flipCount:0,flipLoss:0});
+  },{sales:0,payout:0,spend:0,cogs:0,afterAds:0,profit:0,units:0,flipCount:0,flipLoss:0,
+     clicks:0,impressions:0,adOrders:0,adSales:0});
   const unattributed=adpSpendFromSettlement(records);
   return {rows:all,totals,haveAds:ads.size>0,adRows,adNoKey,asinOnly,unattributed,
     costed:all.filter(r=>r.hasCost).length,settlementCount:settle.length};
@@ -7919,6 +7931,8 @@ function adpRender(){
     if(dead.length) h+=`<div class="banner warn"><b>${inr0(dead.reduce((s,x)=>s+x.spend,0))}</b> of ad spend went to ${dead.length} SKU(s) with no sales <i>and</i> no ad-attributed sales in this settlement — pure loss unless they sold outside the period.</div>`;
     if(sibling.length) h+=`<div class="banner info"><b>${inr0(sibling.reduce((s,x)=>s+x.spend,0))}</b> of ad spend sits on ${sibling.length} SKU(s) that have no settlement sales but <i>do</i> have ${inr0(sibling.reduce((s,x)=>s+x.adSales,0))} of ad-attributed sales — normally the buyer bought another listing of the same product (your FBA one, typically), so the revenue settled under that SKU instead. Judge those two rows together, not apart.</div>`;
   }
+  if(r.haveAds&&t.impressions>0)
+    h+=`<div class="banner info">Across the whole account: <b>${num(t.impressions)}</b> impressions → <b>${num(t.clicks)}</b> clicks (CTR ${(t.clicks/t.impressions*100).toFixed(2)}%) at <b>${t.clicks?inr(t.spend/t.clicks):"—"}</b> per click → <b>${num(t.adOrders)}</b> ad orders (CVR ${t.clicks?(t.adOrders/t.clicks*100).toFixed(1):"—"}%)${t.sales>0&&t.spend>0?` · TACOS <b>${(t.spend/t.sales*100).toFixed(1)}%</b> of total sales`:""}. A low CTR is an ad problem (image, price, title); a low CVR with a healthy CTR is a listing problem — the click was earned and the page lost it.</div>`;
   const sorters={damage:(a,b)=>(a.hasCost?a.profit:a.afterAds)-(b.hasCost?b.profit:b.afterAds),
     spend:(a,b)=>b.spend-a.spend, acos:(a,b)=>(b.acos??-1)-(a.acos??-1), sales:(a,b)=>b.sales-a.sales};
   const rows=[...r.rows].sort(sorters[adpSort]||sorters.damage);
@@ -7936,7 +7950,11 @@ function adpRender(){
     <div class="tblwrap"><table class="sa">
       <thead><tr><th>SKU</th><th class="num">Units</th><th class="num">Sales</th>
         <th class="num">Payout after fees</th><th class="num">Ad spend</th>
+        <th class="num" title="Clicks ÷ impressions, from the ad report's own counts">CTR</th>
+        <th class="num" title="Ad spend ÷ clicks">CPC</th>
+        <th class="num" title="Ad orders ÷ clicks">CVR</th>
         <th class="num" title="Your cost per unit. Type it here — it saves in this browser and the SKU Profitability Report picks it up too.">Cost/unit ₹</th><th class="num">ACOS</th>
+        <th class="num" title="Ad spend ÷ TOTAL settlement sales — what advertising costs the whole SKU, not just its ad-attributed sales">TACOS</th>
         <th class="num" title="How much of a sale can go on ads before this SKU stops making money. Needs a product cost.">Break-even ACOS</th><th class="num">After ads${r.costed?" &amp; cost":""}</th><th>Verdict</th></tr></thead>
       <tbody>${rows.map(x=>{
         const bottom=x.hasCost?x.profit:x.afterAds;
@@ -7953,8 +7971,12 @@ function adpRender(){
           <td class="num">${x.sales?inr0(x.sales):"—"}</td>
           <td class="num">${x.payout?inr0(x.payout):"—"}</td>
           <td class="num">${x.spend?inr0(-x.spend):"—"}</td>
+          <td class="num">${x.ctr===null?"—":x.ctr.toFixed(2)+"%"}</td>
+          <td class="num">${x.cpc===null?"—":inr(x.cpc)}</td>
+          <td class="num">${x.cvr===null?"—":x.cvr.toFixed(1)+"%"}</td>
           <td class="num"><input type="number" min="0" inputmode="decimal" class="sku-cost-in" data-cost-sku="${esc(x.sku)}" value="${x.cost?x.cost:""}" placeholder="0" aria-label="Product cost per unit for ${esc(x.sku)}"></td>
           <td class="num"${over?' style="color:var(--red);font-weight:700"':""}>${x.acos===null?"—":x.acos.toFixed(1)+"%"}</td>
+          <td class="num">${x.tacos===null?"—":x.tacos.toFixed(1)+"%"}</td>
           <td class="num"${x.breakEven===null&&x.spend>0?' title="Add this SKU\'s product cost to see the break-even ACOS"':""}>${x.breakEven===null?"—":x.breakEven.toFixed(1)+"%"}</td>
           <td class="num" style="font-weight:700;color:${bottom>0?"var(--green)":"var(--red)"}">${inr0(bottom)}</td>
           <td class="sa-sub" style="color:${vc}">${verdict[0]}</td>
@@ -7987,14 +8009,17 @@ function adpWire(out,rows){
   const csv=out.querySelector("#adp-csv");
   if(csv&&rows) csv.addEventListener("click",()=>{
     const q=v=>`"${String(v??"").replace(/"/g,'""')}"`;
-    const head=["SKU","Units","Sales","Payout after fees","Ad spend","ACOS %","Break-even ACOS %","Product cost/unit","After ads","Verdict"];
+    const head=["SKU","Units","Sales","Payout after fees","Ad spend","Impressions","Clicks","CTR %","CPC","CVR %","ACOS %","TACOS %","Break-even ACOS %","Product cost/unit","After ads","Verdict"];
     const lines=[head.map(q).join(",")];
     for(const x of rows){
       const bottom=x.hasCost?x.profit:x.afterAds;
       const verdict=x.orphan?"Ad spend, no sales":x.flips?"Ads turn profit into a loss"
         :bottom>0?"Profitable after ads":x.spend>0?"Loss before ads too":"No ads on this SKU";
       lines.push([x.sku,x.units,x.sales.toFixed(2),x.payout.toFixed(2),x.spend.toFixed(2),
-        x.acos===null?"":x.acos.toFixed(1),x.breakEven===null?"":x.breakEven.toFixed(1),
+        x.impressions||"",x.clicks||"",
+        x.ctr===null?"":x.ctr.toFixed(2),x.cpc===null?"":x.cpc.toFixed(2),x.cvr===null?"":x.cvr.toFixed(1),
+        x.acos===null?"":x.acos.toFixed(1),x.tacos===null?"":x.tacos.toFixed(1),
+        x.breakEven===null?"":x.breakEven.toFixed(1),
         x.hasCost?x.cost.toFixed(2):"",bottom.toFixed(2),verdict].map(q).join(","));
     }
     const a=document.createElement("a");
