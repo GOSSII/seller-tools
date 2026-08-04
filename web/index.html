@@ -3310,7 +3310,107 @@ const saCell=(fields,index,key)=>{const i=index[key];return i===undefined?"":(fi
    bytes, so every parser rejects it and the user is told the file "isn't
    recognised" — true but useless. Spot it and say what to do instead. */
 const saLooksExcel=(text,name)=>/\.xlsx?$/i.test(name||"")||/^PK/.test(String(text||"").slice(0,8));
-const SA_EXCEL_MSG="that's an Excel file — these tools read text. Open it and use File → Save As → CSV, then drop the CSV here.";
+const SA_EXCEL_MSG="that's an Excel file this browser couldn't unpack — open it and use File → Save As → CSV, then drop the CSV here.";
+/* ============================================================
+   XLSX READER — no library. An .xlsx is a ZIP of XML; the ZIP
+   directory is parsed by hand and the deflate stream handed to
+   the browser's own DecompressionStream, then the first sheet
+   is flattened to CSV text and fed through the SAME parsers as
+   a CSV upload. Amazon's legacy ads console only exports .xlsx,
+   so "save as CSV first" was a real toll on every ad report.
+   Reads only what the parsers need: shared strings, inline
+   strings, booleans and raw numbers. Styles are ignored, so a
+   date cell arrives as Excel's serial number — none of our
+   parsers read those columns.
+   ============================================================ */
+async function saInflateRaw(bytes){
+  const ds=new DecompressionStream("deflate-raw");
+  return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(ds)).arrayBuffer());
+}
+async function saUnzip(buf,want){
+  const b=new Uint8Array(buf), dv=new DataView(buf);
+  if(b.length<22) return null;
+  let e=-1;             // End-of-central-directory record, searched from the tail
+  for(let i=b.length-22;i>=Math.max(0,b.length-22-65536);i--)
+    if(dv.getUint32(i,true)===0x06054b50){e=i;break;}
+  if(e<0) return null;
+  const count=dv.getUint16(e+10,true); let p=dv.getUint32(e+16,true);
+  const td=new TextDecoder(), out=new Map();
+  for(let i=0;i<count&&p+46<=b.length;i++){
+    if(dv.getUint32(p,true)!==0x02014b50) break;
+    const method=dv.getUint16(p+10,true), csize=dv.getUint32(p+20,true),
+      nlen=dv.getUint16(p+28,true), elen=dv.getUint16(p+30,true), clen=dv.getUint16(p+32,true),
+      lho=dv.getUint32(p+42,true);
+    const name=td.decode(b.subarray(p+46,p+46+nlen));
+    p+=46+nlen+elen+clen;
+    if(!want(name)) continue;
+    const lnlen=dv.getUint16(lho+26,true), lelen=dv.getUint16(lho+28,true);
+    const start=lho+30+lnlen+lelen, comp=b.subarray(start,start+csize);
+    out.set(name, method===0?comp.slice():await saInflateRaw(comp));
+  }
+  return out;
+}
+function saXlsxSharedStrings(xml){
+  if(!xml) return [];
+  const doc=new DOMParser().parseFromString(xml,"application/xml");
+  return [...doc.getElementsByTagName("si")].map(si=>si.textContent||"");
+}
+function saXlsxSheetToCsv(xml,shared){
+  const doc=new DOMParser().parseFromString(xml,"application/xml");
+  const colOf=ref=>{let n=0;for(const ch of ref){const c=ch.charCodeAt(0);
+    if(c>=65&&c<=90)n=n*26+(c-64); else if(c>=97&&c<=122)n=n*26+(c-96); else break;}return n-1;};
+  const lines=[];
+  for(const row of doc.getElementsByTagName("row")){
+    const arr=[];
+    for(const c of row.getElementsByTagName("c")){
+      const ref=c.getAttribute("r"), idx=ref?colOf(ref):arr.length;
+      const t=c.getAttribute("t")||"";
+      let v="";
+      if(t==="inlineStr"){ const is=c.getElementsByTagName("is")[0]; v=is?is.textContent:""; }
+      else{
+        const ve=c.getElementsByTagName("v")[0]; v=ve?ve.textContent:"";
+        if(t==="s") v=shared[Number(v)]??"";
+        else if(t==="b") v=v==="1"?"TRUE":"FALSE";
+      }
+      while(arr.length<idx) arr.push("");
+      arr[idx]=v;
+    }
+    lines.push(arr.map(x=>/[",\n\r]/.test(x)?'"'+x.replace(/"/g,'""')+'"':x).join(","));
+  }
+  return lines.join("\n");
+}
+/* File → CSV text of the first worksheet, or null if it isn't a real .xlsx
+   (an old binary .xls, a mis-named file, a browser without DecompressionStream). */
+async function saXlsxToText(file){
+  try{
+    if(typeof DecompressionStream==="undefined") return null;
+    const entries=await saUnzip(await file.arrayBuffer(),
+      n=>n==="xl/sharedStrings.xml"||/^xl\/worksheets\/sheet\d+\.xml$/.test(n));
+    if(!entries) return null;
+    const sheetName=[...entries.keys()].filter(n=>n.startsWith("xl/worksheets/"))
+      .sort((a,b)=>Number(a.match(/\d+/))-Number(b.match(/\d+/)))[0];
+    if(!sheetName) return null;
+    const td=new TextDecoder();
+    const shared=saXlsxSharedStrings(entries.has("xl/sharedStrings.xml")?td.decode(entries.get("xl/sharedStrings.xml")):null);
+    const csv=saXlsxSheetToCsv(td.decode(entries.get(sheetName)),shared);
+    return csv&&csv.trim()?csv:null;
+  }catch(e){ return null; }
+}
+
+/* Route a dropped file to `ingest(text)` — .xlsx through the browser ZIP
+   reader (so the legacy ads console's exports just work), everything else as
+   plain text. `fail(msg)` when the file cannot be read either way. */
+function saReadDropped(f,ingest,fail){
+  if(/\.xlsx?$/i.test(f.name)){
+    saXlsxToText(f).then(csv=>{ if(csv) ingest(csv); else fail(SA_EXCEL_MSG); })
+      .catch(()=>fail(SA_EXCEL_MSG));
+    return;
+  }
+  const rd=new FileReader();
+  rd.onload=()=>ingest(String(rd.result));
+  rd.onerror=()=>fail("could not read the file");
+  rd.readAsText(f);
+}
 function saGroupKey(fields,index,tt){
   const ids=saCell(fields,index,"orderId")+saCell(fields,index,"shipmentId")+saCell(fields,index,"adjustmentId");
   return [saCell(fields,index,"settlementId"),tt??saCell(fields,index,"transactionType"),
@@ -4631,7 +4731,7 @@ function recBody(){
         <div class="ico">🕵️</div>
         <h3>Drop settlement + MTR files here</h3>
         <p>or click to choose — several files at once is fine (.csv or .txt)</p>
-        <input type="file" id="rec-file" multiple accept=".csv,.txt,text/plain,text/csv">
+        <input type="file" id="rec-file" multiple accept=".csv,.txt,.xlsx,text/plain,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
       </label>
       <div class="sa-priv">🔒 Private by design — your files never leave your device. All cross-checking happens locally on this page.</div>
       <div id="rec-out"></div>
@@ -4647,9 +4747,8 @@ function recAddFiles(list){
   const files=[...(list||[])]; if(!files.length) return;
   let pending=files.length;
   files.forEach(f=>{
-    const rd=new FileReader();
-    rd.onload=()=>{
-      const text=String(rd.result);
+    const finish=()=>{ if(--pending===0) recRenderResults(); };
+    saReadDropped(f,text=>{
       recFiles=recFiles.filter(x=>x.name!==f.name); // re-drop replaces
       const mtr=parseMtr(text);
       const ut=mtr?null:parseUnifiedTransaction(text);
@@ -4665,10 +4764,8 @@ function recAddFiles(list){
         }
         else recFiles.push({name:f.name,kind:"error",msg:"not recognised as a settlement flat file or MTR."+saDescribeColumns(text)});
       }
-      if(--pending===0) recRenderResults();
-    };
-    rd.onerror=()=>{recFiles.push({name:f.name,kind:"error",msg:"could not read the file"});if(--pending===0)recRenderResults();};
-    rd.readAsText(f);
+      finish();
+    },msg=>{ recFiles=recFiles.filter(x=>x.name!==f.name); recFiles.push({name:f.name,kind:"error",msg}); finish(); });
   });
 }
 function recRenderResults(){
@@ -5068,7 +5165,7 @@ function fbBody(){
         <div class="ico">🪜</div>
         <h3>Drop your settlement file(s) here</h3>
         <p>or click to choose — several at once is fine (.csv or .txt)</p>
-        <input type="file" id="fb-file" multiple accept=".csv,.txt,text/plain,text/csv">
+        <input type="file" id="fb-file" multiple accept=".csv,.txt,.xlsx,text/plain,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
       </label>
       <div class="sa-priv">🔒 Private by design — your files never leave your device. Every figure is computed locally on this page.</div>
       <div id="fb-out"></div>
@@ -5163,9 +5260,8 @@ function fbAddFiles(list){
   const files=[...(list||[])]; if(!files.length) return;
   let pending=files.length;
   files.forEach(f=>{
-    const rd=new FileReader();
-    rd.onload=()=>{
-      const text=String(rd.result);
+    const finish=()=>{ if(--pending===0) fbRenderResults(); };
+    saReadDropped(f,text=>{
       fbFiles=fbFiles.filter(x=>x.name!==f.name);   // re-drop replaces
       const ut=parseUnifiedTransaction(text);
       if(!ut&&saLooksExcel(text,f.name)) fbFiles.push({name:f.name,kind:"error",msg:SA_EXCEL_MSG});
@@ -5179,10 +5275,8 @@ function fbAddFiles(list){
         }
         else fbFiles.push({name:f.name,kind:"error",msg:"not recognised as a settlement flat file."+saDescribeColumns(text)});
       }
-      if(--pending===0) fbRenderResults();
-    };
-    rd.onerror=()=>{fbFiles.push({name:f.name,kind:"error",msg:"could not read the file"});if(--pending===0)fbRenderResults();};
-    rd.readAsText(f);
+      finish();
+    },msg=>{ fbFiles=fbFiles.filter(x=>x.name!==f.name); fbFiles.push({name:f.name,kind:"error",msg}); finish(); });
   });
 }
 const fbBandLabel=slab=>"Band "+(slab+1)+" · ≤"+FB_SLAB_KG[slab]+" kg";
@@ -5562,7 +5656,7 @@ function trendsBody(){
         <div class="ico">📈</div>
         <h3>Drop your settlement files here</h3>
         <p>or click to choose — several statements, plus your MTR for order-date units (.csv or .txt)</p>
-        <input type="file" id="tr-file" multiple accept=".csv,.txt,text/plain,text/csv">
+        <input type="file" id="tr-file" multiple accept=".csv,.txt,.xlsx,text/plain,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
       </label>
       <div class="sa-priv">🔒 Private by design — your files never leave your device. All charts are computed locally on this page.</div>
       <div id="tr-out"></div>
@@ -5578,26 +5672,23 @@ function trAddFiles(list){
   const files=[...(list||[])]; if(!files.length) return;
   let pending=files.length;
   files.forEach(f=>{
-    const rd=new FileReader();
-    rd.onload=()=>{
-      const txt=String(rd.result);
+    const finish=()=>{ if(--pending===0) trRenderResults(); };
+    saReadDropped(f,txt=>{
       trFiles=trFiles.filter(x=>x.name!==f.name); // re-drop replaces
       /* An MTR carries the ORDER date, which is what Amazon's own SKU and
          business reports count by — take one if it is offered so the months
          can be shown on the same basis. */
       const mtr=parseMtr(txt);
-      if(mtr){ trFiles.push({name:f.name,kind:"mtr",rows:mtr.rows}); if(--pending===0) trRenderResults(); return; }
-      if(saLooksExcel(txt,f.name)){ trFiles.push({name:f.name,kind:"error",msg:SA_EXCEL_MSG}); if(--pending===0) trRenderResults(); return; }
+      if(mtr){ trFiles.push({name:f.name,kind:"mtr",rows:mtr.rows}); finish(); return; }
+      if(saLooksExcel(txt,f.name)){ trFiles.push({name:f.name,kind:"error",msg:SA_EXCEL_MSG}); finish(); return; }
       const p=parseUnifiedTransaction(txt)||parseSettlement(txt);
       if(p.records.length||p.summary){
         const dup=p.summary&&trFiles.some(x=>x.kind==="settlement"&&x.parsed.summary&&x.parsed.summary.settlementId===p.summary.settlementId);
         if(dup) trFiles.push({name:f.name,kind:"error",msg:"same settlement ID as a file already loaded — skipped to avoid double counting"});
         else trFiles.push({name:f.name,kind:"settlement",parsed:p});
       } else trFiles.push({name:f.name,kind:"error",msg:"not recognised as a settlement flat file or MTR."+saDescribeColumns(txt)});
-      if(--pending===0) trRenderResults();
-    };
-    rd.onerror=()=>{trFiles.push({name:f.name,kind:"error",msg:"could not read the file"});if(--pending===0)trRenderResults();};
-    rd.readAsText(f);
+      finish();
+    },msg=>{ trFiles=trFiles.filter(x=>x.name!==f.name); trFiles.push({name:f.name,kind:"error",msg}); finish(); });
   });
 }
 function trRenderResults(){
@@ -7926,7 +8017,7 @@ function adpBody(){
         <div class="ico">📉</div>
         <h3>Drop your settlement + advertising report</h3>
         <p>or click to choose — several files at once is fine (.csv or .txt)</p>
-        <input type="file" id="adp-file" multiple accept=".csv,.txt,text/plain,text/csv">
+        <input type="file" id="adp-file" multiple accept=".csv,.txt,.xlsx,text/plain,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
       </label>
       <div class="sa-priv">🔒 Private by design — both files are read in your browser and never uploaded.</div>
       <div id="adp-out"></div>
@@ -7942,24 +8033,21 @@ function adpAddFiles(list){
   const files=[...(list||[])]; if(!files.length) return;
   let pending=files.length;
   files.forEach(f=>{
-    const rd=new FileReader();
-    rd.onload=()=>{
-      const text=String(rd.result);
+    const finish=()=>{ if(--pending===0) adpRender(); };
+    saReadDropped(f,text=>{
       adpFiles=adpFiles.filter(x=>x.name!==f.name); // re-drop replaces
       const ad=parseAdReport(text);
       if(ad){ adpFiles.push({name:f.name,kind:"ads",ad}); }
       else if(saLooksExcel(text,f.name)){
-        adpFiles.push({name:f.name,kind:"error",msg:SA_EXCEL_MSG+" (Sponsored ads reports hands out .xlsx; the newer reporting console offers CSV directly)"});
+        adpFiles.push({name:f.name,kind:"error",msg:SA_EXCEL_MSG});
       }
       else{
         const p=parseUnifiedTransaction(text)||parseSettlement(text);
         if(p&&(p.records.length||p.summary)) adpFiles.push({name:f.name,kind:"settlement",parsed:p});
         else adpFiles.push({name:f.name,kind:"error",msg:"not recognised as a settlement, unified transaction or advertised-product report."+saDescribeColumns(text)});
       }
-      if(--pending===0) adpRender();
-    };
-    rd.onerror=()=>{adpFiles.push({name:f.name,kind:"error",msg:"could not read the file"});if(--pending===0)adpRender();};
-    rd.readAsText(f);
+      finish();
+    },msg=>{ adpFiles=adpFiles.filter(x=>x.name!==f.name); adpFiles.push({name:f.name,kind:"error",msg}); finish(); });
   });
 }
 function adpCompute(){
