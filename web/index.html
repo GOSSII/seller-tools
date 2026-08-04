@@ -626,6 +626,16 @@
   /* A row the seller's own measurements have ruled out: dimmed, but still
      readable — the numbers in it are the reason it was ruled out. */
   tr.fb-off td{opacity:.6}
+  /* Per-SKU status chips: judgement stated as a label, rules in the formulas
+     panel. "Needs data" is deliberately loud — a missing cost must never read
+     as a healthy profit. */
+  .st{display:inline-block;font-size:11px;font-weight:800;padding:2px 9px;border-radius:999px;white-space:nowrap}
+  .st-good{background:var(--green-soft);color:var(--green);border:1px solid var(--green-line)}
+  .st-watch{background:#fef9c3;color:#854d0e;border:1px solid #fde68a}
+  .st-problem{background:#ffedd5;color:#9a3412;border:1px solid #fed7aa}
+  .st-loss{background:#fee2e2;color:#b91c1c;border:1px solid #fecaca}
+  .st-data{background:var(--blue-soft);color:var(--blue);border:1px solid var(--blue-line)}
+  .st-info{background:var(--bg);color:var(--muted);border:1px solid var(--line)}
   td.fb-parcel{min-width:212px}
   td.fb-parcel .fb-row{display:flex;gap:4px;align-items:center;flex-wrap:nowrap}
   .rec-claim{margin-top:10px;font-size:12.5px;color:#1e3a5f;background:var(--blue-soft);border:1px solid var(--blue-line);border-radius:10px;padding:9px 12px;line-height:1.55}
@@ -3480,7 +3490,7 @@ window.parseSettlement=parseSettlement; // exposed for verification/debugging
    as the only unlock. Search "sa_unlocked" and "removeLegacyGate".
    ====================================================================== */
 const SA_PASSWORD="2023";
-let saParsed=null, saFilter="all", saLimit=100;
+let saParsed=null, saFilter="all", saLimit=100, saQuery="";
 const saUnlocked=()=>{try{return sessionStorage.getItem("sa_unlocked")==="1";}catch(e){return false;}};
 const saIsTax=l=>/(^|[^a-z])(cgst|sgst|igst|tcs|tds)([^a-z]|$)|(cgst|sgst|igst)$|tax|194/i.test(l||"");
 
@@ -3521,7 +3531,7 @@ function saAnalyzerBody(){
 
 function saRead(file){
   const rd=new FileReader();
-  rd.onload=()=>{saParsed=parseSettlement(String(rd.result));saParsed._name=file.name;saFilter="all";saLimit=100;saRenderResults();};
+  rd.onload=()=>{saParsed=parseSettlement(String(rd.result));saParsed._name=file.name;saFilter="all";saLimit=100;saQuery="";saRenderResults();};
   rd.onerror=()=>{const o=document.getElementById("sa-out");if(o)o.innerHTML='<div class="banner warn">Could not read that file.</div>';};
   rd.readAsText(file);
 }
@@ -3642,6 +3652,15 @@ function saFlow(records){
   return {B,orders,units,refunds};
 }
 
+/* Shared CSV download — quoting rules in one place. */
+function saCsvDownload(filename,header,rows){
+  const q=v=>`"${String(v??"").replace(/"/g,'""')}"`;
+  const lines=[header.map(q).join(",")].concat(rows.map(r=>r.map(q).join(",")));
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([lines.join("\r\n")],{type:"text/csv"}));
+  a.download=filename;
+  document.body.appendChild(a); a.click(); a.remove();
+}
 function saRenderResults(){
   const r=saParsed,out=document.getElementById("sa-out"); if(!out)return;
   const agg=saAggregate(r);
@@ -3721,8 +3740,12 @@ function saRenderResults(){
 
   const types=["all",...Object.keys(byType)];
   h+=`<div class="panel"><h4>Transactions <span class="sa-sub">(${r.records.length})</span></h4>
-    <div class="filterbar">${types.map(t=>`<button class="fbtn ${t===saFilter?'on':''}" data-type="${esc(t)}">${t==='all'?'All':esc(t)}</button>`).join("")}</div>`;
-  const filtered=r.records.filter(rec=>saFilter==='all'||rec.transactionType===saFilter);
+    <div class="filterbar">${types.map(t=>`<button class="fbtn ${t===saFilter?'on':''}" data-type="${esc(t)}">${t==='all'?'All':esc(t)}</button>`).join("")}
+      <input id="sa-q" type="search" value="${esc(saQuery)}" placeholder="Filter by order ID or SKU" style="min-width:200px;flex:1;max-width:320px;padding:7px 11px;font-size:13px">
+      <button class="fbtn" id="sa-csv" title="Every amount line of this settlement, one row each — ready for Excel">⬇ Export CSV</button></div>`;
+  const q=saQuery.trim().toLowerCase();
+  const filtered=r.records.filter(rec=>(saFilter==='all'||rec.transactionType===saFilter)
+    &&(!q||(rec.orderId||"").toLowerCase().includes(q)||(rec.sku||"").toLowerCase().includes(q)));
   const shown=filtered.slice(0,saLimit);
   h+=`<div class="tblwrap"><table class="sa">
     <thead><tr><th></th><th>Type</th><th>Order</th><th>SKU</th><th class="num">Qty</th><th>Fulfil</th><th class="num">Principal</th><th class="num">Fees</th></tr></thead><tbody>`;
@@ -3752,9 +3775,44 @@ function saRenderResults(){
   else
     h+=`<div class="banner good">✅ Every one of the ${r.records.length} records parsed cleanly — no malformed rows.</div>`;
 
+  /* Every figure above, stated as arithmetic — so a seller (or their CA) can
+     re-derive any number by hand and trust the rest. */
+  h+=`<details class="howto"><summary>How every number here is computed</summary><div class="hbody">
+    <span class="htag">Formulas</span>
+    <ol>
+      <li><b>Deposit total</b> = the sum of every amount line in the file. The reconciliation banner compares that sum against Amazon's own total-amount row — they must match to the paisa, or the file is incomplete.</li>
+      <li><b>Net product sales</b> = Principal lines on orders + Principal lines on refunds (refunds are negative).</li>
+      <li><b>Amazon fees</b> = every negative non-tax line: referral, closing, fulfilment, shipping, ads, storage and the rest — each visible under its own label in the fee breakdown.</li>
+      <li><b>Refund rate (by value)</b> = |refunded principal| ÷ gross principal. Count-based return rate can differ.</li>
+      <li><b>GST on fees (ITC)</b> = the CGST/SGST/IGST charged on Amazon's fees. A GST-registered seller claims this back in GSTR-3B — it is not money lost.</li>
+      <li><b>Where the money went</b> files every line into exactly one bucket, so the buckets always add up to the deposit. Nothing is estimated; if a label is unrecognised it lands in "Other" rather than being guessed at.</li>
+    </ol>
+  </div></details>`;
+  h+=`<div class="panel"><h4>What should I do next?</h4><ul style="margin:8px 0 0 18px;line-height:1.9;font-size:13.5px">
+    ${FB.gross&&Math.abs(FB.refunded)/FB.gross>0.1?`<li>Your refund rate is <b>${(Math.abs(FB.refunded)/FB.gross*100).toFixed(1)}%</b> by value — open the <a href="#/sku-report">SKU Profitability Report</a> and sort by Refund % to find which products drive it.</li>`:""}
+    ${Math.abs(Math.min(0,FB.gstFees))>0?`<li>Give your CA the <b>${inr(Math.abs(Math.min(0,FB.gstFees)))}</b> of GST on fees — it is claimable as input tax credit in GSTR-3B, and the <a href="#/gst-report">GST &amp; TCS Report</a> breaks it down label by label.</li>`:""}
+    <li>Drop this same file (plus its sibling statements — both Account Types) into <a href="#/reconcile">Reconciliation</a> to audit every fee against Amazon's published rate card and find money worth claiming.</li>
+    <li>To see profit per product rather than per settlement, use the <a href="#/sku-report">SKU Profitability Report</a>; several months of files at once go in <a href="#/trends">Trends</a>.</li>
+  </ul></div>`;
+
   out.innerHTML=h;
   saWireTips(out);
-  out.querySelectorAll(".fbtn").forEach(b=>b.addEventListener("click",()=>{saFilter=b.dataset.type;saLimit=100;saRenderResults();}));
+  const sq=out.querySelector("#sa-q");
+  if(sq){ sq.addEventListener("input",()=>{saQuery=sq.value;saLimit=100;
+    // re-render but keep focus in the box so typing isn't interrupted
+    const pos=sq.selectionStart; saRenderResults();
+    const nq=out.querySelector("#sa-q"); if(nq){nq.focus(); try{nq.setSelectionRange(pos,pos);}catch(e){}}
+  }); }
+  const csvBtn=out.querySelector("#sa-csv");
+  if(csvBtn) csvBtn.addEventListener("click",()=>{
+    const rows=[];
+    for(const rec of r.records) for(const l of rec.amounts)
+      rows.push([rec.settlementId,rec.transactionType,rec.orderId,rec.sku,rec.quantity||"",
+        rec.fulfillmentId,rec.postedDate,l.amountType,l.amountDescription,l.amount.toFixed(2)]);
+    saCsvDownload("settlement-"+((r.summary&&r.summary.settlementId)||"export")+".csv",
+      ["Settlement ID","Type","Order ID","SKU","Qty","Fulfilment","Posted date","Amount type","Description","Amount (INR)"],rows);
+  });
+  out.querySelectorAll(".fbtn[data-type]").forEach(b=>b.addEventListener("click",()=>{saFilter=b.dataset.type;saLimit=100;saRenderResults();}));
   out.querySelectorAll("tr.exp").forEach(row=>{
     if(row.classList.contains("nodetail"))return;
     row.addEventListener("click",()=>{
@@ -3893,7 +3951,7 @@ function gstRenderResults(){
    make money after fees, taxes and refunds. Pure aggregation of
    the parsed records — nothing estimated.
    ============================================================ */
-let skuSort="net";
+let skuSort="net", skuQuery="";
 /* Advanced P&L (Phase 7a) — Pro-only overlay on the SKU report. */
 let skuAdvanced=false, skuIsPro=false, skuShowUpgrade=false;
 const skuExpanded=new Set();
@@ -3938,6 +3996,21 @@ function skuCompute(r){
   }
   return Object.values(bySku);
 }
+/* One judgement per SKU, from rules a seller can check by hand (they are
+   printed in the formulas panel). `adv` = advanced P&L mode; `cpuKnown` =
+   a product cost has been entered for this SKU. The order matters: a missing
+   cost outranks everything, because without it "profit" is only payout. */
+function skuStatus(s,adv,cpuKnown){
+  if(s.sku==="(no SKU)") return {k:"info",l:"Account-level"};
+  if(adv&&!cpuKnown) return {k:"data",l:"Needs data"};
+  const rp=s.sales?Math.abs(s.refundValue)/s.sales*100:0;
+  if(adv?s.truePL<0:s.net<0) return {k:"loss",l:"Loss"};
+  if(rp>15) return {k:"problem",l:"Problem"};
+  if(rp>8) return {k:"watch",l:"Watch"};
+  return {k:"good",l:"Good"};
+}
+window.skuStatus=skuStatus; // exposed for verification/debugging
+const stChip=st=>`<span class="st st-${st.k}">${esc(st.l)}</span>`;
 
 function renderSkuReport(){
   document.title="SKU Profitability Report — Seller Tools India";
@@ -3999,20 +4072,27 @@ function skuRenderResults(){
   const costs=loadSkuCosts();
   const withPL=sorted.map(s=>{
     const netUnits=Math.max(0,(s.units||0)-(s.unitsReturned||0));
-    const cpu=Number(costs[s.sku]||0);
+    /* A cost the seller never entered is UNKNOWN, not zero. Treating it as
+       zero showed "true profit" equal to the payout — the exact number the
+       advanced mode exists to correct. Unknown-cost SKUs are excluded from
+       the profit total and labelled Needs data instead. */
+    const cpuKnown=s.sku!=="(no SKU)"&&costs[s.sku]!==undefined&&Number(costs[s.sku])>0;
+    const cpu=cpuKnown?Number(costs[s.sku]):0;
     const cost=cpu*netUnits;          // product cost on units sold net of returns
     const truePL=s.net-cost;          // net settlement minus your product cost
-    return Object.assign({},s,{netUnits,cpu,cost,truePL});
+    return Object.assign({},s,{netUnits,cpuKnown,cpu,cost,truePL});
   });
-  const trueProfit=withPL.reduce((t,x)=>t+x.truePL,0);
-  const lossCount=withPL.filter(x=>x.truePL<0).length;
+  const costed=withPL.filter(x=>x.cpuKnown);
+  const needCost=withPL.filter(x=>!x.cpuKnown&&x.sku!=="(no SKU)"&&(x.units||0)>0).length;
+  const trueProfit=costed.reduce((t,x)=>t+x.truePL,0);
+  const lossCount=costed.filter(x=>x.truePL<0).length;
 
   let h=`<div class="stats">
     <div class="stat blue"><div class="k">SKUs · Units</div><div class="v">${skus.length} · ${totals.units}</div></div>
     <div class="stat green"><div class="k">Net across all SKUs</div><div class="v">${inr(totals.net)}</div></div>
     <div class="stat"><div class="k">Fees as % of sales</div><div class="v">${feePct.toFixed(1)}%</div></div>
     <div class="stat ${refundPct>10?'red':''}"><div class="k">Refunds as % of sales</div><div class="v">${refundPct.toFixed(1)}%</div></div>
-    ${advOn?`<div class="stat ${trueProfit<0?'red':'green'}"><div class="k">True profit after product cost</div><div class="v">${inr(trueProfit)}</div><div class="sa-sub" style="margin-top:3px">${lossCount} loss-making SKU${lossCount===1?"":"s"}</div></div>`:""}
+    ${advOn?`<div class="stat ${trueProfit<0?'red':'green'}"><div class="k">True profit after product cost</div><div class="v">${costed.length?inr(trueProfit):"—"}</div><div class="sa-sub" style="margin-top:3px">${costed.length?`across ${costed.length} costed SKU${costed.length===1?"":"s"} · ${lossCount} loss-making`:"enter product costs below"}${needCost?` · <b>${needCost} still need a cost</b>`:""}</div></div>`:""}
   </div>`;
 
   if(skus.length>1)
@@ -4030,7 +4110,11 @@ function skuRenderResults(){
       <button class="fbtn ${skuSort==='sales'?'on':''}" data-sort="sales">Sort by Sales</button>
       <button class="fbtn ${skuSort==='refund'?'on':''}" data-sort="refund">Sort by Refund %</button>
       <button class="fbtn ${advOn?'on':''}" data-adv="1" title="Add your product costs to see true profit">⚡ Advanced P&amp;L${skuIsPro?"":" · Pro"}</button>
+      <input id="sku-q" type="search" value="${esc(skuQuery)}" placeholder="Filter by SKU" style="min-width:160px;flex:1;max-width:260px;padding:7px 11px;font-size:13px">
+      <button class="fbtn" id="sku-csv">⬇ Export CSV</button>
     </div>`;
+  const skuQ=skuQuery.trim().toLowerCase();
+  const visPL=withPL.filter(s=>!skuQ||s.sku.toLowerCase().includes(skuQ));
 
   if(advOn){
     h+=`<div class="sku-costall">
@@ -4039,30 +4123,34 @@ function skuRenderResults(){
       <button class="fbtn" id="sku-apply-all">Apply to all SKUs</button>
       <span class="sa-sub">saved in your browser</span></div>
     <div class="tblwrap"><table class="sa">
-      <thead><tr><th>SKU</th><th class="num">Units (net)</th><th class="num">Net</th><th class="num">Cost/unit ₹</th><th class="num">Product cost</th><th class="num">True P&amp;L</th></tr></thead>
-      <tbody>${withPL.map(s=>{
+      <thead><tr><th>SKU</th><th>Status</th><th class="num">Units (net)</th><th class="num">Net</th><th class="num">Cost/unit ₹</th><th class="num">Product cost</th><th class="num">True P&amp;L</th></tr></thead>
+      <tbody>${visPL.map(s=>{
         const exp=skuExpanded.has(s.sku);
         const bucketRows=Object.keys(s.b||{}).filter(k=>Math.abs(s.b[k])>=0.005)
           .map(k=>`<div class="sku-bk"><span>${esc(SA_BUCKET_NAMES[k]||k)}</span><span>${sv(s.b[k])}</span></div>`).join("")
           || `<div class="sku-bk"><span>No itemised fees for this SKU.</span><span></span></div>`;
         return `<tr>
           <td><button type="button" class="sku-exp" data-expand="${esc(s.sku)}" aria-expanded="${exp}">${exp?"▾":"▸"}</button> ${esc(s.sku)}</td>
+          <td>${stChip(skuStatus(s,true,s.cpuKnown))}</td>
           <td class="num">${s.netUnits}${s.unitsReturned?` <span class="sa-sub">(−${s.unitsReturned})</span>`:""}</td>
           <td class="num">${sv(s.net)}</td>
-          <td class="num"><input type="number" min="0" inputmode="decimal" class="sku-cost-in" data-cost-sku="${esc(s.sku)}" value="${s.cpu?s.cpu:""}" placeholder="0"></td>
-          <td class="num">${s.cost?"-"+inr(s.cost):inr(0)}</td>
-          <td class="num"><b class="${s.truePL<0?'amt-neg':'amt-pos'}">${inr(s.truePL)}</b></td>
+          <td class="num">${s.sku==="(no SKU)"?'<span class="sa-sub" title="Account-level spend — a product cost does not apply">n/a</span>':`<input type="number" min="0" inputmode="decimal" class="sku-cost-in" data-cost-sku="${esc(s.sku)}" value="${s.cpu?s.cpu:""}" placeholder="0">`}</td>
+          <td class="num">${s.cpuKnown?"-"+inr(s.cost):'<span class="sa-sub">—</span>'}</td>
+          <td class="num">${s.cpuKnown?`<b class="${s.truePL<0?'amt-neg':'amt-pos'}">${inr(s.truePL)}</b>`
+            :(s.sku==="(no SKU)"?`<b>${sv(s.net)}</b>`:'<span class="sa-sub" title="Enter this SKU\'s product cost to see its true P&L">needs cost</span>')}</td>
         </tr>
-        ${exp?`<tr class="sku-detail"><td colspan="6"><div class="sku-bklist"><div class="sku-bk"><span><b>Fee &amp; charge breakdown</b></span><span></span></div>${bucketRows}</div></td></tr>`:""}`;}).join("")}
+        ${exp?`<tr class="sku-detail"><td colspan="7"><div class="sku-bklist"><div class="sku-bk"><span><b>Fee &amp; charge breakdown</b></span><span></span></div>${bucketRows}</div></td></tr>`:""}`;}).join("")}
       </tbody></table></div>
     <div class="banner info">Product cost is applied to units <b>sold net of returns</b>. True P&amp;L = Net settlement − your product cost. Costs are stored only in your browser (never uploaded).</div></div>`;
   } else {
     h+=`<div class="tblwrap"><table class="sa">
-      <thead><tr><th>SKU</th><th class="num">Units</th><th class="num">Gross sales</th><th class="num">Refunds</th><th class="num">Fees</th><th class="num">Taxes</th><th class="num">Net</th><th class="num">Net / unit</th><th class="num">Refund %</th></tr></thead>
-      <tbody>${sorted.map(s=>{
+      <thead><tr><th>SKU</th><th>Status</th><th class="num">Units</th><th class="num">Gross sales</th><th class="num">Refunds</th><th class="num">Fees</th><th class="num">Taxes</th><th class="num">Net</th><th class="num">Net / unit</th><th class="num">Refund %</th></tr></thead>
+      <tbody>${visPL.map(s=>{
         const rp=s.sales?Math.abs(s.refundValue)/s.sales*100:0;
         return `<tr>
-          <td>${esc(s.sku)}</td><td class="num">${s.units}</td>
+          <td>${esc(s.sku)}</td>
+          <td>${stChip(skuStatus(s,false,s.cpuKnown))}</td>
+          <td class="num">${s.units}</td>
           <td class="num">${inr(s.sales)}</td><td class="num">${sv(s.refundValue)}</td>
           <td class="num">${sv(s.fees)}</td><td class="num">${sv(s.taxes)}</td>
           <td class="num"><b>${sv(s.net)}</b></td>
@@ -4073,7 +4161,44 @@ function skuRenderResults(){
   }
 
   if(r.errors.length) h+=`<div class="banner warn"><b>${r.errors.length} row(s) could not be parsed</b> and are excluded — open the Settlement Analyzer for details.</div>`;
+
+  h+=`<details class="howto"><summary>How every number here is computed</summary><div class="hbody">
+    <span class="htag">Formulas</span>
+    <ol>
+      <li><b>Net</b> = the sum of every settlement line for the SKU: principal + fees + taxes + refunds. It is what reached your bank for that product this settlement.</li>
+      <li><b>Refund %</b> = |refunded principal| ÷ gross principal, by value.</li>
+      <li><b>True P&amp;L</b> (Advanced) = Net − product cost × units sold net of returns. A SKU with no cost entered shows <b>Needs data</b>, never a guessed profit — a missing cost is unknown, not zero.</li>
+      <li><b>Status</b>: <span class="st st-loss">Loss</span> net (or true P&amp;L) below zero · <span class="st st-problem">Problem</span> refund % above 15 · <span class="st st-watch">Watch</span> refund % above 8 · <span class="st st-good">Good</span> otherwise · <span class="st st-data">Needs data</span> cost missing in Advanced mode.</li>
+      <li>Order-level shipping (Easy Ship, postage) is traced to the SKU through the order id, except on mixed-SKU orders. Ad spend and other account-level charges stay under <b>(no SKU)</b> — no fee is ever invented per SKU.</li>
+    </ol>
+  </div></details>`;
+  const worstRefund=[...withPL].filter(s=>s.sku!=="(no SKU)"&&s.sales>0).sort((a,b)=>(Math.abs(b.refundValue)/b.sales)-(Math.abs(a.refundValue)/a.sales))[0];
+  h+=`<div class="panel"><h4>What should I do next?</h4><ul style="margin:8px 0 0 18px;line-height:1.9;font-size:13.5px">
+    ${advOn&&needCost?`<li><b>${needCost} SKU${needCost>1?"s":""} still ${needCost>1?"have":"has"} no product cost</b> — their profit is unknowable until you enter one. Start with your biggest sellers.</li>`:""}
+    ${worst&&worst.net<0?`<li><b>${esc(worst.sku)}</b> took ${inr(Math.abs(worst.net))} out of your settlement. Check its price against the fee steps in the <a href="#/fee-bands">Fee Band Optimizer</a> and its weight band in the <a href="#/fba-fee">FBA fee calculator</a>.</li>`:""}
+    ${worstRefund&&worstRefund.sales&&Math.abs(worstRefund.refundValue)/worstRefund.sales>0.15?`<li><b>${esc(worstRefund.sku)}</b> refunds ${(Math.abs(worstRefund.refundValue)/worstRefund.sales*100).toFixed(0)}% of its sales by value — read its recent reviews for a size/quality/expectation mismatch before spending another rupee advertising it.</li>`:""}
+    <li>Drop the same file into <a href="#/reconcile">Reconciliation</a> to check every fee behind these numbers against Amazon's rate card.</li>
+    <li>Units ÷ days in the period gives each SKU's daily sales rate for the <a href="#/restock-planner">Restock Planner</a>.</li>
+  </ul></div>`;
+
   out.innerHTML=h;
+  const skq=out.querySelector("#sku-q");
+  if(skq){ skq.addEventListener("input",()=>{skuQuery=skq.value;
+    const pos=skq.selectionStart; skuRenderResults();
+    const nq=out.querySelector("#sku-q"); if(nq){nq.focus(); try{nq.setSelectionRange(pos,pos);}catch(e){}}
+  }); }
+  const skuCsv=out.querySelector("#sku-csv");
+  if(skuCsv) skuCsv.addEventListener("click",()=>{
+    const rows=withPL.map(s=>{
+      const rp=s.sales?Math.abs(s.refundValue)/s.sales*100:0;
+      const st=skuStatus(s,advOn,s.cpuKnown);
+      return [s.sku,st.l,s.units,s.unitsReturned||0,s.sales.toFixed(2),s.refundValue.toFixed(2),
+        s.fees.toFixed(2),s.taxes.toFixed(2),s.net.toFixed(2),rp.toFixed(1),
+        advOn?(s.cpuKnown?s.cpu:"" ):"",advOn?(s.cpuKnown?s.truePL.toFixed(2):"needs cost"):""];
+    });
+    saCsvDownload("sku-profitability.csv",
+      ["SKU","Status","Units","Units returned","Gross sales (INR)","Refunds (INR)","Fees (INR)","Taxes (INR)","Net (INR)","Refund %","Cost/unit (INR)","True P&L (INR)"],rows);
+  });
   out.querySelectorAll(".fbtn[data-sort]").forEach(b=>b.addEventListener("click",()=>{skuSort=b.dataset.sort;skuRenderResults();}));
   const adv=out.querySelector("[data-adv]");
   if(adv) adv.addEventListener("click",()=>{
