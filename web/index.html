@@ -1550,6 +1550,8 @@ const HELP={
     steps:["Enter the date of your last settlement, your cycle (7-day standard, 14-day, or daily), and average sales per day.","Adjust deductions %, reserve % and bank-credit delay if yours differ.","Read the headline for your next deposit, and the table for the next 6 settlement closes and estimated bank-credit dates."]},
   "trends":{input:`Several settlement files: <b>Payments → All Statements → Download Flat File V2</b> for each statement — the more months you drop, the better the picture.`,
     steps:["Drop all your settlement files at once (or add them one by one — duplicates are skipped).","Read the month-by-month charts: sales, fees as % of sales, refund rate and net payout.","Pick a SKU to see its own monthly units, sales and net — is it growing, and is it still worth the fees?"]},
+  "fee-bands":{input:`Settlement file(s): <b>Payments → All Statements → Download Flat File V2</b>. Drop as many as you have — the more units behind each SKU, the more certain its usual price and weight band are. Statements where Amazon bills your selling fees on a separate invoice can't be used for the price side: there is no fee line to read a band from.`,
+    steps:["Drop your settlement file(s) — several at once is fine.","Work down the price-step list: each row is a SKU that nets more per unit at the lower price, with the revenue you give up already subtracted.","Test the price on one SKU before editing in bulk — a lower price can also mean fewer or more orders, which no settlement file can tell you.","On the weight list, start with the SKUs that have already shipped in the lower band, then weigh and measure the rest — volumetric weight (L×W×H ÷ 5000) often decides the band, so a smaller box can win it without removing a gram."]},
 };
 function helpHtml(id){
   const e=HELP[id];
@@ -2248,7 +2250,11 @@ const PW_MOCKS={
   trends:`<div class="row"><span>Apr net payout</span><b class="amt pos">₹41,210</b></div>
     <div class="row"><span>May net payout</span><b class="amt pos">₹48,760</b></div>
     <div class="row"><span>Jun net payout</span><b class="amt pos">₹55,390</b></div>
-    <div class="row"><span>Fees % of sales</span><b class="big">21.4% ↓</b></div>`
+    <div class="row"><span>Fees % of sales</span><b class="big">21.4% ↓</b></div>`,
+  feebands:`<div class="row"><span>KURTA-RED-M · ₹1,049 → ₹1,000</span><b class="amt pos">+₹157/u</b></div>
+    <div class="row"><span>MUG-CERAMIC · ₹319 → ₹300</span><b class="amt pos">+₹6/u</b></div>
+    <div class="row"><span>CABLE-USB-C · weight band 2 → 1</span><b class="amt pos">+₹20/u</b></div>
+    <div class="row"><span>Worth per month</span><b class="big">₹18,430</b></div>`
 };
 const SA_INFO={route:"settlement-analyzer",title:"Amazon Settlement Analyzer",plan:"Starter",
   price:"₹199/month — unlock with Starter",priceAlt:"or ₹999/year (save ~58%)",
@@ -2280,6 +2286,11 @@ const TREND_INFO={route:"trends",title:"Multi-Month Trends",plan:"Pro",needPro:t
   desc:"Drop several settlement files and see your business month by month.",
   feats:["Sales, fees % and refund rate, month by month","Net payout trend — is the business growing?","Per-SKU trends: units, sales and net over time"],
   mock:PW_MOCKS.trends};
+const FB_INFO={route:"fee-bands",title:"Fee Band Optimizer",plan:"Pro",needPro:true,
+  price:"₹499/month — unlock with Pro",priceAlt:"or ₹2,499/year (save ~58%)",
+  desc:"Amazon's fees step at fixed prices and fixed weights. This finds the SKUs sitting a rupee or a gram the wrong side of a step.",
+  feats:["SKUs priced just over a referral or closing-fee step","What the step costs, net of the revenue you'd give up","Weight bands your parcels have already shipped in — and are no longer billed at","Read from fees Amazon actually charged, not from a category you type in"],
+  mock:PW_MOCKS.feebands};
 
 function fmtDate(d){
   if(!d) return "—";
@@ -2913,6 +2924,7 @@ function renderHome(){
         <a class="tile" href="#/reconcile"><span class="pill">Pro</span><div class="ico">🕵️</div><h3>Reconciliation &amp; SAFE-T Finder</h3><p>Cross-check settlements and your MTR to find missing referral-fee credits, SAFE-T-eligible refunds and unpaid shipments — with claim steps.</p></a>
         <a class="tile" href="#/ad-profit"><span class="pill">Pro</span><div class="ico">📉</div><h3>Ad Profitability by SKU</h3><p>True ACOS per SKU — and which products only make money until the ads are paid for.</p></a>
         <a class="tile" href="#/trends"><span class="pill">Pro</span><div class="ico">📈</div><h3>Multi-Month Trends</h3><p>Sales, fees %, refund rate and net payout month by month — overall and per SKU.</p></a>
+        <a class="tile" href="#/fee-bands"><span class="pill">Pro</span><div class="ico">🪜</div><h3>Fee Band Optimizer</h3><p>The SKUs sitting a rupee over a referral step or a gram over a weight band — and what moving under is worth.</p></a>
       </div>
 
       <section class="lp2-sec">
@@ -3046,6 +3058,8 @@ function renderPricing(){
             <li><span class="tick">✓</span> Everything in Starter</li>
             <li><span class="tick">✓</span> SKU P&amp;L with your product costs</li>
             <li><span class="tick">✓</span> Reconciliation &amp; SAFE-T finder</li>
+            <li><span class="tick">✓</span> Ad Profitability by SKU</li>
+            <li><span class="tick">✓</span> Fee Band Optimizer</li>
             <li><span class="tick">✓</span> Multi-month Trends</li>
           </ul>
           ${paidBtn(pr," sec")}
@@ -4592,6 +4606,366 @@ function recWire(out,settlements,mtrRows,res){
     const a=document.createElement("a");
     a.href=URL.createObjectURL(new Blob([lines.join("\r\n")],{type:"text/csv"}));
     a.download="reconciliation-checklist.csv";
+    document.body.appendChild(a); a.click(); a.remove();
+  });
+}
+
+/* ============================================================
+   FEE BAND OPTIMIZER (Pro)
+   Amazon prices two of its three big fees in STEPS rather than
+   slopes: the referral fee changes at fixed price points, weight
+   handling at fixed weight points. A listing a rupee over a price
+   step, or a gram over a weight step, pays the whole step for
+   nothing. Both are readable straight off a settlement — the fee
+   Amazon charged identifies the band it billed in — so every
+   figure here comes from what this SKU was actually charged, not
+   from anything typed in. Reconciliation finds money to claim
+   back; this finds money not to spend again.
+   ============================================================ */
+let fbFiles=[];
+/* Every price at which some category's referral rate changes, plus the three
+   closing-fee steps: the only prices at which a cut can pay for itself. */
+const FB_EDGES=(()=>{
+  const s=new Set(CLOSING_BANDS.filter(x=>x!==null));
+  for(const c of CATS) for(const e of refBandEdges(c.key)) s.add(e);
+  return [...s].sort((a,b)=>a-b);
+})();
+/* Amazon's published closing-fee columns. What a SKU was charged identifies
+   its column, so the fee one band lower is read off that same column instead
+   of guessed from a category the settlement never names. */
+const FB_CLOSING_COLS=[{id:"easyship",afn:false,t:CLOSING_BY_CHANNEL.easyship},
+  {id:"self",afn:false,t:CLOSING_BY_CHANNEL.self}]
+  .concat(Object.keys(CLOSING_FBA_GROUPS).map(g=>({id:"fba-"+g,afn:true,t:CLOSING_FBA_GROUPS[g]})));
+const fbClosingBand=p=>p<=300?0:p<=500?1:p<=1000?2:3;
+const FB_SLAB_KG=[0.5,1,2];   // the three published weight-handling bands
+const FB_MIN_UNITS=4;         // fewer units than this and "usual price" means nothing
+const FB_MIN_SHIP=4;          // same for a SKU's usual weight band
+const FB_MIN_NET=1;           // rupees per unit — below this it is noise, not a saving
+const FB_RATE_TOL=0.004;      // 0.4pp, to absorb rounding in Amazon's own fee lines
+const FB_RECENT_DAYS=30;      // the tail of the coverage that counts as "now"
+const FB_PROVEN_MIN=3;        // shipments in a lighter band before it counts as done
+const FB_PROVEN_SHARE=0.1;    // …and that many as a share of the SKU's shipments
+/* Weighted mode: the value carrying the most units, ties going to the lower
+   one so a coin-flip never flatters the saving. */
+function fbMode(list){
+  const m=new Map(); let tot=0;
+  for(const x of list){ m.set(x.v,(m.get(x.v)||0)+x.w); tot+=x.w; }
+  let v=null,best=-1;
+  for(const [k,w] of m) if(w>best||(w===best&&k<v)){best=w;v=k;}
+  return {v,share:tot?best/tot:0,units:best,total:tot};
+}
+function fbCompute(settlements){
+  const records=[]; for(const p of settlements) records.push(...p.records);
+  /* Easy Ship, postage and base fees are billed against the ORDER on rows
+     carrying no SKU — same rule as the SKU report: attribute them back only
+     when the order held a single SKU, because a mixed order has no honest
+     split. */
+  const skuOfOrder=new Map();
+  for(const rec of records){
+    if(!rec.orderId||!rec.sku) continue;
+    const cur=skuOfOrder.get(rec.orderId);
+    if(cur===undefined) skuOfOrder.set(rec.orderId,rec.sku);
+    else if(cur!==rec.sku) skuOfOrder.set(rec.orderId,null);
+  }
+  const bySku=new Map();
+  const get=sku=>{let s=bySku.get(sku);
+    if(!s){s={sku,units:0,orders:0,principal:0,tax:0,price:[],wt:[]};bySku.set(sku,s);}return s;};
+  let priceLines=0,wtLines=0,wtUnknown=0;
+  for(const rec of records){
+    if(rec.transactionType!=="Order") continue;
+    const sku=rec.sku||(rec.orderId?skuOfOrder.get(rec.orderId):null); if(!sku) continue;
+    const afn=rec.fulfillmentId==="AFN";
+    const units=Math.max(1,rec.quantity||0);
+    let buyerPaid=0,principal=0,tax=0,closing=0,referral=0,wtFee=0;
+    for(const l of rec.amounts){
+      const lab=(l.amountDescription||"").trim();
+      /* Fee bands are on what the BUYER paid — principal plus shipping, gift
+         wrap and the GST inside the price, less the promotions you funded.
+         That is the basis the closing-fee audit was proved against on real
+         accounts; excluding tax puts items near a step in the wrong band. */
+      if(/^(principal|shipping|gift ?wrap)$/i.test(lab)) buyerPaid+=l.amount;
+      else if(/^(product tax|shipping tax|gift ?wrap tax)$/i.test(lab)) buyerPaid+=l.amount;
+      else if(/^(promo rebates|shipping (discount|promo discount)|gift ?wrap discount|product tax discount|shipping tax discount)$/i.test(lab)) buyerPaid+=l.amount;
+      if(/^principal$/i.test(lab)) principal+=l.amount;
+      if(/^product tax$/i.test(lab)) tax+=l.amount;
+      if(/^fixed closing fee$/i.test(lab)) closing+=l.amount;
+      /* "Commission IGST" is the 18% GST ON the commission, not commission —
+         counting it read a 12.5% referral as 14.75% and matched the SKU to
+         the wrong category. It is also money you claim back as input tax
+         credit, so it was never part of the saving either. */
+      if(/^(commission|referral fee)/i.test(lab)&&!/\b[ICS]GST\b/i.test(lab)) referral+=l.amount;
+      if(/^(fba weight handling fee|amazon easy ship charges|easy ship weight handling fees)$/i.test(lab)) wtFee+=l.amount;
+    }
+    const s=get(sku); s.orders++; s.units+=units;
+    if(principal>0){s.principal+=principal;s.tax+=tax;}
+    /* Keep sales that carry no fee line at all: they are how a fee-invoiced
+       account is recognised, and dropping them here would leave those SKUs
+       looking like they simply never sold. */
+    if(buyerPaid>0){
+      priceLines++;
+      s.price.push({p:buyerPaid/units,ref:Math.abs(referral)/units,close:Math.abs(closing)/units,
+        units,afn,closeSeen:closing<-0.005,d:saParseDate(rec.postedDate)});
+    }
+    if(wtFee<-0.005){
+      const per=Math.abs(wtFee)/units,hit=REC_SLAB_OF.get(Math.round(per*100));
+      if(hit){wtLines++;s.wt.push({slab:hit.slab,family:hit.family,per,units});}
+      else wtUnknown++;   // above 2 kg the ladder is additive, so no band to read
+    }
+  }
+  /* What period do these statements cover? Everything below is "over the
+     loaded period", and the price a SKU sells at NOW is read from the tail of
+     it — a listing repriced last month must not be advised on last month's
+     price. */
+  let from=null,to=null;
+  for(const p of settlements){
+    if(!p.summary) continue;
+    const a=saParseDate(p.summary.settlementStartDate),b=saParseDate(p.summary.settlementEndDate);
+    if(a&&(!from||a<from)) from=a;
+    if(b&&(!to||b>to)) to=b;
+  }
+  const days=(from&&to)?(recDayNo(to)-recDayNo(from)+1):0;
+  const recentFrom=to?recShiftDays(to,-FB_RECENT_DAYS):null;
+  const price=[],weight=[]; let variedPrice=0,unknownRate=0,noFees=0;
+  for(const s of bySku.values()){
+    // GST inside this SKU's own price: a price cut hands back the tax too,
+    // and that part was never the seller's money to lose.
+    const g=s.principal>0?Math.max(0,s.tax/s.principal):0;
+    if(s.price.length){
+      const totU=s.price.reduce((a,x)=>a+x.units,0);
+      /* Today's price, not the period's: take the mode over the closing weeks
+         and only fall back to the whole period when the tail is too thin to
+         say anything. */
+      const recent=recentFrom?s.price.filter(x=>x.d&&x.d>=recentFrom):[];
+      const window=recent.reduce((a,x)=>a+x.units,0)>=FB_MIN_UNITS?recent:s.price;
+      const md=fbMode(window.map(x=>({v:Math.round(x.p),w:x.units})));
+      if(totU<FB_MIN_UNITS){/* too little history to call anything usual */}
+      else if(md.share<0.5) variedPrice++;   // sells at too many prices to advise one
+      else{
+        // Price the opportunity on every unit that sold AT that price, so a
+        // recent reprice is never credited with the whole period's volume.
+        const at=s.price.filter(x=>Math.round(x.p)===md.v);
+        const U=at.reduce((a,x)=>a+x.units,0);
+        const wavg=k=>at.reduce((a,x)=>a+x[k]*x.units,0)/U;
+        const P=md.v,ref=wavg("ref"),close=wavg("close");
+        const afn=at.filter(x=>x.afn).reduce((a,x)=>a+x.units,0)>U/2;
+        /* A zero referral line means 0% only if this statement itemises
+           selling fees at all — on a fee-invoiced account it means the fee is
+           billed elsewhere, and guessing a saving from it would be fiction. */
+        const feesItemised=at.some(x=>x.closeSeen)||ref>0.005;
+        const rate=P>0?ref/P:0;
+        const cats=CATS.filter(c=>Math.abs(refRate(c.key,P)-rate)<=FB_RATE_TOL);
+        const cols=FB_CLOSING_COLS.filter(c=>c.afn===afn&&Math.abs(c.t[fbClosingBand(P)]-close)<=0.51);
+        if(!feesItemised) noFees++;
+        else if(!cats.length) unknownRate++;
+        let bestOp=null;
+        for(const E of FB_EDGES){
+          if(E>=P) continue;
+          /* The referral rate below the step is only knowable when this SKU's
+             own charge identifies a category. Where several fit and disagree,
+             take the dearest — a saving overstated is worse than one missed.
+             Rates are not monotonic (furniture pays MORE below ₹15,000), so
+             an unrecognised rate earns no referral saving at all. */
+          const refNew=cats.length?E*Math.max(...cats.map(c=>refRate(c.key,E))):null;
+          const refSave=refNew===null?0:Math.max(0,ref-refNew);
+          const closeNew=cols.length?Math.max(...cols.map(c=>c.t[fbClosingBand(E)])):null;
+          const closeSave=closeNew===null?0:Math.max(0,close-closeNew);
+          const give=(P-E)/(1+g);
+          const net=refSave+closeSave-give;
+          if(net<FB_MIN_NET) continue;
+          const prize=net*U;
+          if(!bestOp||prize>bestOp.prize)
+            bestOp={sku:s.sku,price:P,target:E,ref,refNew,close,closeNew,refSave,closeSave,give,net,
+              units:U,prize,cats:cats.map(c=>c.name),rateKnown:refNew!==null,colKnown:!!cols.length};
+        }
+        if(bestOp&&feesItemised) price.push(bestOp);
+      }
+    }
+    if(s.wt.length>=FB_MIN_SHIP){
+      const md=fbMode(s.wt.map(x=>({v:x.slab,w:1})));
+      const fam=fbMode(s.wt.map(x=>({v:x.family,w:1}))).v;
+      if(md.share>=0.6&&md.v>0){
+        const atMode=s.wt.filter(x=>x.slab===md.v);
+        const unitsAtMode=atMode.reduce((a,x)=>a+x.units,0);
+        /* Has this SKU ever been billed lighter? Then the lighter band is not
+           a theory — the same product has already shipped in it, and the rest
+           of its shipments paid the difference for nothing. */
+        const lower=s.wt.filter(x=>x.slab<md.v);
+        /* One or two shipments in a lighter band across hundreds is Amazon
+           mis-measuring, not a parcel you can reproduce — it takes a real
+           share of the SKU's shipments before "we have already done this"
+           is a fair thing to tell someone. */
+        const proven=lower.length>=Math.max(FB_PROVEN_MIN,s.wt.length*FB_PROVEN_SHARE);
+        const target=proven?fbMode(lower.map(x=>({v:x.slab,w:1}))).v:md.v-1;
+        const cur=REC_FEE_FOR(fam,md.v),to=REC_FEE_FOR(fam,target);
+        if(cur!==null&&cur!==undefined&&to!==null&&to!==undefined&&cur>to)
+          weight.push({sku:s.sku,slab:md.v,target,family:fam,per:cur,perTarget:to,save:cur-to,
+            units:unitsAtMode,prize:(cur-to)*unitsAtMode,proven,provenN:lower.length,ships:s.wt.length,
+            kg:FB_SLAB_KG[target],fba:/^fba/.test(fam)});
+      }
+    }
+  }
+  price.sort((a,b)=>b.prize-a.prize); weight.sort((a,b)=>b.prize-a.prize);
+  const sum=a=>a.reduce((s,x)=>s+x.prize,0);
+  return {price,weight,
+    totals:{price:sum(price),proven:sum(weight.filter(w=>w.proven)),potential:sum(weight.filter(w=>!w.proven))},
+    notes:{skus:bySku.size,priceLines,wtLines,wtUnknown,variedPrice,unknownRate,noFees,from,to,days}};
+}
+window.fbCompute=fbCompute; // exposed for verification/debugging
+
+function renderFeeBands(){
+  setMeta("Fee Band Optimizer — Seller Tools India",
+    "Find the SKUs sitting just above an Amazon fee step — a rupee over a referral band or a gram over a weight band — and what moving them under is worth, computed from your own settlement files in your browser.");
+  backBtn.hidden=false;
+  gatePremium(FB_INFO, fbBody);
+}
+function fbBody(){
+  app.innerHTML=`
+    <div class="wrap page">
+      <h2>Fee Band Optimizer</h2>
+      <p class="lede">Amazon's referral fee steps at fixed prices and its weight handling steps at fixed weights. Drop your settlement files and this finds the SKUs sitting just the wrong side of a step — what the step costs you, what moving under it gives up, and whether the trade is worth making.</p>
+      ${helpHtml("fee-bands")}
+      <label class="sa-drop" id="fb-drop">
+        <div class="ico">🪜</div>
+        <h3>Drop your settlement file(s) here</h3>
+        <p>or click to choose — several at once is fine (.csv or .txt)</p>
+        <input type="file" id="fb-file" multiple accept=".csv,.txt,text/plain,text/csv">
+      </label>
+      <div class="sa-priv">🔒 Private by design — your files never leave your device. Every figure is computed locally on this page.</div>
+      <div id="fb-out"></div>
+    </div>`;
+  const drop=document.getElementById("fb-drop"),file=document.getElementById("fb-file");
+  ["dragenter","dragover"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add("over");}));
+  ["dragleave","drop"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove("over");}));
+  drop.addEventListener("drop",ev=>{fbAddFiles(ev.dataTransfer.files);});
+  file.addEventListener("change",()=>{fbAddFiles(file.files);file.value="";});
+  if(fbFiles.length) fbRenderResults();
+}
+function fbAddFiles(list){
+  const files=[...(list||[])]; if(!files.length) return;
+  let pending=files.length;
+  files.forEach(f=>{
+    const rd=new FileReader();
+    rd.onload=()=>{
+      const text=String(rd.result);
+      fbFiles=fbFiles.filter(x=>x.name!==f.name);   // re-drop replaces
+      const ut=parseUnifiedTransaction(text);
+      if(!ut&&saLooksExcel(text,f.name)) fbFiles.push({name:f.name,kind:"error",msg:SA_EXCEL_MSG});
+      else if(ut) fbFiles.push({name:f.name,kind:"settlement",parsed:ut});
+      else{
+        const p=parseSettlement(text);
+        if(p.records.length||p.summary){
+          const dup=p.summary&&fbFiles.some(x=>x.kind==="settlement"&&x.parsed.summary&&x.parsed.summary.settlementId===p.summary.settlementId);
+          if(dup) fbFiles.push({name:f.name,kind:"error",msg:"same settlement ID as a file already loaded — skipped to avoid double counting"});
+          else fbFiles.push({name:f.name,kind:"settlement",parsed:p});
+        }
+        else fbFiles.push({name:f.name,kind:"error",msg:"not recognised as a settlement flat file"});
+      }
+      if(--pending===0) fbRenderResults();
+    };
+    rd.onerror=()=>{fbFiles.push({name:f.name,kind:"error",msg:"could not read the file"});if(--pending===0)fbRenderResults();};
+    rd.readAsText(f);
+  });
+}
+const fbBandLabel=slab=>"Band "+(slab+1)+" · ≤"+FB_SLAB_KG[slab]+" kg";
+/* What the target band asks of the parcel. FBA weighs the parcel and then
+   adds 100 g of packaging before choosing the band, so the scales have to
+   read lighter than the band edge; Easy Ship bills what you packed. */
+const fbTargetKg=w=>w.fba?"≤"+(FB_SLAB_KG[w.target]-0.1).toFixed(1)+" kg on the scales"
+  :"≤"+FB_SLAB_KG[w.target]+" kg packed";
+function fbPriceNote(o){
+  const bits=[];
+  if(o.refSave>0.005) bits.push("referral "+pc(o.ref/o.price*100)+" → "+pc(o.refNew/o.target*100)+", saving "+inr(o.refSave));
+  else if(!o.rateKnown&&o.ref>0.005) bits.push("referral rate matches no published category, so none of it is counted");
+  if(o.closeSave>0.005) bits.push("closing fee "+inr(o.close)+" → "+inr(o.closeNew));
+  if(!bits.length) bits.push("fee step at ₹"+o.target.toLocaleString("en-IN"));
+  bits.push("you give up "+inr(o.give));
+  return bits.join(" · ");
+}
+function fbRenderResults(){
+  const out=document.getElementById("fb-out"); if(!out) return;
+  let h=`<div class="rec-files">${fbFiles.map((f,i)=>`<span class="rec-file"${f.kind==="error"?` title="${esc(f.msg)}"`:""}><b>${esc(f.name)}</b><span class="rf-kind">${f.kind==="error"?"⚠ Skipped":(f.parsed&&f.parsed.source==="unified"?"Unified txn":"Settlement")}</span><button type="button" data-rm="${i}" aria-label="Remove ${esc(f.name)}">✕</button></span>`).join("")}</div>`;
+  const bad=fbFiles.filter(f=>f.kind==="error");
+  if(bad.length) h+=`<div class="banner warn">${bad.map(f=>`<b>${esc(f.name)}</b>: ${esc(f.msg)}`).join("<br>")}</div>`;
+  const settlements=fbFiles.filter(f=>f.kind==="settlement").map(f=>f.parsed);
+  if(!settlements.length){
+    if(fbFiles.length) h+=`<div class="banner info">Add at least one <b>settlement flat file</b> (Payments → All Statements → Download Flat File V2) — that's the file the fee bands are read from.</div>`;
+    out.innerHTML=h; fbWire(out); return;
+  }
+  const res=fbCompute(settlements),n=res.notes;
+  const perMonth=x=>n.days>=20?x*30/n.days:null;
+  const testing=res.totals.price+res.totals.potential;
+  const total=res.totals.proven+testing;
+  const pm=perMonth(total);
+  h+=`<div class="stats">
+    <div class="stat blue"><div class="k">SKUs read</div><div class="v">${n.skus}</div><div class="sa-sub" style="margin-top:3px">${n.days?esc(saFmtDay(n.from))+" → "+esc(saFmtDay(n.to)):"period unknown"}</div></div>
+    <div class="stat green"><div class="k">Already done it once</div><div class="v">${inr(res.totals.proven)}</div><div class="sa-sub" style="margin-top:3px">weight bands these SKUs have shipped in before</div></div>
+    <div class="stat"><div class="k">Worth testing</div><div class="v">${inr(testing)}</div><div class="sa-sub" style="margin-top:3px">${res.price.length} price step${res.price.length===1?"":"s"} · ${res.weight.filter(w=>!w.proven).length} weight target${res.weight.filter(w=>!w.proven).length===1?"":"s"}</div></div>
+    <div class="stat ${total>0?"blue":"green"}"><div class="k">Over this period</div><div class="v">${inr(total)}</div>${pm===null?"":`<div class="sa-sub" style="margin-top:3px">≈ ${inr0(pm)}/month at this rate</div>`}</div>
+  </div>`;
+  h+=`<div class="banner info">Every figure comes from fees Amazon actually charged these SKUs — the charge identifies the band, so nothing here depends on knowing your category or your parcel. Savings are <b>net of the revenue you give up</b> and exclude GST on the fee, which you claim back as input tax credit anyway. This is money not to spend again; money to <i>claim back</i> is in <a href="#/reconcile">Reconciliation</a>.</div>`;
+  if(n.noFees)
+    h+=`<div class="banner warn">${n.noFees} SKU${n.noFees>1?"s have":" has"} no selling-fee lines in these statements — Amazon is billing those fees on a separate invoice (<b>Tax Document Library → Seller Fee Invoices</b>), so there is no charge here to read a band from. Price steps can't be checked for ${n.noFees>1?"them":"it"}.</div>`;
+  if(!res.price.length&&!res.weight.length)
+    h+=`<div class="banner good">✅ Nothing sitting the wrong side of a fee step. Every SKU with enough history is already priced under its nearest referral band, and none is being billed a weight band heavier than it has shipped in.</div>`;
+  else
+    h+=`<div style="display:flex;justify-content:flex-end;margin:14px 0 2px"><button type="button" class="fbtn" id="fb-csv">⬇ Export findings CSV</button></div>`;
+
+  if(res.price.length){
+    h+=`<div class="panel"><h4>🪜 Priced just over a fee step <span class="sa-sub">(${res.price.length})</span></h4>
+      <p class="sa-sub" style="margin:4px 0 10px">Amazon's referral fee and closing fee change at fixed prices, so a listing a few rupees above a step pays the whole step. These SKUs net <b>more per unit at the lower price</b> — the revenue given up is already subtracted, GST included. Selling less at a lower price is still possible; a price test is the honest next move, not a bulk edit.</p>
+      <div class="tblwrap"><table class="sa">
+        <thead><tr><th>SKU</th><th class="num">Selling at</th><th class="num">Move to</th><th class="num">Net / unit</th><th class="num">Units</th><th class="num">Over the period</th><th>What changes</th></tr></thead>
+        <tbody>${res.price.map(o=>`<tr>
+          <td>${esc(o.sku)}</td><td class="num">${inr(o.price)}</td><td class="num">${inr(o.target)}</td>
+          <td class="num"><b>${inr(o.net)}</b></td><td class="num">${num(o.units)}</td>
+          <td class="num">${inr(o.prize)}</td>
+          <td class="sa-sub">${esc(fbPriceNote(o))}${o.cats.length&&o.refSave>0.005?`<br><span style="color:var(--faint)">charged at the rate Amazon lists for ${esc(o.cats.slice(0,2).join(" / "))}${o.cats.length>2?" and "+(o.cats.length-2)+" more":""}</span>`:""}</td></tr>`).join("")}
+        </tbody></table></div>
+      <div class="rec-claim"><b>How to act:</b> change the price in <b>Inventory → Manage Inventory → Edit</b>, or in a Price bulk-upload file. Run the <a href="#/price-bands">Price Band Optimizer</a> first if you want to see the whole ladder for one product, and check the new price still clears your product cost in the <a href="#/profit">profit calculator</a>.</div></div>`;
+  }
+  if(res.weight.length){
+    const proven=res.weight.filter(w=>w.proven),maybe=res.weight.filter(w=>!w.proven);
+    h+=`<div class="panel"><h4>⚖️ Weight bands worth winning <span class="sa-sub">(${res.weight.length})</span></h4>
+      <p class="sa-sub" style="margin:4px 0 10px">Weight handling is charged by band, on the greater of actual and volumetric weight (L×W×H ÷ 5000). A parcel a few grams over a band edge pays the whole band, and at a fulfilment centre Amazon adds 100 g of packaging before it picks one — so an FBA target weight is what the scales must read, not the band edge.${proven.length?` <b>${proven.length} of these ${proven.length===1?"has":"have"} already shipped in the lower band</b> — for ${proven.length===1?"it":"those"} the lighter band isn't a theory, it's something the SKU has done.`:""}</p>
+      <div class="tblwrap"><table class="sa">
+        <thead><tr><th>SKU</th><th>Billed in</th><th>Could ship in</th><th class="num">Saved / unit</th><th class="num">Units</th><th class="num">Over the period</th><th>Evidence</th></tr></thead>
+        <tbody>${res.weight.map(w=>`<tr>
+          <td>${esc(w.sku)}</td><td>${esc(fbBandLabel(w.slab))}</td><td>${esc(fbBandLabel(w.target))}</td>
+          <td class="num"><b>${inr(w.save)}</b></td><td class="num">${num(w.units)}</td><td class="num">${inr(w.prize)}</td>
+          <td class="sa-sub">${w.proven
+            ? `already billed band ${w.target+1} on ${w.provenN} of its ${w.ships} shipments`
+            : `${w.ships} shipments, all in this band`} — needs ${esc(fbTargetKg(w))}</td></tr>`).join("")}
+        </tbody></table></div>
+      <div class="rec-claim"><b>How to act:</b> weigh and measure the packed parcel — if volumetric weight is the higher of the two, a smaller box wins the band without removing a gram (check both in the <a href="#/fba-fee">FBA fee calculator</a>). Where a SKU is billed <i>heavier</i> than it usually ships, that specific charge may be reclaimable — <a href="#/reconcile">Reconciliation</a> lists those.</div></div>`;
+    if(!proven.length&&maybe.length)
+      h+=`<div class="banner info">None of these has ever been billed the lower band, so each one is a target rather than a proven saving — worth checking the scales before repacking anything.</div>`;
+  }
+  const lim=[];
+  if(n.wtLines||n.wtUnknown) lim.push(`read the weight band off <b>${num(n.wtLines)}</b> of ${num(n.wtLines+n.wtUnknown)} weight-handling charges — Amazon publishes flat rates only to 2 kg, above which the ladder is additive and the band can't be read back`);
+  if(n.variedPrice) lim.push(`${n.variedPrice} SKU${n.variedPrice>1?"s sell":" sells"} at too many different prices for one of them to be called usual`);
+  if(n.unknownRate) lim.push(`${n.unknownRate} SKU${n.unknownRate>1?"s were":" was"} charged a referral rate that matches no category on Amazon's published schedule, so only their closing-fee saving is counted`);
+  if(lim.length) h+=`<div class="banner info"><b>What this covers:</b> ${lim.join("; ")}.</div>`;
+  h+=`<div class="banner info">A SKU needs ${FB_MIN_UNITS} units at one price, or ${FB_MIN_SHIP} shipments, before it is judged at all — one order proves nothing. Figures are for the period loaded; load more statements for a steadier picture.</div>`;
+  out.innerHTML=h; fbWire(out,res);
+}
+function fbWire(out,res){
+  out.querySelectorAll("[data-rm]").forEach(b=>b.addEventListener("click",()=>{
+    fbFiles.splice(Number(b.dataset.rm),1); fbRenderResults();
+  }));
+  const csv=out.querySelector("#fb-csv");
+  if(csv&&res) csv.addEventListener("click",()=>{
+    const q=v=>`"${String(v??"").replace(/"/g,'""')}"`;
+    const lines=[["Type","SKU","Now","Target","Saved per unit (INR)","Given up per unit (INR)","Net per unit (INR)","Units","Total over period (INR)","Detail"].map(q).join(",")];
+    for(const o of res.price)
+      lines.push(["Price step",o.sku,o.price.toFixed(2),o.target.toFixed(2),(o.refSave+o.closeSave).toFixed(2),
+        o.give.toFixed(2),o.net.toFixed(2),o.units,o.prize.toFixed(2),fbPriceNote(o)].map(q).join(","));
+    for(const w of res.weight)
+      lines.push(["Weight band",w.sku,"band "+(w.slab+1),"band "+(w.target+1),w.save.toFixed(2),"0.00",
+        w.save.toFixed(2),w.units,w.prize.toFixed(2),
+        w.proven?`already billed the lower band on ${w.provenN} of ${w.ships} shipments`:`${w.ships} shipments, all in this band`].map(q).join(","));
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(new Blob([lines.join("\r\n")],{type:"text/csv"}));
+    a.download="fee-band-savings.csv";
     document.body.appendChild(a); a.click(); a.remove();
   });
 }
@@ -7313,6 +7687,7 @@ function route(){
   if(h==="sku-report"){renderSkuReport();window.scrollTo(0,0);return;}
   if(h==="reconcile"){renderReconcile();window.scrollTo(0,0);return;}
   if(h==="trends"){renderTrends();window.scrollTo(0,0);return;}
+  if(h==="fee-bands"){renderFeeBands();window.scrollTo(0,0);return;}
   if(h==="ad-profit"){renderAdProfit();window.scrollTo(0,0);return;}
   if(h==="link-builder"){renderLinkBuilder();window.scrollTo(0,0);return;}
   if(h==="keyword-combiner"){renderKeywordCombiner();window.scrollTo(0,0);return;}
@@ -7328,7 +7703,7 @@ function route(){
 window.addEventListener("hashchange",route);
 /* Premium tools re-check entitlement when the tab regains focus, so a session
    kicked on another device locks here within seconds of the user returning. */
-const PREMIUM_ROUTES=["settlement-analyzer","gst-report","sku-report","reconcile","trends","ad-profit"];
+const PREMIUM_ROUTES=["settlement-analyzer","gst-report","sku-report","reconcile","trends","ad-profit","fee-bands"];
 window.addEventListener("focus",()=>{
   const h=location.hash.replace(/^#\/?/,"");
   if(!PREMIUM_ROUTES.includes(h) || saUnlocked() || !sessionUser()) return;
