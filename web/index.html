@@ -4748,7 +4748,7 @@ function recCompute(settlements,mtrRows,extra){
      ORDER, deliberately: on a multi-item order a return of any line counts,
      so a false claim is never generated at the cost of missing a few. */
   const haveReturns=fbaReturns.length>0, haveReimb=reimbRows.length>0;
-  let retCoverEnd=null, nrTooRecent=0;
+  let retCoverEnd=null, nrTooRecent=0, nrSuspicious=false;
   if(haveReturns&&haveReimb){
     const returnedOrders=new Set(fbaReturns.map(r=>r.orderId).filter(Boolean));
     const reimbOrders=new Set(reimbRows.map(r=>r.orderId).filter(Boolean));
@@ -4760,17 +4760,32 @@ function recCompute(settlements,mtrRows,extra){
        TODAY, not through the statement end, and nothing is left unjudged. */
     for(const r of fbaReturns) if(r.date&&(!retCoverEnd||r.date>retCoverEnd)) retCoverEnd=r.date;
     const coverDay=retCoverEnd?recDayNo(retCoverEnd):null;
+    /* nrJudged counts every refund old enough and inside coverage — matched
+       or not — because it is the denominator for the sanity check below. */
+    let nrJudged=0;
     for(const rec of records){
       if(!/refund/i.test(rec.transactionType)||rec.fulfillmentId!=="AFN"||rec.principal>=-0.005) continue;
-      if(returnedOrders.has(rec.orderId)||reimbOrders.has(rec.orderId)) continue;
       const d=saParseDate(rec.postedDate);
       const days=d?Math.floor((Date.now()-new Date(d+"T00:00:00Z").getTime())/86400000):null;
       if(days===null||days<45) continue;   // the buyer's return window is still open
-      if(coverDay===null||recDayNo(d)+45+7>coverDay){ nrTooRecent++; continue; }
+      const matched=returnedOrders.has(rec.orderId)||reimbOrders.has(rec.orderId);
+      if(coverDay===null||recDayNo(d)+45+7>coverDay){ if(!matched) nrTooRecent++; continue; }
+      nrJudged++;
+      if(matched) continue;
       notReturned.push({check:"notReturned",orderId:rec.orderId,sku:rec.sku,date:rec.postedDate,
         amount:Math.round(Math.abs(rec.principal)*100)/100,days,
         note:"Refunded "+days+" days ago — the item never reached a fulfilment centre and no reimbursement was ever issued"});
     }
+    /* Sanity: on a real single account Amazon's automation almost never
+       misses — the measured miss rate across four live accounts was 0–1% of
+       judged refunds. A double-digit share does not mean Amazon forgot
+       dozens of times; it means the statements and the reports are not from
+       the SAME seller account (statements from several accounts in one
+       folder is exactly how it happens — the returns report only ever covers
+       one). Raising those would be filing claims on another account's
+       refunds, so the whole list is demoted to suspicion and kept out of
+       the claimable total. */
+    nrSuspicious=notReturned.length>=5&&nrJudged>0&&(notReturned.length/nrJudged)>0.10;
     /* One order can carry a refund record per unit; a claim quotes the order
        once, so merge them and sum the money. */
     {const m=new Map();
@@ -4804,7 +4819,7 @@ function recCompute(settlements,mtrRows,extra){
   /* "Claimable" is only what the files prove Amazon owes. SAFE-T rows are
      candidates to review — most seller-fulfilled refunds are ordinary returns
      — so they are counted separately and never inflate the headline. */
-  const recovery=[...refundFee,...feeOver,...feeDup,...weightJump,...notReturned,...fcDamaged].reduce((s,x)=>s+(x.amount||0),0);
+  const recovery=[...refundFee,...feeOver,...feeDup,...weightJump,...(nrSuspicious?[]:notReturned),...fcDamaged].reduce((s,x)=>s+(x.amount||0),0);
   const review=safeT.reduce((s,x)=>s+(x.amount||0),0);
   const unpaid=shipped.reduce((s,x)=>s+(x.amount||0),0);
   return {issues:{notReturned,fcDamaged,feeOver,feeDup,weightJump,refundFee,safeT,shipped,negative},
@@ -4815,7 +4830,7 @@ function recCompute(settlements,mtrRows,extra){
     notes:{feesItemised,feeLinesPresent,ordersWithFee,refundsNoOriginal,refundsNoFee,negativeNoRevenue,feeLinesAudited,weightLinesAudited,
       skippedCancelled,skippedRecent,gaps,covEnd,cutoff,mtrOrders,manyUnmatched,
       haveReturns:fbaReturns.length>0,haveReimb:reimbRows.length>0,
-      returnRows:fbaReturns.length,reimbRows:reimbRows.length,retCoverEnd,nrTooRecent}};
+      returnRows:fbaReturns.length,reimbRows:reimbRows.length,retCoverEnd,nrTooRecent,nrSuspicious}};
 }
 window.recCompute=recCompute; // exposed for verification/debugging
 
@@ -4968,6 +4983,8 @@ function recRenderResults(){
   }
   if(n.negativeNoRevenue)
     h+=`<div class="banner info">${n.negativeNoRevenue} order${n.negativeNoRevenue>1?"s carry":" carries"} fulfilment fees here but no sale — the revenue is in a statement you haven't loaded, so ${n.negativeNoRevenue>1?"they were":"it was"} left out of the loss-making check rather than counted as a loss.</div>`;
+  if(n.nrSuspicious)
+    h+=`<div class="banner warn"><b>${res.issues.notReturned.length} refunds look "never returned" — that is too many to be real.</b> Across real accounts Amazon's automation misses under 1%; a share this size almost always means these settlement files and the returns/reimbursements reports are <b>not from the same seller account</b> (statements from several accounts in one folder is the usual cause — the returns report only ever covers one account). The list is shown below for checking but <b>excluded from Claimable</b>. Load one account's files at a time.</div>`;
   if(n.haveReturns&&n.haveReimb)
     h+=`<div class="banner info">FBA returns (${num(n.returnRows)} rows) and Reimbursements (${num(n.reimbRows)} rows) loaded — the <b>refunded-never-returned</b> and <b>damaged-in-Amazon's-hands</b> checks ran against every FBA refund.${n.nrTooRecent?` <b>${n.nrTooRecent} refund${n.nrTooRecent>1?"s":""}</b> could not be judged: the returns report's newest row is ${esc(saFmtDay(n.retCoverEnd))}, and their 45-day return window runs past it — re-export both reports <b>through today</b> and they can be.`:""}</div>`;
   else if(n.haveReturns||n.haveReimb)
