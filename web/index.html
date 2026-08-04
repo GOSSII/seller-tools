@@ -5449,6 +5449,75 @@ function trendCompute(settlements,mtrRows){
 }
 window.trendCompute=trendCompute; // exposed for verification/debugging
 
+/* Month-over-month reading of the numbers, in words. Settlement weeks rarely
+   line up with month ends, so raw totals would compare a 28-day July against a
+   30-day June and invent a fall. Every Δ is therefore computed on the DAILY
+   RUN-RATE over the days the statements actually cover, and a month needs at
+   least a fortnight of coverage before it is compared at all — below that the
+   sample is too thin to mean anything. Ratios (fee %, refund %) are immune to
+   coverage and compared directly. Thresholds a seller can check by hand:
+     growth/decline  ≥15% move in daily sales rate
+     refund spike    ≥3 points up AND above 5%
+     margin squeeze  fee share up ≥2 points, or rising 3 straight months
+     mover SKUs      ≥40% move on a ₹5,000+/month run-rate
+     new winner      from under ₹500 to a ₹5,000+/month rate */
+const TR_MIN_DAYS=14;
+function trendInsights(months,skus){
+  const full=(months||[]).filter(e=>e.coverDays>=TR_MIN_DAYS);
+  if(full.length<2) return {ok:false,rows:[],notes:[],movers:{up:[],down:[]},
+    reason:full.length?"Only one month has a fortnight or more of coverage — load neighbouring statements to compare months like for like.":"No month has enough coverage yet."};
+  const pct=(a,b)=>Math.abs(b)>1e-9?(a-b)/Math.abs(b)*100:null;
+  const rows=full.map((e,i)=>{
+    const p=i>0?full[i-1]:null;
+    const rate=(x,k)=>x[k]/x.coverDays;
+    return {m:e.m,gross:e.gross,net:e.net,units:e.units,feePct:e.feePct,refundPct:e.refundPct,
+      coverDays:e.coverDays,monthDays:e.monthDays,partial:!!e.partial,
+      grossD:rate(e,"gross"),netD:rate(e,"net"),
+      dGross:p?pct(rate(e,"gross"),rate(p,"gross")):null,
+      dNet:p?pct(rate(e,"net"),rate(p,"net")):null,
+      dUnits:p?pct(rate(e,"units"),rate(p,"units")):null,
+      dFeePp:p?e.feePct-p.feePct:null,dRefundPp:p?e.refundPct-p.refundPct:null};
+  });
+  const L=rows[rows.length-1],P=rows[rows.length-2];
+  const name=m=>trFmtMonth(m);
+  const notes=[];
+  if(L.dGross!==null){
+    if(L.dGross>=15) notes.push({k:"good",t:`Daily sales rate grew <b>${L.dGross.toFixed(0)}%</b> in ${name(L.m)} (${inr0(P.grossD)}/day → ${inr0(L.grossD)}/day).`});
+    else if(L.dGross<=-15) notes.push({k:"bad",t:`Daily sales rate fell <b>${Math.abs(L.dGross).toFixed(0)}%</b> in ${name(L.m)} (${inr0(P.grossD)}/day → ${inr0(L.grossD)}/day).`});
+  }
+  if(L.dGross!==null&&L.dNet!==null&&L.dGross>0&&L.dNet<0)
+    notes.push({k:"bad",t:`Sales rose but the payout rate <b>fell</b> (${inr0(P.netD)}/day → ${inr0(L.netD)}/day) — fees or refunds ate more than the growth brought in.`});
+  if(L.dRefundPp!==null&&L.dRefundPp>=3&&L.refundPct>=5)
+    notes.push({k:"bad",t:`Refunds jumped to <b>${L.refundPct.toFixed(1)}%</b> of sales in ${name(L.m)} (up ${L.dRefundPp.toFixed(1)} points) — find the SKU behind it in the <a href="#/sku-report">SKU report</a> before it compounds.`});
+  const squeeze3=rows.length>=3&&rows.slice(-3).every((r,i,a)=>i===0||r.feePct>a[i-1].feePct);
+  if((L.dFeePp!==null&&L.dFeePp>=2)||squeeze3)
+    notes.push({k:"bad",t:`Fees are taking a growing share of every sale — ${squeeze3?`up three straight months to <b>${L.feePct.toFixed(1)}%</b>`:`up ${L.dFeePp.toFixed(1)} points to <b>${L.feePct.toFixed(1)}%</b>`}. Run <a href="#/reconcile">Reconciliation</a>'s fee audit and check weight bands in the <a href="#/fee-bands">Fee Band Optimizer</a>.`});
+  if(rows.length>=3){
+    const best=rows.reduce((m,r)=>r.netD>m.netD?r:m,rows[0]);
+    const trendUp=rows.every((r,i)=>i===0||r.netD>=rows[i-1].netD*0.95);
+    const trendDn=rows.every((r,i)=>i===0||r.netD<=rows[i-1].netD*1.05);
+    if(trendUp&&L.netD>rows[0].netD) notes.push({k:"good",t:`The daily payout rate has climbed across all ${rows.length} months (${inr0(rows[0].netD)}/day → ${inr0(L.netD)}/day) — the business is compounding.`});
+    else if(trendDn&&L.netD<rows[0].netD) notes.push({k:"bad",t:`The daily payout rate has slid across all ${rows.length} months (${inr0(rows[0].netD)}/day → ${inr0(L.netD)}/day).`});
+    else notes.push({k:"info",t:`Best month so far by payout rate: <b>${name(best.m)}</b> at ${inr0(best.netD)}/day.`});
+  }
+  if(!notes.length) notes.push({k:"info",t:`${name(L.m)} vs ${name(P.m)}: daily sales rate ${L.dGross===null?"—":(L.dGross>=0?"+":"")+L.dGross.toFixed(1)+"%"}, payout rate ${L.dNet===null?"—":(L.dNet>=0?"+":"")+L.dNet.toFixed(1)+"%"} — steady, nothing that needs action.`});
+  /* SKU movers between the last two compared months, also on run-rate so a
+     28-day month doesn't fade every SKU at once. Figures shown are
+     monthly-equivalent (rate × 30) so they read like month numbers. */
+  const movers={up:[],down:[]};
+  const mEq=(s2,row)=>{const x=(s2.months||[]).find(y=>y.m===row.m);return x?x.sales/row.coverDays*30:0;};
+  for(const s2 of (skus||[])){
+    const prev=mEq(s2,P),last=mEq(s2,L);
+    if(prev<500&&last>=5000) movers.up.push({sku:s2.sku,prev,last,note:"new"});
+    else if(prev>=5000&&last>=prev*1.4) movers.up.push({sku:s2.sku,prev,last});
+    else if(prev>=5000&&last<=prev*0.6) movers.down.push({sku:s2.sku,prev,last});
+  }
+  movers.up.sort((x,y)=>(y.last-y.prev)-(x.last-x.prev)); movers.up=movers.up.slice(0,5);
+  movers.down.sort((x,y)=>(x.last-x.prev)-(y.last-y.prev)); movers.down=movers.down.slice(0,5);
+  return {ok:true,rows,notes,movers,lastM:L.m,prevM:P.m};
+}
+window.trendInsights=trendInsights; // exposed for verification/debugging
+
 function renderTrends(){
   setMeta("Multi-Month Trends — Seller Tools India",
     "Drop several Amazon settlement files and see your business month by month: sales, fees as a percentage of sales, refund rate and net payout — computed locally in your browser.");
@@ -5554,6 +5623,36 @@ function trRenderResults(){
         <td class="num">${e.feePct.toFixed(1)}%</td><td class="num ${e.refundPct>10?'amt-neg':''}">${e.refundPct.toFixed(1)}%</td>
         <td class="num"><b>${sv(e.net)}</b></td></tr>`).join("")}
       </tbody></table></div></div>`;
+  // Month-over-month reading, full months only.
+  {
+    const ins=trendInsights(M,t.skus);
+    const dp=(v,pp)=>v===null?"—":`<span class="${v>0?"amt-pos":v<0?"amt-neg":""}">${v>0?"+":""}${v.toFixed(1)}${pp?" pp":"%"}</span>`;
+    h+=`<div class="panel"><h4>What changed, month over month <span class="sa-sub">— compared on the daily run-rate, so a part-covered month is never read as a crash</span></h4>`;
+    if(!ins.ok) h+=`<div class="banner info">${esc(ins.reason)}</div>`;
+    else{
+      h+=ins.notes.map(n=>`<div class="banner ${n.k==="good"?"good":n.k==="bad"?"warn":"info"}" style="margin-top:8px">${n.t}</div>`).join("");
+      h+=`<div style="display:flex;justify-content:flex-end;margin:10px 0 2px"><button type="button" class="fbtn" id="tr-csv">⬇ Export month table CSV</button></div>
+      <div class="tblwrap" style="margin-top:6px"><table class="sa">
+        <thead><tr><th>Month</th><th class="num">Sales</th><th class="num" title="Change in the daily sales rate vs the previous month">Δ rate</th><th class="num">Net payout</th><th class="num" title="Change in the daily payout rate">Δ rate</th><th class="num">Units</th><th class="num" title="Change in units per day">Δ rate</th><th class="num">Fee % <span class="sa-sub">Δ</span></th><th class="num">Refund % <span class="sa-sub">Δ</span></th></tr></thead>
+        <tbody>${ins.rows.map(r=>`<tr>
+          <td>${esc(trFmtMonth(r.m))}${r.partial?` <span class="sa-sub">· ${r.coverDays}/${r.monthDays} days</span>`:""}</td>
+          <td class="num">${inr0(r.gross)}</td><td class="num">${dp(r.dGross)}</td>
+          <td class="num"><b>${inr0(r.net)}</b></td><td class="num">${dp(r.dNet)}</td>
+          <td class="num">${num(r.units)}</td><td class="num">${dp(r.dUnits)}</td>
+          <td class="num">${r.feePct.toFixed(1)}% ${r.dFeePp===null?"":dp(r.dFeePp,1)}</td>
+          <td class="num">${r.refundPct.toFixed(1)}% ${r.dRefundPp===null?"":dp(r.dRefundPp,1)}</td></tr>`).join("")}
+        </tbody></table></div>`;
+      if(ins.movers.up.length||ins.movers.down.length){
+        const li=x=>`<li><b>${esc(x.sku)}</b> — ${inr0(x.prev)} → ${inr0(x.last)}${x.note==="new"?' <span class="st st-good">new</span>':""}</li>`;
+        h+=`<div style="display:flex;gap:24px;flex-wrap:wrap;margin-top:12px">
+          ${ins.movers.up.length?`<div style="flex:1;min-width:240px"><b>📈 Gaining (${esc(trFmtMonth(ins.prevM))} → ${esc(trFmtMonth(ins.lastM))})</b><ul style="margin:6px 0 0 18px;line-height:1.8;font-size:13.5px">${ins.movers.up.map(li).join("")}</ul></div>`:""}
+          ${ins.movers.down.length?`<div style="flex:1;min-width:240px"><b>📉 Fading</b><ul style="margin:6px 0 0 18px;line-height:1.8;font-size:13.5px">${ins.movers.down.map(li).join("")}</ul><p class="sa-sub" style="margin-top:6px">Check stock-outs and lost buy box before touching the price — a fade is a symptom, not a diagnosis.</p></div>`:""}
+        </div>`;
+      }
+      h+=`<p class="sa-sub" style="margin:10px 0 0">Every Δ compares <b>daily run-rates over the days the statements cover</b>, never raw totals — so a 28-day month against a 31-day one is a fair fight. A month needs 14+ covered days to be compared. Thresholds: sales moves from 15%, refund spikes from 3 points above a 5% base, fee squeeze from 2 points or three rising months, SKU movers from a 40% swing on a ₹5,000+/month rate (mover figures shown as monthly equivalents). Months are settled-basis.</p>`;
+    }
+    h+=`</div>`;
+  }
   // Which days sell — averaged per occurrence of that weekday.
   if(t.dow&&t.dow.some(d=>d.days>0)){
     const D=t.dow.filter(d=>d.days>0);
@@ -5620,6 +5719,19 @@ function trWire(out){
   }));
   const sel=out.querySelector("#tr-sku");
   if(sel) sel.addEventListener("change",()=>{trSku=sel.value;trRenderResults();});
+  const csv=out.querySelector("#tr-csv");
+  if(csv) csv.addEventListener("click",()=>{
+    const settlements=trFiles.filter(f=>f.kind==="settlement").map(f=>f.parsed);
+    const t=trendCompute(settlements,trFiles.filter(f=>f.kind==="mtr").flatMap(f=>f.rows));
+    const M=t.months.filter(m=>m.coverDays>0);
+    const ins=trendInsights(M,t.skus);
+    if(!ins.ok) return;
+    const d=v=>v===null?"":v.toFixed(1);
+    saCsvDownload("trends-month-over-month.csv",
+      ["Month","Sales (INR)","Sales MoM %","Net payout (INR)","Net MoM %","Units","Units MoM %","Fee %","Fee MoM pp","Refund %","Refund MoM pp"],
+      ins.rows.map(r=>[r.m,r.gross.toFixed(2),d(r.dGross),r.net.toFixed(2),d(r.dNet),
+        r.units,d(r.dUnits),r.feePct.toFixed(1),d(r.dFeePp),r.refundPct.toFixed(1),d(r.dRefundPp)]));
+  });
 }
 
 /* ============================================================
