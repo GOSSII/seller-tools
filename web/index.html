@@ -1554,7 +1554,7 @@ const HELP={
     steps:["Drop the settlement file.","Sort by Net to see which products actually make money after fees, taxes and refunds.","Sort by Refund % to spot problem products. Units ÷ days gives the daily sales rate for the Restock Planner."]},
   "ad-profit":{input:`Two files. <b>Payments → All Statements → Flat File V2</b> (or a Monthly Unified Transaction report) for what each SKU actually earned — and, from the <b>Advertising console → Sponsored Ads → Reports</b>, a <b>Sponsored Products “Advertised product”</b> report for the same period, which is the only place ad spend is broken down per SKU.`,
     steps:["Drop the settlement (or unified transaction) file, and the advertised-product report for the same dates.","Fill in product costs for your main SKUs — without them the table shows payout, not profit.","Read the “ads turn profit into loss” list first: those SKUs earn money until the advertising is counted.","Compare each SKU's ACOS against its break-even ACOS — anything above it is being advertised at a loss."]},
-  "reconcile":{input:`Settlement file(s): <b>Payments → All Statements → Download Flat File V2</b> — drop every statement for the period you're checking, <b>from both Account Types</b>: All Statements keeps a separate weekly series for <i>Electronic Transactions</i> and for <i>Cash On Delivery Transactions and Non-Transactional Fees</i>, and orders paid through the series you skip will look unpaid. Optional: the <b>FBA customer returns</b> and <b>Reimbursements</b> reports (<b>Reports → Fulfilment</b>, Download tab, exact dates matching your statements — both together) unlock the refunded-never-returned and damaged-at-Amazon checks. Optional but recommended: the matching MTR — <b>Reports → Tax Document Library → Merchant Tax Reports → B2C</b> (.csv) — so shipped-but-unpaid orders can be caught too.`,
+  "reconcile":{input:`Settlement file(s): <b>Payments → All Statements → Download Flat File V2</b> — drop every statement for the period you're checking, <b>from both Account Types</b>: All Statements keeps a separate weekly series for <i>Electronic Transactions</i> and for <i>Cash On Delivery Transactions and Non-Transactional Fees</i>, and orders paid through the series you skip will look unpaid. Optional: the <b>Inventory Ledger</b> (detailed view) finds stock Amazon misplaced and never reimbursed, and the <b>Replacements</b> report stops replacement flows being misread as unreturned refunds. Optional: the <b>FBA customer returns</b> and <b>Reimbursements</b> reports (<b>Reports → Fulfilment</b>, Download tab, exact dates matching your statements — both together) unlock the refunded-never-returned and damaged-at-Amazon checks. Optional but recommended: the matching MTR — <b>Reports → Tax Document Library → Merchant Tax Reports → B2C</b> (.csv) — so shipped-but-unpaid orders can be caught too.`,
     steps:["Drop your settlement file(s), and the MTR for the same months if you have it.","Work through each issue list — every row shows the order, the amount at stake and the exact Seller Central path to claim it.","Tick rows off as you raise them (ticks are saved in your browser), and export the checklist as CSV to track claims."]},
   "fnsku-labels":{input:`Your FNSKU (starts with X0) is in <b>Inventory → FBA Inventory</b> — the FNSKU column — or on the <b>Print item labels</b> page (<b>Manage Inventory</b> → tick your FBA listings → <b>Print item labels</b>). Copy it from either place; the product name can be anything your packers will recognise.`,
     steps:["Add a row per product: FNSKU/code, product name, condition (defaults to New) and how many stickers you need.","Pick the paper: A4 sticker sheets with 65, 40 or 24 labels per page, or a 4×6 thermal sheet (12 per page).","Generate, check the preview, download — and print at 100% scale (never \"fit to page\", or the barcode dimensions shift).","Stick one label per unit, covering any existing barcode on the retail packaging."]},
@@ -4499,9 +4499,64 @@ function parseReimbursements(text){
   return rows.length?{rows}:null;
 }
 window.parseReimbursements=parseReimbursements; // exposed for verification/debugging
+/* Inventory Ledger, detailed view (Reports → Fulfilment → Inventory Ledger).
+   Amazon's "bank statement for inventory". Only the Adjustments rows matter
+   here, but the newest date across ALL rows is kept as the coverage proxy.
+   Reason codes are Amazon's own: M misplaced (lost), F found, D damaged
+   stock removed, Q/P disposition reclassifications (not losses). */
+function parseInventoryLedger(text){
+  const lines=String(text||"").replace(/^\ufeff/,"").split(/\r\n|\r|\n/);
+  let hln=-1; for(let i=0;i<lines.length;i++){if(lines[i].trim()!==""){hln=i;break;}}
+  if(hln===-1) return null;
+  const delim=lines[hln].includes("\t")?"\t":",";
+  const cols=saSplit(lines[hln],delim).map(h=>h.trim().toLowerCase().replace(/^"|"$/g,""));
+  const ix=n=>cols.indexOf(n);
+  const iDate=ix("date"),iMsku=ix("msku"),iEvent=ix("event type"),iQty=ix("quantity"),
+        iDisp=ix("disposition"),iReason=ix("reason"),iFn=ix("fnsku");
+  if(iDate<0||iEvent<0||iQty<0||iReason<0) return null;
+  const us=d=>{const m=String(d||"").match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    return m?m[3]+"-"+m[1].padStart(2,"0")+"-"+m[2].padStart(2,"0"):null;};
+  const adjustments=[]; let coverEnd=null, rows=0;
+  for(let i=hln+1;i<lines.length;i++){
+    if(!lines[i].trim()) continue;
+    const f=saSplit(lines[i],delim).map(x=>x.trim());
+    if(f.length<5) continue;
+    rows++;
+    const d=us(f[iDate]);
+    if(d&&(!coverEnd||d>coverEnd)) coverEnd=d;
+    if((f[iEvent]||"")!=="Adjustments") continue;
+    const q=Number(f[iQty]); if(!Number.isFinite(q)||q===0) continue;
+    adjustments.push({date:d,sku:iMsku>=0?(f[iMsku]||""):"",fnsku:iFn>=0?(f[iFn]||""):"",
+      qty:q,disposition:(iDisp>=0?f[iDisp]:"").toUpperCase(),reason:(f[iReason]||"").toUpperCase()});
+  }
+  return rows?{adjustments,coverEnd,rows}:null;
+}
+window.parseInventoryLedger=parseInventoryLedger; // exposed for verification/debugging
+/* FBA Replacements report (Reports → Fulfilment → Replacements): the map
+   from a replacement order back to the original it replaced. */
+function parseReplacements(text){
+  const lines=String(text||"").replace(/^\ufeff/,"").split(/\r\n|\r|\n/);
+  let hln=-1; for(let i=0;i<lines.length;i++){if(lines[i].trim()!==""){hln=i;break;}}
+  if(hln===-1) return null;
+  const delim=lines[hln].includes("\t")?"\t":",";
+  const cols=saSplit(lines[hln],delim).map(h=>h.trim().toLowerCase().replace(/^"|"$/g,""));
+  const ix=n=>cols.indexOf(n);
+  const iRepl=ix("replacement-amazon-order-id"),iOrig=ix("original-amazon-order-id"),iSku=ix("sku");
+  if(iRepl<0||iOrig<0) return null;
+  const rows=[];
+  for(let i=hln+1;i<lines.length;i++){
+    if(!lines[i].trim()) continue;
+    const f=saSplit(lines[i],delim).map(x=>x.trim());
+    if(f.length<3) continue;
+    if(f[iRepl]&&f[iOrig]) rows.push({replOrder:f[iRepl],origOrder:f[iOrig],sku:iSku>=0?(f[iSku]||""):""});
+  }
+  return rows.length?{rows}:null;
+}
+window.parseReplacements=parseReplacements; // exposed for verification/debugging
 function recCompute(settlements,mtrRows,extra){
   extra=extra||{};
   const fbaReturns=extra.returns||[], reimbRows=extra.reimb||[];
+  const ledger=extra.ledger||null, replRows=extra.replacements||[];
   const records=[]; for(const p of settlements) records.push(...p.records);
   const ordersById=new Map(); let refundsChecked=0;
   for(const rec of records){
@@ -4751,6 +4806,13 @@ function recCompute(settlements,mtrRows,extra){
   let retCoverEnd=null, nrTooRecent=0, nrSuspicious=false;
   if(haveReturns&&haveReimb){
     const returnedOrders=new Set(fbaReturns.map(r=>r.orderId).filter(Boolean));
+    /* A replacement's return often arrives under the REPLACEMENT order id
+       while the refund sits on the original — credit the original. And an
+       order that got a replacement at all is a different flow from a plain
+       refund, so it is excluded from the ghost check outright. */
+    const replToOrig=new Map(); for(const rp of replRows) replToOrig.set(rp.replOrder,rp.origOrder);
+    for(const rp of replRows){ returnedOrders.add(rp.origOrder); }
+    for(const r of fbaReturns){ const o=replToOrig.get(r.orderId); if(o) returnedOrders.add(o); }
     const reimbOrders=new Set(reimbRows.map(r=>r.orderId).filter(Boolean));
     /* The returns report only proves absence WITHIN ITS OWN DATES. A refund's
        return can arrive up to 45 days later, and the reimbursement a little
@@ -4853,6 +4915,58 @@ function recCompute(settlements,mtrRows,extra){
           +(val===undefined?"; value not in the loaded statements":"")});
     }
   }
+  /* ---- Lost in the warehouse (Inventory Ledger × Reimbursements) ----
+     Reason M is Amazon misplacing a unit; F is finding one again. What stays
+     lost after netting found units, was lost 30+ days ago (Amazon's own
+     research window) inside the ledger's coverage, and has no INVENTORY-side
+     reimbursement for the SKU, is money Amazon's policy owes. Order-level
+     reimbursement reasons (CustomerReturn, CustomerServiceIssue) never
+     offset a lost unit — they are a different mechanism entirely. Valued at
+     the SKU's own average unit principal from the loaded statements. */
+  const lostWh=[]; let destroyedSellable=0, ledgerCoverEnd=null, ledgerAdjustments=0;
+  if(ledger&&ledger.adjustments){
+    ledgerCoverEnd=ledger.coverEnd; ledgerAdjustments=ledger.adjustments.length;
+    const coverDay2=ledgerCoverEnd?recDayNo(ledgerCoverEnd):null;
+    const invReimbQty=new Map();   // sku -> units reimbursed inventory-side
+    for(const rr of reimbRows){
+      if(rr.orderId) continue;     // order-level reimbursements don't offset stock
+      if(rr.sku) invReimbQty.set(rr.sku,(invReimbQty.get(rr.sku)||0)+1);
+    }
+    // average unit principal per sku, for valuing a lost unit honestly
+    const unitVal=new Map();
+    {const agg=new Map();
+     for(const rec of records){
+       if(rec.transactionType!=="Order"||!rec.sku||rec.principal<=0||!(rec.quantity>0)) continue;
+       const e=agg.get(rec.sku)||{v:0,q:0}; e.v+=rec.principal; e.q+=rec.quantity; agg.set(rec.sku,e);
+     }
+     for(const [k,e] of agg) if(e.q>0) unitVal.set(k,e.v/e.q);}
+    const bySku=new Map();
+    for(const a of ledger.adjustments){
+      if(a.reason!=="M"&&a.reason!=="F"&&a.reason!=="D") continue;
+      if(a.reason==="D"){ if(a.qty<0&&a.disposition==="SELLABLE") destroyedSellable+=-a.qty; continue; }
+      const e=bySku.get(a.sku)||{lost:[],found:0};
+      if(a.reason==="M"&&a.qty<0) e.lost.push({date:a.date,qty:-a.qty});
+      if(a.reason==="F"&&a.qty>0) e.found+=a.qty;
+      bySku.set(a.sku,e);
+    }
+    for(const [sku,e] of bySku){
+      e.lost.sort((x,y)=>String(x.date).localeCompare(String(y.date)));
+      let offset=e.found+(invReimbQty.get(sku)||0);
+      for(const L of e.lost){
+        const take=Math.min(offset,L.qty); offset-=take; const rem=L.qty-take;
+        if(rem<=0) continue;
+        const d=L.date?recDayNo(L.date):null;
+        if(coverDay2===null||d===null||d+30>coverDay2) continue;  // research window still open
+        const v=unitVal.get(sku);
+        lostWh.push({check:"lostWh",orderId:"",sku,date:L.date,
+          amount:v!==undefined?Math.round(v*rem*100)/100:null,
+          note:rem+" unit"+(rem>1?"s":"")+" misplaced in the fulfilment centre "
+            +(d!==null?Math.floor((recDayNo(ledgerCoverEnd)-d)):"30+")+" days ago — never found, never reimbursed"
+            +(v===undefined?"; value unknown (SKU has no sales in the loaded statements)":"")});
+      }
+    }
+    lostWh.sort((a,b)=>(b.amount||0)-(a.amount||0));
+  }
   /* "Claimable" is only what the files prove Amazon owes. SAFE-T rows are
      candidates to review — most seller-fulfilled refunds are ordinary returns
      — so they are counted separately and never inflate the headline. */
@@ -4862,9 +4976,9 @@ function recCompute(settlements,mtrRows,extra){
   /* fcDamaged values are review, not claimable: the return report proves the
      damage happened in Amazon's hands, but only Amazon's answer proves the
      money — its reimbursement clock is not fully knowable from outside. */
-  const review=[...safeT,...softGhosts,...fcDamaged].reduce((s,x)=>s+(x.amount||0),0);
+  const review=[...safeT,...softGhosts,...fcDamaged,...lostWh].reduce((s,x)=>s+(x.amount||0),0);
   const unpaid=shipped.reduce((s,x)=>s+(x.amount||0),0);
-  return {issues:{notReturned,fcDamaged,feeOver,feeDup,weightJump,refundFee,safeT,shipped,negative},
+  return {issues:{notReturned,fcDamaged,lostWh,feeOver,feeDup,weightJump,refundFee,safeT,shipped,negative},
     ordersChecked:ordersById.size,refundsChecked,
     recovery:Math.round(recovery*100)/100,
     review:Math.round(review*100)/100,
@@ -4872,7 +4986,8 @@ function recCompute(settlements,mtrRows,extra){
     notes:{feesItemised,feeLinesPresent,ordersWithFee,refundsNoOriginal,refundsNoFee,negativeNoRevenue,feeLinesAudited,weightLinesAudited,
       skippedCancelled,skippedRecent,gaps,covEnd,cutoff,mtrOrders,manyUnmatched,
       haveReturns:fbaReturns.length>0,haveReimb:reimbRows.length>0,
-      returnRows:fbaReturns.length,reimbRows:reimbRows.length,retCoverEnd,nrTooRecent,nrSuspicious}};
+      returnRows:fbaReturns.length,reimbRows:reimbRows.length,retCoverEnd,nrTooRecent,nrSuspicious,
+      haveLedger:!!ledger,ledgerCoverEnd,ledgerAdjustments,destroyedSellable,haveRepl:replRows.length>0,replRows:replRows.length}};
 }
 window.recCompute=recCompute; // exposed for verification/debugging
 
@@ -4883,6 +4998,9 @@ const REC_CHECKS={
   fcDamaged:{icon:"📦",title:"Returned damaged — in Amazon's hands",
     why:"These returns came back marked damaged by the carrier or at the fulfilment centre — damage that happened while Amazon was responsible for the unit, which its policy reimburses. Only returns 30+ days old are listed (Amazon reimburses on its own clock), reimbursements are matched by order AND by SKU, and customer-damaged / defective returns are deliberately excluded: policy puts those on the buyer or the product. Counted under Refunds to review, not Claimable — only Amazon's answer proves the money.",
     claim:`<b>Seller Central → Help → Get Support → Fulfilment by Amazon</b> → quote the Order ID, the return date and the disposition (carrier-damaged / warehouse-damaged) from the FBA customer returns report, and ask for reimbursement under the FBA lost and damaged inventory policy.`},
+  lostWh:{icon:"🗃️",title:"Lost in the fulfilment centre, never reimbursed",
+    why:"Amazon's Inventory Ledger records these units as misplaced (reason M) 30+ days ago, they were never recorded found (reason F), and no inventory-side reimbursement exists for the SKU. Amazon's FBA lost-inventory policy reimburses stock it loses; order-level reimbursements are a different mechanism and are not counted as settling these. Valued at the SKU's own average unit price from your statements. Counted under review — only Amazon's answer proves the money.",
+    claim:`<b>Seller Central → Help → Get Support → Fulfilment by Amazon</b> → "Inventory lost in fulfilment centre, not reimbursed". Quote the MSKU, the adjustment date from the Inventory Ledger, and the quantity. Amazon researches against the same ledger you just read.`},
   feeOver:{icon:"⚠️",title:"Closing fee charged above Amazon's own rate card",
     why:"The fixed closing fee depends only on the item's price band and how it was fulfilled — the fee category can only make it cheaper. These orders were charged more than the published maximum for their band, which is a billing error, not a category difference.",
     claim:`<b>Seller Central → Help → Get Support → Selling on Amazon → Payments</b> → "Incorrect closing fee charged". Quote the Order ID, the item price and the fee charged, and cite the fee schedule (Selling on Amazon fee schedule, Table 1 and Table 2). <b>Amazon requires fee claims within 30 calendar days of the order</b> — rows older than that are marked and may be refused.`},
@@ -4905,7 +5023,7 @@ const REC_CHECKS={
     why:"Fees exceeded what the buyer paid — you shipped these at a loss. Not a claim, but fix the cause: weight slab, fee category, or a price below the fee floor.",
     claim:`Re-check the maths with the <a href="#/profit">profit calculator</a> and <b>Reports → Fee Preview</b>. If the charged weight or category is wrong: <b>Help → Get Support</b> → ask for a fee correction with the Order ID.`},
 };
-const REC_ORDER=["notReturned","fcDamaged","feeOver","feeDup","weightJump","refundFee","safeT","shipped","negative"];
+const REC_ORDER=["notReturned","fcDamaged","lostWh","feeOver","feeDup","weightJump","refundFee","safeT","shipped","negative"];
 
 function renderReconcile(){
   setMeta("Reconciliation & SAFE-T Finder — Seller Tools India",
@@ -4942,6 +5060,10 @@ function recAddFiles(list){
     const finish=()=>{ if(--pending===0) recRenderResults(); };
     saReadDropped(f,text=>{
       recFiles=recFiles.filter(x=>x.name!==f.name); // re-drop replaces
+      const led=parseInventoryLedger(text);
+      if(led&&led.adjustments){ recFiles.push({name:f.name,kind:"ledger",ledger:led}); finish(); return; }
+      const rp=parseReplacements(text);
+      if(rp){ recFiles.push({name:f.name,kind:"repl",rows:rp.rows}); finish(); return; }
       const ret=parseFbaReturns(text);
       if(ret){ recFiles.push({name:f.name,kind:"returns",rows:ret.rows}); finish(); return; }
       const rb=parseReimbursements(text);
@@ -4966,7 +5088,7 @@ function recAddFiles(list){
 }
 function recRenderResults(){
   const out=document.getElementById("rec-out"); if(!out) return;
-  const kindLabel={settlement:"Settlement",mtr:"MTR",returns:"FBA returns",reimb:"Reimbursements",error:"Skipped"};
+  const kindLabel={settlement:"Settlement",mtr:"MTR",returns:"FBA returns",reimb:"Reimbursements",ledger:"Inventory Ledger",repl:"Replacements",error:"Skipped"};
   const kindOf=f=>f.kind==="error"?"⚠ "+kindLabel.error
     :f.kind==="settlement"&&f.parsed&&f.parsed.source==="unified"?"Unified txn":kindLabel[f.kind];
   let h=`<div class="rec-files">${recFiles.map((f,i)=>`<span class="rec-file"${f.kind==="error"?` title="${esc(f.msg)}"`:""}><b>${esc(f.name)}</b><span class="rf-kind">${kindOf(f)}</span><button type="button" data-rm="${i}" aria-label="Remove ${esc(f.name)}">✕</button></span>`).join("")}</div>`;
@@ -4980,7 +5102,10 @@ function recRenderResults(){
   }
   const fbaReturns=recFiles.filter(f=>f.kind==="returns").flatMap(f=>f.rows);
   const reimbRows=recFiles.filter(f=>f.kind==="reimb").flatMap(f=>f.rows);
-  const res=recCompute(settlements,mtrRows,{returns:fbaReturns,reimb:reimbRows});
+  const ledgerFile=recFiles.find(f=>f.kind==="ledger");
+  const replacements=recFiles.filter(f=>f.kind==="repl").flatMap(f=>f.rows);
+  const res=recCompute(settlements,mtrRows,{returns:fbaReturns,reimb:reimbRows,
+    ledger:ledgerFile?ledgerFile.ledger:null,replacements});
   const done=loadRecDone();
   const allIssues=REC_ORDER.flatMap(k=>res.issues[k]);
   const openCount=allIssues.filter(x=>!done[recKey(x)]).length;
@@ -5025,6 +5150,10 @@ function recRenderResults(){
   }
   if(n.negativeNoRevenue)
     h+=`<div class="banner info">${n.negativeNoRevenue} order${n.negativeNoRevenue>1?"s carry":" carries"} fulfilment fees here but no sale — the revenue is in a statement you haven't loaded, so ${n.negativeNoRevenue>1?"they were":"it was"} left out of the loss-making check rather than counted as a loss.</div>`;
+  if(n.haveLedger)
+    h+=`<div class="banner info">Inventory Ledger loaded (${num(n.ledgerAdjustments)} adjustment${n.ledgerAdjustments===1?"":"s"}, coverage to ${n.ledgerCoverEnd?esc(saFmtDay(n.ledgerCoverEnd)):"—"}) — misplaced stock is netted against found stock and inventory-side reimbursements${n.haveReimb?"":", <b>but no Reimbursements report is loaded</b>, so a reimbursed loss cannot be told from an unpaid one — add it for an honest answer"}. ${n.destroyedSellable?`<b>${n.destroyedSellable} sellable unit${n.destroyedSellable>1?"s were":" was"} removed as damaged</b> — worth a look in the ledger.`:""}</div>`;
+  if(n.haveRepl)
+    h+=`<div class="banner info">Replacements report loaded (${num(n.replRows)} row${n.replRows===1?"":"s"}) — orders that were replaced, and returns arriving under a replacement order id, no longer count as ghost refunds.</div>`;
   if(n.haveReturns&&n.haveReimb&&!n.retCoverEnd)
     h+=`<div class="banner warn">The returns report's dates could not be read (an .xlsx export stores them as serial numbers), so the returned-item checks cannot judge anything. Re-export the FBA customer returns report as <b>.csv</b> and drop it again.</div>`;
   if(n.nrSuspicious)
