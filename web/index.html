@@ -4907,13 +4907,92 @@ function fbBody(){
       </label>
       <div class="sa-priv">🔒 Private by design — your files never leave your device. Every figure is computed locally on this page.</div>
       <div id="fb-out"></div>
+      <div id="fb-chart"></div>
     </div>`;
   const drop=document.getElementById("fb-drop"),file=document.getElementById("fb-file");
   ["dragenter","dragover"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add("over");}));
   ["dragleave","drop"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove("over");}));
   drop.addEventListener("drop",ev=>{fbAddFiles(ev.dataTransfer.files);});
   file.addEventListener("change",()=>{fbAddFiles(file.files);file.value="";});
+  fbRenderChart();
   if(fbFiles.length) fbRenderResults();
+}
+/* ============================================================
+   THE BANDS THEMSELVES — a rate card built from the same tables
+   the audit above computes with, so the reference a seller reads
+   and the figures the tool charges against can never disagree.
+   ============================================================ */
+let fbChartTier=FBA_STEP_DEFAULT, fbChartZone="r", fbChartCat="other";
+function fbRenderChart(){
+  const el=document.getElementById("fb-chart"); if(!el) return;
+  const zoneName=fbChartZone==="n"?"National":"Regional";
+  const wh=FBA_WH[fbChartTier][fbChartZone], es=ES_WH[fbChartTier], add=FBA_WH_ADD[fbChartZone];
+  const seg=(id,cur,opts)=>`<div class="seg" id="${id}" style="max-width:340px">${opts.map(o=>
+    `<button type="button" data-v="${o.v}" class="${o.v===cur?"on":""}" aria-pressed="${o.v===cur}">${esc(o.l)}</button>`).join("")}</div>`;
+  /* Weight bands. Amazon rounds the billing weight up to the next 500 g and,
+     at a fulfilment centre, adds 100 g of packaging first — so the number on
+     your scales has to be lower than the band edge. */
+  const rows=[0,1,2].map(i=>`<tr>
+    <td>Band ${i+1}</td><td>≤ ${FB_SLAB_KG[i]} kg</td>
+    <td>≤ ${(FB_SLAB_KG[i]-0.1).toFixed(1)} kg</td>
+    <td>≤ ${FB_SLAB_KG[i]} kg</td>
+    <td class="num">${inr0(wh[i])}</td><td class="num">${inr0(es[i])}</td></tr>`).join("");
+  const catRules=(CATMAP[fbChartCat]||CATMAP.other).referral;
+  let lastEdge=0;
+  const refRows=catRules.map(([upTo,pct])=>{
+    const from=lastEdge===0?"₹0":"₹"+(lastEdge+1).toLocaleString("en-IN");
+    const to=upTo===null?"and above":"– ₹"+upTo.toLocaleString("en-IN");
+    lastEdge=upTo===null?lastEdge:upTo;
+    return `<tr><td>${from} ${to}</td><td class="num"><b>${pct}%</b></td></tr>`;
+  }).join("");
+  el.innerHTML=`
+    <details class="howto" style="margin-top:22px" id="fb-chart-d"${fbFiles.length?"":" open"}>
+      <summary>The bands themselves — the rate card every figure above is charged against</summary>
+      <div class="hbody">
+        <span class="htag">Weight handling, per unit</span>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 12px">
+          ${seg("fb-tier",fbChartTier,[{v:"premium",l:"Premium"},{v:"standard",l:"Standard"},{v:"basic",l:"Basic"}])}
+          ${seg("fb-zone",fbChartZone,[{v:"r",l:"Regional"},{v:"n",l:"National"}])}
+        </div>
+        <div class="tblwrap"><table class="sa">
+          <thead><tr><th>Band</th><th>Billed weight</th><th>FBA — on your scales</th><th>Easy Ship — packed</th>
+            <th class="num">FBA ${esc(zoneName)}</th><th class="num">Easy Ship</th></tr></thead>
+          <tbody>${rows}
+            <tr><td>2–5 kg</td><td colspan="3" class="sa-sub">each additional kg after 2 kg</td>
+              <td class="num">+${inr0(add.after2)}</td><td class="num">+${inr0(ES_WH_ADD.after2)}</td></tr>
+            <tr><td>above 5 kg</td><td colspan="3" class="sa-sub">each additional kg after 5 kg</td>
+              <td class="num">+${inr0(add.after5)}</td><td class="num">+${inr0(ES_WH_ADD.after5)}</td></tr>
+          </tbody></table></div>
+        <p class="sa-sub" style="margin:8px 0 0">Billed weight is the <b>greater of actual and volumetric</b> (L×W×H ÷ 5000), rounded up to the next 500 g — and at a fulfilment centre Amazon adds 100 g of packaging before rounding, which is why the FBA column asks for less than the band edge. A 780 g parcel bills at 1 kg; 900 g still bills at 1 kg; 910 g jumps to the next band. FBA also charges pick &amp; pack: ${inr0(pickPack(0.5))} up to 1 kg, then ₹5 per additional kg to 5 kg. To check one product against all of this — actual against volumetric, and the fee either way — use the <a href="#/fba-fee">FBA fee calculator</a>.</p>
+
+        <span class="htag" style="margin-top:18px">Fixed closing fee, per unit</span>
+        <div class="tblwrap"><table class="sa">
+          <thead><tr><th>Item price</th><th class="num">Easy Ship</th><th class="num">Self Ship</th><th class="num">FBA</th></tr></thead>
+          <tbody>${CLOSING_BANDS.map((edge,i)=>`<tr>
+            <td>${edge===null?"above ₹1,000":(i===0?"≤ ₹"+edge:"₹"+(CLOSING_BANDS[i-1]+1).toLocaleString("en-IN")+" – ₹"+edge.toLocaleString("en-IN"))}</td>
+            <td class="num">${inr0(CLOSING_BY_CHANNEL.easyship[i])}</td>
+            <td class="num">${inr0(CLOSING_BY_CHANNEL.self[i])}</td>
+            <td class="num">${inr0(CLOSING_FBA_GROUPS.std[i])}${(()=>{
+              const alts=[...new Set(Object.keys(CLOSING_FBA_GROUPS).map(g=>CLOSING_FBA_GROUPS[g][i]))].filter(v=>v!==CLOSING_FBA_GROUPS.std[i]).sort((a,b)=>a-b);
+              return alts.length?` <span class="sa-sub">(${alts.map(v=>inr0(v)).join(" / ")} for some categories)</span>`:"";
+            })()}</td></tr>`).join("")}</tbody></table></div>
+        <p class="sa-sub" style="margin:8px 0 0">The price band is what the <b>buyer paid</b> — item price including the GST inside it, plus any shipping they were charged, less promotions you funded.</p>
+
+        <span class="htag" style="margin-top:18px">Referral fee</span>
+        <div style="margin:8px 0 12px"><select id="fb-cat" style="max-width:340px">${
+          CATS.map(c=>`<option value="${c.key}"${c.key===fbChartCat?" selected":""}>${esc(c.name)}</option>`).join("")}</select></div>
+        <div class="tblwrap"><table class="sa">
+          <thead><tr><th>Item price</th><th class="num">Referral fee</th></tr></thead>
+          <tbody>${refRows}</tbody></table></div>
+        <p class="sa-sub" style="margin:8px 0 0">Charged on the same buyer-paid amount as the closing fee. ${esc(bandNote(fbChartCat))} Amazon adds 18% GST to every fee here, which a GST-registered seller claims back as input tax credit — so the figures above are what the fee actually costs you. Rates are the schedule effective 10 June 2026; confirm yours in <b>Seller Central → Reports → Fee Preview</b>.</p>
+      </div>
+    </details>`;
+  const wire=(id,fn)=>{const s=document.getElementById(id); if(s) s.querySelectorAll("button").forEach(b=>
+    b.addEventListener("click",()=>{fn(b.dataset.v); fbRenderChart(); const d=document.getElementById("fb-chart-d"); if(d) d.open=true;}));};
+  wire("fb-tier",v=>{fbChartTier=v;});
+  wire("fb-zone",v=>{fbChartZone=v;});
+  const sel=document.getElementById("fb-cat");
+  if(sel) sel.addEventListener("change",()=>{fbChartCat=sel.value; fbRenderChart(); const d=document.getElementById("fb-chart-d"); if(d) d.open=true;});
 }
 function fbAddFiles(list){
   const files=[...(list||[])]; if(!files.length) return;
