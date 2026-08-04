@@ -1568,6 +1568,8 @@ const HELP={
     steps:["Drop all your settlement files at once (or add them one by one — duplicates are skipped).","Read the month-by-month charts: sales, fees as % of sales, refund rate and net payout.","Pick a SKU to see its own monthly units, sales and net — is it growing, and is it still worth the fees?"]},
   "ads-optimizer":{input:`<b>Advertising console → Sponsored ads → Reports (or Measurement &amp; reporting) → Sponsored Products → Search term</b> — export for 30–60 days. The .xlsx it hands out drops straight in; CSV works too.`,
     steps:["Drop the Search Term report (several files at once is fine — re-drops replace). Optional but worth it: add the Advertised-product report for the same period, plus your settlement files — terms in single-SKU ad groups are then judged against that SKU's own break-even ACOS instead of a flat line.","Export the negatives list and paste each term as a negative exact into the campaign it spent in.","Move the winners into their own exact-match keywords, then negate them where they came from so the two never bid against each other.","Check the campaign scoreboard monthly — and judge affordability per SKU in Ad Profitability, which knows each product's break-even ACOS."]},
+  "returns":{input:`Any or all of: <b>settlement flat files</b> (Payments → All Statements → Download Flat File V2), the <b>FBA customer returns report</b> (Reports → Fulfilment → Customer Concessions → FBA customer returns), and the <b>seller-fulfilled Return Report</b> (Orders → Manage Returns → View reports → All Returns — 60-day ranges).`,
+    steps:["Drop the files — settlements give the money side, the FBA report gives dispositions, the seller-fulfilled report gives RTO share and label costs. Each panel switches on when its file is present.","Read the buckets: logistics/RTO returns are a courier problem, not a product problem — the fix is different for each bucket and written under it.","Work the per-SKU table worst-first: a SKU refunding 30% of its sales is losing money no ad campaign can fix.","Switcheroo rows and never-delivered-back returns are claim material — run Reconciliation &amp; SAFE-T with the same files to sort them."]},
   "fee-bands":{input:`Settlement file(s): <b>Payments → All Statements → Download Flat File V2</b>. Drop as many as you have — the more units behind each SKU, the more certain its usual price and weight band are. Statements where Amazon bills your selling fees on a separate invoice can't be used for the price side: there is no fee line to read a band from.`,
     steps:["Drop your settlement file(s) — several at once is fine.","Work down the price-step list: each row is a SKU that nets more per unit at the lower price, with the revenue you give up already subtracted.","Test the price on one SKU before editing in bulk — a lower price can also mean fewer or more orders, which no settlement file can tell you.","On the weight list, weigh one packed parcel per SKU and type it in (dimensions too, if the box is large for its weight — volumetric weight often decides the band). The tool then says which of three things is true: Amazon is billing a band heavier than your parcel, so claim it; the band is a packaging change away; or the product itself is too heavy and no repacking reaches it. Weights are saved in your browser only."]},
 };
@@ -2273,6 +2275,10 @@ const PW_MOCKS={
     <div class="row"><span>"lunch box steel" · 9 orders</span><b class="amt pos">12% ACOS</b></div>
     <div class="row"><span>Terms to negate</span><b class="big">31</b></div>
     <div class="row"><span>Spend they were eating</span><b class="amt neg">−₹4,812</b></div>`,
+  returns:`<div class="row"><span>Refunds, % of gross sales</span><b class="big">11.8%</b></div>
+    <div class="row"><span>FBA stock back sellable</span><b class="amt pos">62%</b></div>
+    <div class="row"><span>Top reason · UNDELIVERABLE</span><b class="big">215u</b></div>
+    <div class="row"><span>Return labels you paid</span><b class="amt neg">−₹6,785</b></div>`,
   feebands:`<div class="row"><span>KURTA-RED-M · ₹1,049 → ₹1,000</span><b class="amt pos">+₹157/u</b></div>
     <div class="row"><span>MUG-CERAMIC · ₹319 → ₹300</span><b class="amt pos">+₹6/u</b></div>
     <div class="row"><span>CABLE-USB-C · weight band 2 → 1</span><b class="amt pos">+₹20/u</b></div>
@@ -2313,6 +2319,11 @@ const ADSO_INFO={route:"ads-optimizer",title:"Ads Optimizer",plan:"Pro",needPro:
   desc:"The Search Term report shows what buyers actually typed. This turns it into the four lists worth acting on.",
   feats:["Search terms eating spend with zero orders — a paste-ready negative list","Winners under broad/auto that earned their own exact match","Terms converting at a loss, campaign scoreboard with verdicts","Reads the .xlsx straight from the ads console"],
   mock:PW_MOCKS.adsopt};
+const RT_INFO={route:"returns",title:"Returns Analyzer",plan:"Pro",needPro:true,
+  price:"₹499/month — unlock with Pro",priceAlt:"or ₹2,499/year (save ~58%)",
+  desc:"Refunds are a third of many sellers' gross — this shows what they cost per SKU, and why.",
+  feats:["Refund ₹ and % of sales per SKU, from your settlements","How much FBA stock comes back sellable vs lost","RTO vs product-problem vs listing-mismatch — Amazon's reasons, bucketed by action","Return labels you paid for, summed from the seller-fulfilled report"],
+  mock:PW_MOCKS.returns};
 const FB_INFO={route:"fee-bands",title:"Fee Band Optimizer",plan:"Pro",needPro:true,
   price:"₹499/month — unlock with Pro",priceAlt:"or ₹2,499/year (save ~58%)",
   desc:"Amazon's fees step at fixed prices and fixed weights. This finds the SKUs sitting a rupee or a gram the wrong side of a step.",
@@ -2492,6 +2503,7 @@ function renderAccount(){
             <a href="#/ad-profit">📉 Ad Profitability by SKU</a>
             <a href="#/fee-bands">🪜 Fee Band Optimizer</a>
             <a href="#/ads-optimizer">🎯 Ads Optimizer</a>
+            <a href="#/returns">↩️ Returns Analyzer</a>
             <a href="#/trends">📈 Multi-Month Trends</a>
           </div>
         </div>
@@ -2967,6 +2979,7 @@ function renderHome(){
         <a class="tile" href="#/trends"><span class="pill">Pro</span><div class="ico">📈</div><h3>Multi-Month Trends</h3><p>Sales, fees %, refund rate and net payout month by month — overall and per SKU.</p></a>
         <a class="tile" href="#/fee-bands"><span class="pill">Pro</span><div class="ico">🪜</div><h3>Fee Band Optimizer</h3><p>The SKUs sitting a rupee over a referral step or a gram over a weight band — and what moving under is worth.</p></a>
         <a class="tile" href="#/ads-optimizer"><span class="pill">Pro</span><div class="ico">🎯</div><h3>Ads Optimizer</h3><p>Search terms to negate, winners that earned an exact match, and a campaign scoreboard — from the Search Term report.</p></a>
+        <a class="tile" href="#/returns"><span class="pill">Pro</span><div class="ico">↩️</div><h3>Returns Analyzer</h3><p>What returns cost per SKU, how much stock comes back sellable, and Amazon's reasons bucketed into RTO, product and listing problems.</p></a>
       </div>
 
       <section class="lp2-sec">
@@ -3071,7 +3084,7 @@ function renderPricing(){
             <li><span class="tick">✓</span> Label Cropper — 4×6 with SKU</li>
             <li><span class="tick">✓</span> Order Printer</li>
             <li><span class="tick">✓</span> Link Builder &amp; Keyword Combiner</li>
-            <li><span class="tick">✓</span> FBA Reimbursement helper</li>
+            <li><span class="tick">✓</span> FBA label maker &amp; listing checker</li>
             <li><span class="tick">✓</span> Files never leave your browser</li>
           </ul>
           <a class="lp-btn sec" href="#/">Use free tools</a>
@@ -3103,6 +3116,7 @@ function renderPricing(){
             <li><span class="tick">✓</span> Ad Profitability by SKU</li>
             <li><span class="tick">✓</span> Fee Band Optimizer</li>
             <li><span class="tick">✓</span> Ads Optimizer</li>
+            <li><span class="tick">✓</span> Returns Analyzer</li>
             <li><span class="tick">✓</span> Multi-month Trends</li>
           </ul>
           ${paidBtn(pr," sec")}
@@ -4573,7 +4587,8 @@ function parseMfnReturns(text){
   const ix=n=>cols.indexOf(n);
   const iOrder=ix("order id"),iReq=ix("return request date"),iRes=ix("resolution"),
         iDel=ix("return delivery date"),iSku=ix("merchant sku"),iSafeT=ix("safet claim id"),
-        iType=ix("return type"),iRefAmt=ix("refunded amount");
+        iType=ix("return type"),iRefAmt=ix("refunded amount"),
+        iReason=ix("return reason"),iLabel=ix("label cost"),iPayer=ix("label to be paid by");
   if(iOrder<0||iReq<0||iRes<0) return null;
   const rows=[];
   for(let i=hln+1;i<lines.length;i++){
@@ -4584,6 +4599,9 @@ function parseMfnReturns(text){
       requestDate:mfnDate(f[iReq]),deliveryDate:iDel>=0?mfnDate(f[iDel]):null,
       resolution:iRes>=0?(f[iRes]||""):"",returnType:iType>=0?(f[iType]||""):"",
       safetId:iSafeT>=0?(f[iSafeT]||""):"",
+      reason:iReason>=0?(f[iReason]||"").toUpperCase():"",
+      /* Label cost is only a real cost when Amazon billed it to the seller. */
+      labelCost:(iLabel>=0&&iPayer>=0&&f[iPayer]==="Seller")?(saParseAmount(f[iLabel])||0):0,
       refundedAmount:iRefAmt>=0?(saParseAmount(f[iRefAmt])||0):0});
   }
   return rows.length?{rows}:null;
@@ -8833,6 +8851,243 @@ function adsCompute(terms,opts){
 }
 window.adsCompute=adsCompute; // exposed for verification/debugging
 
+/* ============================================================
+   RETURNS ANALYZER (Pro) — the economics of what comes back.
+   Settlements say what refunds COST; the two return reports say
+   WHY and in what condition. Together, per SKU: what returns eat
+   of its own sales, how much stock comes back sellable, what
+   share is logistics (RTO) rather than the product's fault, and
+   the reasons in Amazon's own words — grouped into buckets a
+   seller can act on. Nothing is estimated: every panel names the
+   file it was read from, and missing files switch panels off.
+   ============================================================ */
+let rtFiles=[];
+/* Amazon's return-reason codes, grouped by what a seller can DO about them.
+   MFN codes arrive prefixed (CR-, UND-) — normalised before lookup. */
+const RT_BUCKETS=[
+  {k:"rto",name:"Logistics / RTO — never reached the buyer",advice:"Not a product problem. Check pincode serviceability, courier performance and COD share; on Easy Ship these often refund at first scan.",
+    re:/^(UNDELIVERABLE|UND$|UND\b|NEVER_ARRIVED|UNDELIVERABLE_)/},
+  {k:"product",name:"Product problems",advice:"Defects, missing parts, quality — fix the product or the QC before spending another rupee on ads.",
+    re:/^(DEFECTIVE|QUALITY_UNACCEPTABLE|MISSING_PARTS|DAMAGED_BY_)/},
+  {k:"listing",name:"Listing mismatch",advice:"The buyer expected something else — sharpen images, size charts and the first bullet. Cheaper to fix than a defect.",
+    re:/^(NOT_COMPATIBLE|NOT_AS_DESCRIBED|WRONG_ITEM|MISORDERED|STYLE|SIZE)/},
+  {k:"remorse",name:"Buyer remorse",advice:"Ordered and changed their mind. Some is inevitable; a spike after a discount suggests deal-hunters.",
+    re:/^(UNWANTED_ITEM|NO_LONGER_NEEDED|BOUGHT_BY_MISTAKE|BETTER_PRICE|UNAUTHORI)/},
+  {k:"switcheroo",name:"Wrong item returned (switcheroo)",advice:"The buyer sent back something other than your product. Photograph outgoing units, report the buyer, and claim via SAFE-T where the refund already happened.",
+    re:/^SWITCHEROO/},
+];
+const rtBucketOf=reason=>{
+  const r=String(reason||"").toUpperCase().replace(/^CR-/,"").replace(/^UND-/,"UNDELIVERABLE_");
+  for(const b of RT_BUCKETS) if(b.re.test(r)) return b.k;
+  return "other";
+};
+function returnsCompute(settlements,fbaReturns,mfnReturns){
+  const records=settlements.flatMap(p=>p.records);
+  const base=records.length?skuCompute({records}):[];
+  const bySku=new Map();
+  const get=sku=>{let e=bySku.get(sku);
+    if(!e){e={sku,sales:0,units:0,refundValue:0,unitsReturned:0,
+      fbaBack:0,fbaSellable:0,fbaDamaged:0,mfnReq:0,mfnBack:0,mfnNotBack:0,mfnLabel:0,
+      reasons:new Map()};bySku.set(sku,e);}return e;};
+  for(const s of base){
+    const e=get(s.sku);
+    e.sales=s.sales; e.units=s.units; e.refundValue=Math.abs(s.refundValue); e.unitsReturned=s.unitsReturned||0;
+  }
+  const bump=(e,reason,units)=>{const k=String(reason||"(none)");e.reasons.set(k,(e.reasons.get(k)||0)+units);};
+  for(const r of fbaReturns||[]){
+    const e=get(r.sku||"(no SKU)");
+    const q=r.quantity||1;
+    e.fbaBack+=q;
+    if(r.disposition==="SELLABLE") e.fbaSellable+=q; else e.fbaDamaged+=q;
+    bump(e,r.reason,q);
+  }
+  for(const r of mfnReturns||[]){
+    const e=get(r.sku||"(no SKU)");
+    e.mfnReq++;
+    if(r.deliveryDate) e.mfnBack++; else e.mfnNotBack++;
+    e.mfnLabel+=r.labelCost||0;
+    bump(e,r.reason,1);
+  }
+  const skus=[...bySku.values()].filter(e=>e.sales>0.005||e.refundValue>0.005||e.fbaBack>0||e.mfnReq>0);
+  for(const e of skus){
+    e.refundPct=e.sales>0?e.refundValue/e.sales*100:null;
+    e.recovered=e.fbaBack>0?e.fbaSellable/e.fbaBack*100:null;
+  }
+  skus.sort((a,b)=>b.refundValue-a.refundValue);
+  // Account totals + reason pareto with buckets.
+  const t={sales:0,refundValue:0,unitsReturned:0,fbaBack:0,fbaSellable:0,fbaDamaged:0,
+    mfnReq:0,mfnBack:0,mfnNotBack:0,mfnLabel:0};
+  const reasonAgg=new Map();
+  for(const e of skus){
+    for(const k of Object.keys(t)) t[k]+=e[k]||0;
+    for(const [r,q] of e.reasons) reasonAgg.set(r,(reasonAgg.get(r)||0)+q);
+  }
+  const totalReasonUnits=[...reasonAgg.values()].reduce((a,x)=>a+x,0);
+  const reasons=[...reasonAgg.entries()].map(([reason,units])=>({reason,units,
+    bucket:rtBucketOf(reason),share:totalReasonUnits?units/totalReasonUnits*100:0}))
+    .sort((a,b)=>b.units-a.units);
+  const buckets=RT_BUCKETS.map(b=>({k:b.k,name:b.name,advice:b.advice,
+    units:reasons.filter(r=>r.bucket===b.k).reduce((a,x)=>a+x.units,0)}))
+    .concat([{k:"other",name:"Other / unmapped reasons",advice:"Reasons Amazon reports that fit no bucket — read them in the table below.",
+      units:reasons.filter(r=>r.bucket==="other").reduce((a,x)=>a+x.units,0)}])
+    .filter(b=>b.units>0).sort((a,b)=>b.units-a.units);
+  return {skus,totals:t,reasons,buckets,
+    have:{settle:settlements.length>0,fba:(fbaReturns||[]).length>0,mfn:(mfnReturns||[]).length>0}};
+}
+window.returnsCompute=returnsCompute; // exposed for verification/debugging
+/* One judgement per SKU for the returns table. Rules printed in the panel. */
+function rtStatus(e){
+  if(e.sku==="(no SKU)") return {k:"info",l:"Account-level"};
+  if(e.refundPct===null) return {k:"data",l:"No sales loaded"};
+  if(e.refundPct>=30&&e.refundValue>=2000) return {k:"loss",l:"Return-driven loss"};
+  if(e.refundPct>=20) return {k:"problem",l:"Problem"};
+  if(e.refundPct>=10) return {k:"watch",l:"Watch"};
+  return {k:"good",l:"OK"};
+}
+window.rtStatus=rtStatus; // exposed for verification/debugging
+
+function renderReturnsAnalyzer(){
+  setMeta("Returns Analyzer — Seller Tools India",
+    "Drop your settlement files plus Amazon's two return reports and see what returns really cost per SKU — how much comes back sellable, what share is courier RTO rather than the product, and the return reasons grouped into actions.");
+  backBtn.hidden=false;
+  gatePremium(RT_INFO, rtBody);
+}
+function rtBody(){
+  app.innerHTML=`
+    <div class="wrap page">
+      <h2>Returns Analyzer</h2>
+      <p class="lede">Refunds are a third of many Indian sellers' gross. This reads what they actually cost per SKU, how much stock comes back <b>sellable</b>, what share is courier RTO rather than the product's fault, and Amazon's own return reasons — grouped into things you can act on.</p>
+      ${helpHtml("returns")}
+      <label class="sa-drop" id="rt-drop">
+        <div class="ico">↩️</div>
+        <h3>Drop settlements + return reports here</h3>
+        <p>settlement flat files, the FBA customer returns report, and the seller-fulfilled Return Report — any or all (.csv, .txt, .tsv, .xlsx)</p>
+        <input type="file" id="rt-file" multiple accept=".csv,.txt,.tsv,.xlsx,text/plain,text/csv,text/tab-separated-values,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+      </label>
+      <div class="sa-priv">🔒 Private by design — your files never leave your device. Every figure is computed locally on this page.</div>
+      <div id="rt-out"></div>
+    </div>`;
+  const drop=document.getElementById("rt-drop"),file=document.getElementById("rt-file");
+  ["dragenter","dragover"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add("over");}));
+  ["dragleave","drop"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove("over");}));
+  drop.addEventListener("drop",ev=>{rtAddFiles(ev.dataTransfer.files);});
+  file.addEventListener("change",()=>{rtAddFiles(file.files);file.value="";});
+  if(rtFiles.length) rtRenderResults();
+}
+function rtAddFiles(list){
+  const files=[...(list||[])]; if(!files.length) return;
+  let pending=files.length;
+  files.forEach(f=>{
+    const finish=()=>{ if(--pending===0) rtRenderResults(); };
+    saReadDropped(f,text=>{
+      rtFiles=rtFiles.filter(x=>x.name!==f.name); // re-drop replaces
+      const mr=parseMfnReturns(text);
+      if(mr){ rtFiles.push({name:f.name,kind:"mfnret",rows:mr.rows}); finish(); return; }
+      const ret=parseFbaReturns(text);
+      if(ret){ rtFiles.push({name:f.name,kind:"returns",rows:ret.rows}); finish(); return; }
+      const p=parseUnifiedTransaction(text)||parseSettlement(text);
+      if(p&&(p.records.length||p.summary)){
+        const dup=p.summary&&rtFiles.some(x=>x.kind==="settlement"&&x.parsed.summary&&x.parsed.summary.settlementId===p.summary.settlementId);
+        if(dup) rtFiles.push({name:f.name,kind:"error",msg:"same settlement ID as a file already loaded — skipped to avoid double counting"});
+        else rtFiles.push({name:f.name,kind:"settlement",parsed:p});
+      }
+      else rtFiles.push({name:f.name,kind:"error",msg:"not recognised as a settlement, FBA customer returns or seller-fulfilled Return Report."+saDescribeColumns(text)});
+      finish();
+    },msg=>{ rtFiles=rtFiles.filter(x=>x.name!==f.name); rtFiles.push({name:f.name,kind:"error",msg}); finish(); });
+  });
+}
+function rtRenderResults(){
+  const out=document.getElementById("rt-out"); if(!out) return;
+  const kindLabel={settlement:"Settlement",returns:"FBA returns",mfnret:"Seller returns",error:"Skipped"};
+  let h=`<div class="rec-files">${rtFiles.map((f,i)=>`<span class="rec-file"${f.kind==="error"?` title="${esc(f.msg)}"`:""}><b>${esc(f.name)}</b><span class="rf-kind">${f.kind==="error"?"⚠ "+kindLabel.error:kindLabel[f.kind]}</span><button type="button" data-rm="${i}" aria-label="Remove ${esc(f.name)}">✕</button></span>`).join("")}</div>`;
+  const bad=rtFiles.filter(f=>f.kind==="error");
+  if(bad.length) h+=`<div class="banner warn">${bad.map(f=>`<b>${esc(f.name)}</b>: ${esc(f.msg)}`).join("<br>")}</div>`;
+  const settlements=rtFiles.filter(f=>f.kind==="settlement").map(f=>f.parsed);
+  const fbaReturns=rtFiles.filter(f=>f.kind==="returns").flatMap(f=>f.rows);
+  const mfnReturns=rtFiles.filter(f=>f.kind==="mfnret").flatMap(f=>f.rows);
+  if(!settlements.length&&!fbaReturns.length&&!mfnReturns.length){
+    if(rtFiles.length) h+=`<div class="banner info">Add at least one file — settlements give the money side, the two return reports give the why.</div>`;
+    out.innerHTML=h; rtWire(out); return;
+  }
+  const r=returnsCompute(settlements,fbaReturns,mfnReturns);
+  const t=r.totals;
+  const refundPct=t.sales>0?t.refundValue/t.sales*100:null;
+  h+=`<div class="stats">
+    <div class="stat ${refundPct!==null&&refundPct>15?"red":""}"><div class="k">Refunds (by value)</div><div class="v">${t.refundValue?inr0(t.refundValue):"—"}</div><div class="sa-sub" style="margin-top:3px">${refundPct===null?"load settlements for the money side":refundPct.toFixed(1)+"% of gross sales"}</div></div>
+    <div class="stat ${r.have.fba?(t.fbaBack&&t.fbaSellable/t.fbaBack<0.5?"red":"green"):""}"><div class="k">FBA stock recovered sellable</div><div class="v">${r.have.fba?(t.fbaBack?Math.round(100*t.fbaSellable/t.fbaBack)+"%":"—"):"—"}</div><div class="sa-sub" style="margin-top:3px">${r.have.fba?num(t.fbaSellable)+" of "+num(t.fbaBack)+" returned units":"needs the FBA customer returns report"}</div></div>
+    <div class="stat"><div class="k">Seller-fulfilled: item came back</div><div class="v">${r.have.mfn?(t.mfnReq?Math.round(100*t.mfnBack/t.mfnReq)+"%":"—"):"—"}</div><div class="sa-sub" style="margin-top:3px">${r.have.mfn?num(t.mfnNotBack)+" of "+num(t.mfnReq)+" never recorded back":"needs the seller-fulfilled Return Report"}</div></div>
+    <div class="stat ${t.mfnLabel>0?"red":""}"><div class="k">Return labels you paid</div><div class="v">${r.have.mfn?inr0(t.mfnLabel):"—"}</div><div class="sa-sub" style="margin-top:3px">${r.have.mfn?"from the Label cost column":"—"}</div></div>
+  </div>`;
+  const missing=[];
+  if(!r.have.settle) missing.push("settlement files (the money side — refund value per SKU)");
+  if(!r.have.fba) missing.push("the FBA customer returns report (dispositions — how much came back sellable)");
+  if(!r.have.mfn) missing.push("the seller-fulfilled Return Report (RTO share and labels)");
+  if(missing.length) h+=`<div class="banner info">Panels needing ${missing.join("; ")} are switched off until those files are dropped.</div>`;
+  if(r.buckets.length){
+    const tot=r.buckets.reduce((a,b)=>a+b.units,0);
+    h+=`<div class="panel"><h4>Why things come back <span class="sa-sub">— ${num(tot)} returned units, grouped by what you can do about them</span></h4>
+      ${r.buckets.map(b=>`<div style="margin:10px 0">
+        <div style="display:flex;justify-content:space-between;gap:10px;font-size:13.5px"><b>${esc(b.name)}</b><span>${num(b.units)} · ${(100*b.units/tot).toFixed(0)}%</span></div>
+        <div style="height:8px;background:var(--bg);border-radius:99px;margin:4px 0"><div style="height:8px;width:${Math.max(2,100*b.units/tot)}%;background:${b.k==="rto"?"#f5872b":b.k==="product"?"#e5484d":b.k==="switcheroo"?"#b91c1c":"#2f5af0"};border-radius:99px"></div></div>
+        <div class="sa-sub">${esc(b.advice)}</div></div>`).join("")}
+    </div>`;
+  }
+  if(r.reasons.length){
+    h+=`<div class="panel"><h4>Amazon's own reasons <span class="sa-sub">(top ${Math.min(10,r.reasons.length)})</span></h4>
+      <div class="tblwrap"><table class="sa"><thead><tr><th>Reason</th><th>Bucket</th><th class="num">Units</th><th class="num">Share</th></tr></thead>
+      <tbody>${r.reasons.slice(0,10).map(x=>`<tr><td>${esc(x.reason)}</td><td class="sa-sub">${esc((RT_BUCKETS.find(b=>b.k===x.bucket)||{name:"Other"}).name)}</td><td class="num">${num(x.units)}</td><td class="num">${x.share.toFixed(1)}%</td></tr>`).join("")}</tbody></table></div></div>`;
+  }
+  const vis=r.skus.slice(0,60);
+  h+=`<div style="display:flex;justify-content:flex-end;margin:14px 0 2px"><button type="button" class="fbtn" id="rt-csv">⬇ Export CSV</button></div>
+    <div class="panel"><h4>Per-SKU return economics <span class="sa-sub">(${r.skus.length}${r.skus.length>60?", worst 60 shown — export has all":""})</span></h4>
+    <div class="tblwrap"><table class="sa">
+      <thead><tr><th>SKU</th><th>Status</th><th class="num">Refunds ₹</th><th class="num">% of sales</th><th class="num" title="FBA returned units that came back SELLABLE — restocked, not lost">Back sellable</th><th class="num" title="Seller-fulfilled: return requests where the item was never recorded delivered back">Never back</th><th class="num" title="Return labels billed to you (seller-fulfilled)">Labels ₹</th><th>Top reason</th></tr></thead>
+      <tbody>${vis.map(e=>{
+        const top=[...e.reasons.entries()].sort((a,b)=>b[1]-a[1])[0];
+        return `<tr>
+          <td>${esc(e.sku)}</td><td>${stChip(rtStatus(e))}</td>
+          <td class="num"><b>${e.refundValue?inr0(e.refundValue):"—"}</b></td>
+          <td class="num">${e.refundPct===null?"—":e.refundPct.toFixed(1)+"%"}</td>
+          <td class="num">${e.fbaBack?num(e.fbaSellable)+"/"+num(e.fbaBack):"—"}</td>
+          <td class="num">${e.mfnReq?num(e.mfnNotBack)+"/"+num(e.mfnReq):"—"}</td>
+          <td class="num">${e.mfnLabel?inr0(e.mfnLabel):"—"}</td>
+          <td class="sa-sub">${top?esc(top[0])+" ("+num(top[1])+")":"—"}</td></tr>`;}).join("")}
+      </tbody></table></div></div>`;
+  h+=`<details class="howto"><summary>How every number here is computed</summary><div class="hbody">
+    <span class="htag">Formulas &amp; sources</span>
+    <ol>
+      <li><b>Refunds ₹</b> and <b>% of sales</b> come from the settlement files: refunded principal ÷ gross principal per SKU, by value.</li>
+      <li><b>Back sellable</b> is the FBA customer returns report's disposition column — SELLABLE means the unit was restocked; everything else (customer-damaged, defective, carrier-damaged) is stock you lost.</li>
+      <li><b>Never back</b> is the seller-fulfilled Return Report: requests with no return delivery date recorded. Those rows are the raw material for SAFE-T — <a href="#/reconcile">Reconciliation</a> sorts them into claims.</li>
+      <li><b>Labels ₹</b> sums the Label cost column where the label was billed to you.</li>
+      <li>Status: <span class="st st-loss">Return-driven loss</span> ≥30% of sales and ₹2,000+ · <span class="st st-problem">Problem</span> ≥20% · <span class="st st-watch">Watch</span> ≥10% · <span class="st st-good">OK</span> otherwise.</li>
+      <li>Buckets group Amazon's reason codes by the ACTION they call for; the mapping is fixed and shown per reason above. Nothing is estimated.</li>
+    </ol>
+  </div></details>`;
+  const worst=r.skus.find(e=>rtStatus(e).k==="loss"||rtStatus(e).k==="problem");
+  const rtoB=r.buckets.find(b=>b.k==="rto"),swB=r.buckets.find(b=>b.k==="switcheroo");
+  h+=`<div class="panel"><h4>What should I do next?</h4><ul style="margin:8px 0 0 18px;line-height:1.9;font-size:13.5px">
+    ${worst?`<li><b>${esc(worst.sku)}</b> refunds ${worst.refundPct.toFixed(0)}% of its sales (${inr0(worst.refundValue)}). Its top reason above says whether that is the courier, the product or the listing — fix that before advertising it further.</li>`:""}
+    ${rtoB&&r.buckets[0]&&r.buckets[0].k==="rto"?`<li>Your biggest bucket is <b>logistics/RTO</b> — the product is fine; the delivery isn't. Review COD share and repeat-RTO pincodes before touching listings.</li>`:""}
+    ${swB?`<li><b>${num(swB.units)} switcheroo return${swB.units>1?"s":""}</b> — buyers returned something other than your product. Those refunds are SAFE-T material: run <a href="#/reconcile">Reconciliation</a> with the same files.</li>`:""}
+    <li>High-refund SKUs' true profit after returns is in the <a href="#/sku-report">SKU report</a> (Advanced P&amp;L); month-by-month refund trend is in <a href="#/trends">Trends</a>.</li>
+  </ul></div>`;
+  out.innerHTML=h; rtWire(out,r);
+}
+function rtWire(out,r){
+  out.querySelectorAll("[data-rm]").forEach(b=>b.addEventListener("click",()=>{
+    rtFiles.splice(Number(b.dataset.rm),1); rtRenderResults();
+  }));
+  const csv=out.querySelector("#rt-csv");
+  if(csv&&r) csv.addEventListener("click",()=>{
+    saCsvDownload("returns-analyzer.csv",
+      ["SKU","Status","Refunds (INR)","Refund % of sales","FBA units returned","FBA back sellable","FBA back damaged","MFN return requests","MFN never delivered back","Return labels (INR)","Top reason"],
+      r.skus.map(e=>{const top=[...e.reasons.entries()].sort((a,b)=>b[1]-a[1])[0];
+        return [e.sku,rtStatus(e).l,e.refundValue.toFixed(2),e.refundPct===null?"":e.refundPct.toFixed(1),
+          e.fbaBack,e.fbaSellable,e.fbaDamaged,e.mfnReq,e.mfnNotBack,e.mfnLabel.toFixed(2),top?top[0]:""];}));
+  });
+}
+
 function renderAdsOptimizer(){
   setMeta("Ads Optimizer — Seller Tools India",
     "Drop your Sponsored Products Search Term report and get the lists that matter: search terms to negate, terms that earned an exact-match campaign, terms converting at a loss, and a campaign scoreboard — computed in your browser.");
@@ -9008,6 +9263,7 @@ function route(){
   if(h==="fee-bands"){renderFeeBands();window.scrollTo(0,0);return;}
   if(h==="changelog"){renderChangelog();window.scrollTo(0,0);return;}
   if(h==="ads-optimizer"){renderAdsOptimizer();window.scrollTo(0,0);return;}
+  if(h==="returns"){renderReturnsAnalyzer();window.scrollTo(0,0);return;}
   if(h==="ad-profit"){renderAdProfit();window.scrollTo(0,0);return;}
   if(h==="link-builder"){renderLinkBuilder();window.scrollTo(0,0);return;}
   if(h==="keyword-combiner"){renderKeywordCombiner();window.scrollTo(0,0);return;}
@@ -9023,7 +9279,7 @@ function route(){
 window.addEventListener("hashchange",route);
 /* Premium tools re-check entitlement when the tab regains focus, so a session
    kicked on another device locks here within seconds of the user returning. */
-const PREMIUM_ROUTES=["settlement-analyzer","gst-report","sku-report","reconcile","trends","ad-profit","fee-bands","ads-optimizer"];
+const PREMIUM_ROUTES=["settlement-analyzer","gst-report","sku-report","reconcile","trends","ad-profit","fee-bands","ads-optimizer","returns"];
 window.addEventListener("focus",()=>{
   const h=location.hash.replace(/^#\/?/,"");
   if(!PREMIUM_ROUTES.includes(h) || saUnlocked() || !sessionUser()) return;
@@ -9057,6 +9313,7 @@ function pingNow(){ _lastPing=0; try{ sendPing(); }catch(e){} }
    entry per shipped change a seller can actually feel.
    ============================================================ */
 const CHANGELOG=[
+  {d:"2026-08-04",t:"Returns Analyzer — a new Pro tool",n:"Settlements plus Amazon's two return reports, turned into per-SKU return economics: what refunds eat of each SKU's sales, how much FBA stock comes back sellable, the courier-RTO share, return labels you paid, and every reason bucketed into an action."},
   {d:"2026-08-04",t:"Ads Optimizer — a new Pro tool",n:"The Search Term report, turned into the four lists worth acting on: terms to negate (with a paste-ready CSV), winners that earned their own exact match, terms converting at a loss, and a campaign scoreboard."},
   {d:"2026-08-04",t:"Excel files just work now",n:"The .xlsx the ads console exports drops straight into every report tool — no more opening Excel to save as CSV first."},
   {d:"2026-08-04",t:"Trends reads the months out loud",n:"A new month-over-month panel says in words what changed — growth, refund spikes, fee squeeze — with gaining and fading SKUs named. Every comparison runs on the daily run-rate, so a part-covered month is never misread as a crash."},
