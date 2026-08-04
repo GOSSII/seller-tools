@@ -4198,9 +4198,14 @@ function recCompute(settlements,mtrRows){
      buyer; the fixed closing fee it generally keeps, and "Refund commission"
      is the admin fee it charges FOR the refund. Lumping those together turned
      every ordinary refund into a claim. */
+  /* "Commission IGST" is the 18% GST ON the commission, not commission. It was
+     being added to the amount claimed, overstating every referral claim by 18%
+     — and for a GST-registered seller that part was never lost anyway, since
+     it comes back as input tax credit. Amazon reverses it along with the fee;
+     the note says so. */
   const referralOf=rec=>{let s=0;for(const l of rec.amounts){
     const lab=(l.amountDescription||l.amountType||"").trim();
-    if(!/^(commission|referral fee)/i.test(lab))continue;
+    if(!/^(commission|referral fee)/i.test(lab)||/\b[ICS]GST\b/i.test(lab))continue;
     s+=l.amount;}return s;};
   /* Do these statements itemise selling fees per order at all? Amazon bills
      some sellers' referral/closing fees on a separate invoice, leaving the
@@ -4214,10 +4219,17 @@ function recCompute(settlements,mtrRows){
     if(list.some(o=>referralOf(o)<-0.005)) ordersWithFee++;
     if(list.some(o=>o.amounts.some(isSellingFee))) ordersWithAnyFee++;
   }
-  // Two different questions: is the REFERRAL fee itemised (needed to judge a
-  // refund's credit), and is ANY selling fee itemised (needed to net an order).
-  const feesItemised=ordersById.size>0&&(ordersWithFee/ordersById.size)>=REC_FEE_ITEMISED_MIN;
+  /* Whether selling fees are itemised at all is one question, and it is
+     answered by the fee LINES, not by the referral fee specifically. Judging
+     it on the referral share was right until 10 June 2026 and wrong after:
+     most categories now pay 0% below ₹1,000, so on real accounts only 2-4% of
+     orders carry a referral line while 88-100% carry a closing fee. Amazon
+     does not itemise one and invoice the other, so a closing fee on the order
+     proves the referral fee would be there too if it were more than zero —
+     and the refund check never fires without seeing the original order's own
+     fee anyway, so that evidence, not this ratio, is what keeps it honest. */
   const feeLinesPresent=ordersById.size>0&&(ordersWithAnyFee/ordersById.size)>=REC_FEE_ITEMISED_MIN;
+  const feesItemised=feeLinesPresent;
   let refundsNoOriginal=0,refundsNoFee=0;
   /* Loss-making orders, netted per ORDER. An order's lines can be split over
      several records — and even over two statements — so a record holding only
@@ -4336,7 +4348,7 @@ function recCompute(settlements,mtrRows){
     }
     else if(feePaid!==null){
       refundFee.push({check:"refundFee",orderId:rec.orderId,sku:rec.sku,date:rec.postedDate,
-        amount:feePaid,note:"Referral fee charged on the original order, never credited back"});
+        amount:feePaid,note:"Referral fee charged on the original order, never credited back — Amazon reverses the 18% GST on it too, which you were claiming as input tax credit anyway"});
     }
   }
   /* A SKU billed in a heavier weight band than it usually is. Zone and STEP
