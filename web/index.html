@@ -1568,6 +1568,8 @@ const HELP={
     steps:["Drop all your settlement files at once (or add them one by one — duplicates are skipped).","Read the month-by-month charts: sales, fees as % of sales, refund rate and net payout.","Pick a SKU to see its own monthly units, sales and net — is it growing, and is it still worth the fees?"]},
   "ads-optimizer":{input:`<b>Advertising console → Sponsored ads → Reports (or Measurement &amp; reporting) → Sponsored Products → Search term</b> — export for 30–60 days. The .xlsx it hands out drops straight in; CSV works too.`,
     steps:["Drop the Search Term report (several files at once is fine — re-drops replace). Optional but worth it: add the Advertised-product report for the same period, plus your settlement files — terms in single-SKU ad groups are then judged against that SKU's own break-even ACOS instead of a flat line.","Export the negatives list and paste each term as a negative exact into the campaign it spent in.","Move the winners into their own exact-match keywords, then negate them where they came from so the two never bid against each other.","Check the campaign scoreboard monthly — and judge affordability per SKU in Ad Profitability, which knows each product's break-even ACOS."]},
+  "storage":{input:`<b>Reports → Fulfilment Reports → Payments → Monthly Storage Fees</b> → pick the month → Request .csv Download. One file per month; the newest complete month is usually last month (the current month shows "No Data Available" until Amazon bills it).`,
+    steps:["Drop the file — several months at once builds the month-by-month trend.","Read the headline: how much of this month's rent sat on stock that sold nothing.","Work the table worst-first: zero-order ASINs need a price cut, ads, or a removal order — doing nothing is the only guaranteed loss.","Add the rent-per-unit-sold of heavy ASINs to their cost in the SKU report — storage is a real per-unit cost the settlement never shows."]},
   "returns":{input:`Any or all of: <b>settlement flat files</b> (Payments → All Statements → Download Flat File V2), the <b>FBA customer returns report</b> (Reports → Fulfilment → Customer Concessions → FBA customer returns), and the <b>seller-fulfilled Return Report</b> (Orders → Manage Returns → View reports → All Returns — 60-day ranges).`,
     steps:["Drop the files — settlements give the money side, the FBA report gives dispositions, the seller-fulfilled report gives RTO share and label costs. Each panel switches on when its file is present.","Read the buckets: logistics/RTO returns are a courier problem, not a product problem — the fix is different for each bucket and written under it.","Work the per-SKU table worst-first: a SKU refunding 30% of its sales is losing money no ad campaign can fix.","Switcheroo rows and never-delivered-back returns are claim material — run Reconciliation &amp; SAFE-T with the same files to sort them."]},
   "fee-bands":{input:`Settlement file(s): <b>Payments → All Statements → Download Flat File V2</b>. Drop as many as you have — the more units behind each SKU, the more certain its usual price and weight band are. Statements where Amazon bills your selling fees on a separate invoice can't be used for the price side: there is no fee line to read a band from.`,
@@ -2275,6 +2277,10 @@ const PW_MOCKS={
     <div class="row"><span>"lunch box steel" · 9 orders</span><b class="amt pos">12% ACOS</b></div>
     <div class="row"><span>Terms to negate</span><b class="big">31</b></div>
     <div class="row"><span>Spend they were eating</span><b class="amt neg">−₹4,812</b></div>`,
+  storage:`<div class="row"><span>Storage fee this month</span><b class="amt neg">−₹7,292</b></div>
+    <div class="row"><span>Rent on stock that sold nothing</span><b class="amt neg">−₹1,683</b></div>
+    <div class="row"><span>ASINs paying rent, zero orders</span><b class="big">18</b></div>
+    <div class="row"><span>Deepest cover · corner shelf</span><b class="big">14 months</b></div>`,
   returns:`<div class="row"><span>Refunds, % of gross sales</span><b class="big">11.8%</b></div>
     <div class="row"><span>FBA stock back sellable</span><b class="amt pos">62%</b></div>
     <div class="row"><span>Top reason · UNDELIVERABLE</span><b class="big">215u</b></div>
@@ -2319,6 +2325,11 @@ const ADSO_INFO={route:"ads-optimizer",title:"Ads Optimizer",plan:"Pro",needPro:
   desc:"The Search Term report shows what buyers actually typed. This turns it into the four lists worth acting on.",
   feats:["Search terms eating spend with zero orders — a paste-ready negative list","Winners under broad/auto that earned their own exact match","Terms converting at a loss, campaign scoreboard with verdicts","Reads the .xlsx straight from the ads console"],
   mock:PW_MOCKS.adsopt};
+const STO_INFO={route:"storage",title:"Storage Fee Analyzer",plan:"Pro",needPro:true,
+  price:"₹499/month — unlock with Pro",priceAlt:"or ₹2,499/year (save ~58%)",
+  desc:"FBA storage is billed every month whether the product sells or not. This shows which stock pays rent without paying its way.",
+  feats:["Storage fee per ASIN, read from Amazon's own billing report","Stock that paid rent and sold zero units this month","Months of cover per ASIN — overstock flagged before it ages","Rent per unit sold, ready to add to your per-unit costs"],
+  mock:PW_MOCKS.storage};
 const RT_INFO={route:"returns",title:"Returns Analyzer",plan:"Pro",needPro:true,
   price:"₹499/month — unlock with Pro",priceAlt:"or ₹2,499/year (save ~58%)",
   desc:"Refunds are a third of many sellers' gross — this shows what they cost per SKU, and why.",
@@ -2504,6 +2515,7 @@ function renderAccount(){
             <a href="#/fee-bands">🪜 Fee Band Optimizer</a>
             <a href="#/ads-optimizer">🎯 Ads Optimizer</a>
             <a href="#/returns">↩️ Returns Analyzer</a>
+            <a href="#/storage">📦 Storage Fee Analyzer</a>
             <a href="#/trends">📈 Multi-Month Trends</a>
           </div>
         </div>
@@ -2980,6 +2992,7 @@ function renderHome(){
         <a class="tile" href="#/fee-bands"><span class="pill">Pro</span><div class="ico">🪜</div><h3>Fee Band Optimizer</h3><p>The SKUs sitting a rupee over a referral step or a gram over a weight band — and what moving under is worth.</p></a>
         <a class="tile" href="#/ads-optimizer"><span class="pill">Pro</span><div class="ico">🎯</div><h3>Ads Optimizer</h3><p>Search terms to negate, winners that earned an exact match, and a campaign scoreboard — from the Search Term report.</p></a>
         <a class="tile" href="#/returns"><span class="pill">Pro</span><div class="ico">↩️</div><h3>Returns Analyzer</h3><p>What returns cost per SKU, how much stock comes back sellable, and Amazon's reasons bucketed into RTO, product and listing problems.</p></a>
+        <a class="tile" href="#/storage"><span class="pill">Pro</span><div class="ico">📦</div><h3>Storage Fee Analyzer</h3><p>Which ASINs pay the warehouse rent, which pay rent while selling nothing, and months of cover per ASIN — from Amazon's own billing report.</p></a>
       </div>
 
       <section class="lp2-sec">
@@ -3117,6 +3130,7 @@ function renderPricing(){
             <li><span class="tick">✓</span> Fee Band Optimizer</li>
             <li><span class="tick">✓</span> Ads Optimizer</li>
             <li><span class="tick">✓</span> Returns Analyzer</li>
+            <li><span class="tick">✓</span> Storage Fee Analyzer</li>
             <li><span class="tick">✓</span> Multi-month Trends</li>
           </ul>
           ${paidBtn(pr," sec")}
@@ -9088,6 +9102,226 @@ function rtWire(out,r){
   });
 }
 
+/* ============================================================
+   STORAGE FEE ANALYZER (Pro) — what your shelf space costs.
+   Reads the Monthly Storage Fees report (Fulfilment Reports →
+   Payments → Monthly Storage Fees, one file per month). Amazon
+   bills storage per cubic metre per month; this shows which
+   ASINs pay the rent, which pay rent while selling NOTHING, and
+   how many months of stock are sitting there. One row per
+   ASIN × fulfilment centre in the file; merged per ASIN here.
+   Product names in this report contain embedded newlines inside
+   quotes, so rows are scanned character-by-character, never
+   split on newline.
+   ============================================================ */
+let stoFiles=[];
+/* Full-record CSV scanner: returns array of field-arrays, quote-aware,
+   embedded newlines and doubled quotes handled. */
+function saCsvRecords(text){
+  const s=String(text||"").replace(/^﻿/,"");
+  const recs=[];let f="",row=[],q=false;
+  for(let i=0;i<s.length;i++){
+    const c=s[i];
+    if(q){
+      if(c==='"'){ if(s[i+1]==='"'){f+='"';i++;} else q=false; }
+      else f+=c;
+    }else if(c==='"') q=true;
+    else if(c===","){ row.push(f); f=""; }
+    else if(c==="\n"||c==="\r"){
+      if(c==="\r"&&s[i+1]==="\n") i++;
+      row.push(f); f="";
+      if(row.length>1||row[0].trim()!=="") recs.push(row);
+      row=[];
+    }
+    else f+=c;
+  }
+  if(f!==""||row.length){ row.push(f); if(row.length>1||row[0].trim()!=="") recs.push(row); }
+  return recs;
+}
+window.saCsvRecords=saCsvRecords; // exposed for verification/debugging
+function parseStorageFees(text){
+  const recs=saCsvRecords(text);
+  if(!recs.length) return null;
+  const cols=recs[0].map(h=>h.trim().toLowerCase());
+  const ix=n=>cols.indexOf(n);
+  const iAsin=ix("asin"),iName=ix("product-name"),iFc=ix("fulfillment-center"),
+        iQty=ix("average-quantity-on-hand"),iVol=ix("estimated-total-item-volume"),
+        iMonth=ix("month-of-charge"),iRate=ix("storage-rate"),iFee=ix("estimated-monthly-storage-fee"),
+        iOrders=ix("average-quantity-customer-orders"),iItemVol=ix("item-volume");
+  if(iAsin<0||iFee<0||iMonth<0) return null;
+  const rows=[];
+  for(let r=1;r<recs.length;r++){
+    const f=recs[r];
+    if(!f[iAsin]) continue;
+    rows.push({asin:f[iAsin].trim(),name:iName>=0?(f[iName]||"").replace(/\s+/g," ").trim():"",
+      fc:iFc>=0?(f[iFc]||"").trim():"",
+      qty:Number(f[iQty])||0,volume:Number(f[iVol])||0,itemVolume:iItemVol>=0?(Number(f[iItemVol])||0):0,
+      month:(f[iMonth]||"").trim(),rate:Number(f[iRate])||0,
+      fee:Number(f[iFee])||0,orders:iOrders>=0?(Number(f[iOrders])||0):0});
+  }
+  return rows.length?{rows}:null;
+}
+window.parseStorageFees=parseStorageFees; // exposed for verification/debugging
+function storageCompute(rows){
+  /* Group by month first — several monthly files can be dropped at once. */
+  const byMonth=new Map();
+  for(const r of rows){ const a=byMonth.get(r.month)||[]; a.push(r); byMonth.set(r.month,a); }
+  const months=[...byMonth.keys()].sort();
+  const monthTotals=months.map(m=>{
+    const rs=byMonth.get(m);
+    return {month:m,fee:rs.reduce((a,r)=>a+r.fee,0),volume:rs.reduce((a,r)=>a+r.volume,0),
+      qty:rs.reduce((a,r)=>a+r.qty,0)};
+  });
+  /* Detail view reads the NEWEST month only — mixing months would double-count. */
+  const latest=months[months.length-1];
+  const cur=byMonth.get(latest)||[];
+  const byAsin=new Map();
+  for(const r of cur){
+    let e=byAsin.get(r.asin);
+    if(!e){e={asin:r.asin,name:r.name,fee:0,qty:0,volume:0,orders:0,fcs:new Set()};byAsin.set(r.asin,e);}
+    if(!e.name&&r.name) e.name=r.name;
+    e.fee+=r.fee; e.qty+=r.qty; e.volume+=r.volume; e.orders+=r.orders; e.fcs.add(r.fc);
+  }
+  const asins=[...byAsin.values()];
+  for(const e of asins){
+    e.fcCount=e.fcs.size; delete e.fcs;
+    /* qty and orders are the month's daily averages of stock and of units
+       ordered; their ratio is months of cover at the month's sales pace. */
+    e.monthsCover=e.orders>0?e.qty/e.orders:null;   // null = sold nothing
+    e.rentPerSold=e.orders>0?e.fee/e.orders:null;
+  }
+  asins.sort((a,b)=>b.fee-a.fee);
+  const t={fee:0,qty:0,volume:0,orders:0,deadFee:0,deadAsins:0,overFee:0};
+  for(const e of asins){
+    t.fee+=e.fee;t.qty+=e.qty;t.volume+=e.volume;t.orders+=e.orders;
+    if(e.orders===0&&e.qty>0){t.deadFee+=e.fee;t.deadAsins++;}
+    else if(e.monthsCover!==null&&e.monthsCover>6) t.overFee+=e.fee;
+  }
+  const rate=cur.length?cur[0].rate:0;
+  return {months:monthTotals,latest,asins,totals:t,rate};
+}
+window.storageCompute=storageCompute; // exposed for verification/debugging
+function stoStatus(e){
+  if(e.qty<=0) return {k:"info",l:"No stock"};
+  if(e.orders===0) return {k:"loss",l:"Paying rent, selling nothing"};
+  if(e.monthsCover>6) return {k:"problem",l:"Overstocked"};
+  if(e.monthsCover>3) return {k:"watch",l:"Heavy cover"};
+  return {k:"good",l:"OK"};
+}
+window.stoStatus=stoStatus; // exposed for verification/debugging
+
+function renderStorageFees(){
+  setMeta("Storage Fee Analyzer — Seller Tools India",
+    "Drop Amazon's Monthly Storage Fees report and see which ASINs pay the warehouse rent, which pay rent while selling nothing, and how many months of stock are sitting on the shelf.");
+  backBtn.hidden=false;
+  gatePremium(STO_INFO, stoBody);
+}
+function stoBody(){
+  app.innerHTML=`
+    <div class="wrap page">
+      <h2>Storage Fee Analyzer</h2>
+      <p class="lede">FBA storage is billed per cubic metre, every month, whether the product sells or not. This reads Amazon's own storage-fee report and answers the only question that matters: <b>which stock is paying rent without paying its way?</b></p>
+      ${helpHtml("storage")}
+      <label class="sa-drop" id="sto-drop">
+        <div class="ico">📦</div>
+        <h3>Drop Monthly Storage Fees report(s) here</h3>
+        <p>Fulfilment Reports → Payments → Monthly Storage Fees → Request .csv — one file per month, several months at once is fine (.csv, .txt, .xlsx)</p>
+        <input type="file" id="sto-file" multiple accept=".csv,.txt,.tsv,.xlsx,text/plain,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+      </label>
+      <div class="sa-priv">🔒 Private by design — your files never leave your device. Every figure is computed locally on this page.</div>
+      <div id="sto-out"></div>
+    </div>`;
+  const drop=document.getElementById("sto-drop"),file=document.getElementById("sto-file");
+  ["dragenter","dragover"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add("over");}));
+  ["dragleave","drop"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove("over");}));
+  drop.addEventListener("drop",ev=>{stoAddFiles(ev.dataTransfer.files);});
+  file.addEventListener("change",()=>{stoAddFiles(file.files);file.value="";});
+  if(stoFiles.length) stoRenderResults();
+}
+function stoAddFiles(list){
+  const files=[...(list||[])]; if(!files.length) return;
+  let pending=files.length;
+  files.forEach(f=>{
+    const finish=()=>{ if(--pending===0) stoRenderResults(); };
+    saReadDropped(f,text=>{
+      stoFiles=stoFiles.filter(x=>x.name!==f.name);
+      const p=parseStorageFees(text);
+      if(p) stoFiles.push({name:f.name,kind:"storage",rows:p.rows});
+      else if(/long.?time.?range|short.?time.?range/i.test(text.slice(0,600)))
+        stoFiles.push({name:f.name,kind:"error",msg:"this is the Aged Inventory Surcharge report — it only lists items already charged a surcharge, and on most accounts it is empty. This tool reads the Monthly Storage Fees report."});
+      else stoFiles.push({name:f.name,kind:"error",msg:"not recognised as a Monthly Storage Fees report."+saDescribeColumns(text)});
+      finish();
+    },msg=>{ stoFiles=stoFiles.filter(x=>x.name!==f.name); stoFiles.push({name:f.name,kind:"error",msg}); finish(); });
+  });
+}
+function stoRenderResults(){
+  const out=document.getElementById("sto-out"); if(!out) return;
+  let h=`<div class="rec-files">${stoFiles.map((f,i)=>`<span class="rec-file"${f.kind==="error"?` title="${esc(f.msg)}"`:""}><b>${esc(f.name)}</b><span class="rf-kind">${f.kind==="error"?"⚠ Skipped":"Storage fees"}</span><button type="button" data-rm="${i}" aria-label="Remove ${esc(f.name)}">✕</button></span>`).join("")}</div>`;
+  const bad=stoFiles.filter(f=>f.kind==="error");
+  if(bad.length) h+=`<div class="banner warn">${bad.map(f=>`<b>${esc(f.name)}</b>: ${esc(f.msg)}`).join("<br>")}</div>`;
+  const rows=stoFiles.filter(f=>f.kind==="storage").flatMap(f=>f.rows);
+  if(!rows.length){ out.innerHTML=h; stoWire(out); return; }
+  const r=storageCompute(rows);
+  const t=r.totals;
+  const mLabel=m=>{const x=String(m).match(/^(\d{4})-(\d{2})$/);return x?new Date(Date.UTC(+x[1],+x[2]-1,1)).toLocaleDateString("en-IN",{month:"long",year:"numeric",timeZone:"UTC"}):m;};
+  h+=`<div class="stats">
+    <div class="stat"><div class="k">Storage fee · ${esc(mLabel(r.latest))}</div><div class="v">${inr0(t.fee)}</div><div class="sa-sub" style="margin-top:3px">${t.volume.toFixed(2)} m³ at ₹${num(r.rate)}/m³/month</div></div>
+    <div class="stat ${t.deadFee>0?"red":"green"}"><div class="k">Rent on stock that sold nothing</div><div class="v">${inr0(t.deadFee)}</div><div class="sa-sub" style="margin-top:3px">${num(t.deadAsins)} ASIN${t.deadAsins===1?"":"s"} with stock and zero orders this month</div></div>
+    <div class="stat ${t.overFee>0?"red":""}"><div class="k">Rent on 6+ months of cover</div><div class="v">${inr0(t.overFee)}</div><div class="sa-sub" style="margin-top:3px">stock deeper than half a year at this month's pace</div></div>
+    <div class="stat"><div class="k">Avg stock on hand</div><div class="v">${num(t.qty)}</div><div class="sa-sub" style="margin-top:3px">daily average units across all FCs</div></div>
+  </div>`;
+  if(r.months.length>1){
+    h+=`<div class="panel"><h4>Month by month</h4><div class="tblwrap"><table class="sa">
+      <thead><tr><th>Month</th><th class="num">Storage fee</th><th class="num">Volume stored</th><th class="num">Avg units</th></tr></thead>
+      <tbody>${r.months.map(m=>`<tr${m.month===r.latest?' style="font-weight:700"':""}><td>${esc(mLabel(m.month))}</td><td class="num">${inr0(m.fee)}</td><td class="num">${m.volume.toFixed(2)} m³</td><td class="num">${num(m.qty)}</td></tr>`).join("")}</tbody>
+      </table></div><div class="sa-sub" style="margin-top:6px">The tables below read the newest month only — drop older files to grow this trend.</div></div>`;
+  }
+  const vis=r.asins.slice(0,60);
+  h+=`<div style="display:flex;justify-content:flex-end;margin:14px 0 2px"><button type="button" class="fbtn" id="sto-csv">⬇ Export CSV</button></div>
+    <div class="panel"><h4>Who pays the rent — ${esc(mLabel(r.latest))} <span class="sa-sub">(${r.asins.length} ASIN${r.asins.length===1?"":"s"}${r.asins.length>60?", top 60 shown — export has all":""})</span></h4>
+    <div class="tblwrap"><table class="sa">
+      <thead><tr><th>ASIN</th><th>Product</th><th>Status</th><th class="num">Fee/month</th><th class="num" title="Daily-average units on hand across all fulfilment centres">Avg stock</th><th class="num" title="Daily-average units ordered this month">Avg orders</th><th class="num" title="Stock ÷ orders — months the current stock lasts at this month's pace">Months of cover</th><th class="num" title="This month's storage fee ÷ units ordered">Rent per unit sold</th></tr></thead>
+      <tbody>${vis.map(e=>`<tr>
+        <td>${esc(e.asin)}</td><td class="sa-sub" style="max-width:220px">${esc(e.name.slice(0,60))}</td><td>${stChip(stoStatus(e))}</td>
+        <td class="num"><b>${inr(e.fee)}</b></td>
+        <td class="num">${e.qty.toFixed(1)}</td>
+        <td class="num">${e.orders.toFixed(2)}</td>
+        <td class="num">${e.monthsCover===null?"∞":e.monthsCover>99?">99":e.monthsCover.toFixed(1)}</td>
+        <td class="num">${e.rentPerSold===null?"—":inr(e.rentPerSold)}</td></tr>`).join("")}
+      </tbody></table></div></div>`;
+  h+=`<details class="howto"><summary>How every number here is computed</summary><div class="hbody">
+    <span class="htag">Formulas &amp; sources</span>
+    <ol>
+      <li>Every figure is read straight from Amazon's Monthly Storage Fees report — the same file Amazon bills from. Nothing is estimated.</li>
+      <li><b>Avg stock</b> and <b>avg orders</b> are Amazon's daily averages for the month (that's why they aren't whole numbers). One row per ASIN per fulfilment centre; merged per ASIN here.</li>
+      <li><b>Months of cover</b> = avg stock ÷ avg monthly orders. <b>∞</b> means the ASIN sold nothing while stocked.</li>
+      <li><b>Rent per unit sold</b> = the month's storage fee ÷ units ordered — add it to your per-unit costs in the <a href="#/sku-report">SKU report</a>.</li>
+      <li>Status: <span class="st st-loss">Paying rent, selling nothing</span> stock &gt; 0, orders 0 · <span class="st st-problem">Overstocked</span> &gt; 6 months cover · <span class="st st-watch">Heavy cover</span> &gt; 3 months · <span class="st st-good">OK</span> otherwise.</li>
+      <li>The Aged Inventory Surcharge report is separate and only lists items already charged the ageing surcharge — if this tool has flagged nothing there, your account isn't paying it.</li>
+    </ol>
+  </div></details>`;
+  const dead=r.asins.filter(e=>e.orders===0&&e.qty>0);
+  h+=`<div class="panel"><h4>What should I do next?</h4><ul style="margin:8px 0 0 18px;line-height:1.9;font-size:13.5px">
+    ${dead.length?`<li><b>${num(dead.length)} ASIN${dead.length===1?"":"s"}</b> paid ${inr0(t.deadFee)} rent this month and sold zero units. For each: cut the price, advertise it, or file a removal order — doing nothing is the only guaranteed loss.</li>`:""}
+    ${t.overFee>0?`<li>Stock deeper than 6 months of cover paid ${inr0(t.overFee)} — stop restocking those ASINs until cover normalises.</li>`:""}
+    <li>Storage compounds with ageing: stock that crosses Amazon's age thresholds starts paying the Aged Inventory Surcharge on top. Clearing slow stock now avoids both.</li>
+    <li>Whether a rent-heavy ASIN is still profitable after storage is a <a href="#/sku-report">SKU report</a> question — add the rent per unit sold to its cost.</li>
+  </ul></div>`;
+  out.innerHTML=h; stoWire(out,r);
+}
+function stoWire(out,r){
+  out.querySelectorAll("[data-rm]").forEach(b=>b.addEventListener("click",()=>{
+    stoFiles.splice(Number(b.dataset.rm),1); stoRenderResults();
+  }));
+  const csv=out.querySelector("#sto-csv");
+  if(csv&&r) csv.addEventListener("click",()=>{
+    saCsvDownload("storage-fees.csv",
+      ["ASIN","Product","Status","Month","Storage fee (INR)","Avg stock on hand","Avg monthly orders","Months of cover","Rent per unit sold (INR)","Fulfilment centres"],
+      r.asins.map(e=>[e.asin,e.name,stoStatus(e).l,r.latest,e.fee.toFixed(2),e.qty.toFixed(1),e.orders.toFixed(2),
+        e.monthsCover===null?"never sold":e.monthsCover.toFixed(1),e.rentPerSold===null?"":e.rentPerSold.toFixed(2),e.fcCount]));
+  });
+}
+
 function renderAdsOptimizer(){
   setMeta("Ads Optimizer — Seller Tools India",
     "Drop your Sponsored Products Search Term report and get the lists that matter: search terms to negate, terms that earned an exact-match campaign, terms converting at a loss, and a campaign scoreboard — computed in your browser.");
@@ -9264,6 +9498,7 @@ function route(){
   if(h==="changelog"){renderChangelog();window.scrollTo(0,0);return;}
   if(h==="ads-optimizer"){renderAdsOptimizer();window.scrollTo(0,0);return;}
   if(h==="returns"){renderReturnsAnalyzer();window.scrollTo(0,0);return;}
+  if(h==="storage"){renderStorageFees();window.scrollTo(0,0);return;}
   if(h==="ad-profit"){renderAdProfit();window.scrollTo(0,0);return;}
   if(h==="link-builder"){renderLinkBuilder();window.scrollTo(0,0);return;}
   if(h==="keyword-combiner"){renderKeywordCombiner();window.scrollTo(0,0);return;}
@@ -9279,7 +9514,7 @@ function route(){
 window.addEventListener("hashchange",route);
 /* Premium tools re-check entitlement when the tab regains focus, so a session
    kicked on another device locks here within seconds of the user returning. */
-const PREMIUM_ROUTES=["settlement-analyzer","gst-report","sku-report","reconcile","trends","ad-profit","fee-bands","ads-optimizer","returns"];
+const PREMIUM_ROUTES=["settlement-analyzer","gst-report","sku-report","reconcile","trends","ad-profit","fee-bands","ads-optimizer","returns","storage"];
 window.addEventListener("focus",()=>{
   const h=location.hash.replace(/^#\/?/,"");
   if(!PREMIUM_ROUTES.includes(h) || saUnlocked() || !sessionUser()) return;
@@ -9313,6 +9548,7 @@ function pingNow(){ _lastPing=0; try{ sendPing(); }catch(e){} }
    entry per shipped change a seller can actually feel.
    ============================================================ */
 const CHANGELOG=[
+  {d:"2026-08-04",t:"Storage Fee Analyzer — a new Pro tool",n:"Amazon's Monthly Storage Fees report, turned into the question that matters: which stock pays rent without paying its way. Per-ASIN fee, months of cover, rent per unit sold, and the ASINs that paid rent while selling zero units."},
   {d:"2026-08-04",t:"Returns Analyzer — a new Pro tool",n:"Settlements plus Amazon's two return reports, turned into per-SKU return economics: what refunds eat of each SKU's sales, how much FBA stock comes back sellable, the courier-RTO share, return labels you paid, and every reason bucketed into an action."},
   {d:"2026-08-04",t:"Ads Optimizer — a new Pro tool",n:"The Search Term report, turned into the four lists worth acting on: terms to negate (with a paste-ready CSV), winners that earned their own exact match, terms converting at a loss, and a campaign scoreboard."},
   {d:"2026-08-04",t:"Excel files just work now",n:"The .xlsx the ads console exports drops straight into every report tool — no more opening Excel to save as CSV first."},
