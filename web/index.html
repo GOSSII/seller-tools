@@ -4601,7 +4601,7 @@ function parseMfnReturns(text){
   const ix=n=>cols.indexOf(n);
   const iOrder=ix("order id"),iReq=ix("return request date"),iRes=ix("resolution"),
         iDel=ix("return delivery date"),iSku=ix("merchant sku"),iSafeT=ix("safet claim id"),
-        iType=ix("return type"),iRefAmt=ix("refunded amount"),
+        iType=ix("return type"),iRefAmt=ix("refunded amount"),iRQty=ix("return quantity"),
         iReason=ix("return reason"),iLabel=ix("label cost"),iPayer=ix("label to be paid by");
   if(iOrder<0||iReq<0||iRes<0) return null;
   const rows=[];
@@ -4614,6 +4614,7 @@ function parseMfnReturns(text){
       resolution:iRes>=0?(f[iRes]||""):"",returnType:iType>=0?(f[iType]||""):"",
       safetId:iSafeT>=0?(f[iSafeT]||""):"",
       reason:iReason>=0?(f[iReason]||"").toUpperCase():"",
+      quantity:iRQty>=0&&Number(f[iRQty])>0?Number(f[iRQty]):1,
       /* Label cost is only a real cost when Amazon billed it to the seller. */
       labelCost:(iLabel>=0&&iPayer>=0&&f[iPayer]==="Seller")?(saParseAmount(f[iLabel])||0):0,
       refundedAmount:iRefAmt>=0?(saParseAmount(f[iRefAmt])||0):0});
@@ -8880,18 +8881,20 @@ let rtFiles=[];
    MFN codes arrive prefixed (CR-, UND-) — normalised before lookup. */
 const RT_BUCKETS=[
   {k:"rto",name:"Logistics / RTO — never reached the buyer",advice:"Not a product problem. Check pincode serviceability, courier performance and COD share; on Easy Ship these often refund at first scan.",
-    re:/^(UNDELIVERABLE|UND$|UND\b|NEVER_ARRIVED|UNDELIVERABLE_)/},
+    re:/^(UNDELIVERABLE|UND$|UND\b|NEVER_ARRIVED|UNDELIVERABLE_|MISSED_ESTIMATED_DELIVERY)/},
+  {k:"amzdamaged",name:"Damaged in Amazon's or the courier's hands",advice:"The fulfilment centre or the carrier damaged it — that is reimbursable stock, not a QC problem. Run Reconciliation with the same files to check the reimbursement actually arrived.",
+    re:/^DAMAGED_BY_/},
   {k:"product",name:"Product problems",advice:"Defects, missing parts, quality — fix the product or the QC before spending another rupee on ads.",
-    re:/^(DEFECTIVE|QUALITY_UNACCEPTABLE|MISSING_PARTS|DAMAGED_BY_)/},
+    re:/^(DEFECTIVE|QUALITY_UNACCEPTABLE|MISSING_PARTS)/},
+  {k:"remorse",name:"Buyer remorse / ordering mistakes",advice:"Ordered and changed their mind, or ordered the wrong thing. Some is inevitable; a spike after a discount suggests deal-hunters.",
+    re:/^(UNWANTED_ITEM|NO_LONGER_NEEDED|BOUGHT_BY_MISTAKE|ORDERED_WRONG_ITEM|MISORDERED|FOUND_BETTER_PRICE|BETTER_PRICE|UNAUTHORI)/},
   {k:"listing",name:"Listing mismatch",advice:"The buyer expected something else — sharpen images, size charts and the first bullet. Cheaper to fix than a defect.",
-    re:/^(NOT_COMPATIBLE|NOT_AS_DESCRIBED|WRONG_ITEM|MISORDERED|STYLE|SIZE)/},
-  {k:"remorse",name:"Buyer remorse",advice:"Ordered and changed their mind. Some is inevitable; a spike after a discount suggests deal-hunters.",
-    re:/^(UNWANTED_ITEM|NO_LONGER_NEEDED|BOUGHT_BY_MISTAKE|BETTER_PRICE|UNAUTHORI)/},
+    re:/^(NOT_COMPATIBLE|NOT_AS_DESCRIBED|WRONG_ITEM|STYLE|SIZE|APPAREL_)/},
   {k:"switcheroo",name:"Wrong item returned (switcheroo)",advice:"The buyer sent back something other than your product. Photograph outgoing units, report the buyer, and claim via SAFE-T where the refund already happened.",
     re:/^SWITCHEROO/},
 ];
 const rtBucketOf=reason=>{
-  const r=String(reason||"").toUpperCase().replace(/^CR-/,"").replace(/^UND-/,"UNDELIVERABLE_");
+  const r=String(reason||"").toUpperCase().replace(/^CR-/,"").replace(/^AMZ-PG-/,"").replace(/^UND-/,"UNDELIVERABLE_");
   for(const b of RT_BUCKETS) if(b.re.test(r)) return b.k;
   return "other";
 };
@@ -8901,7 +8904,7 @@ function returnsCompute(settlements,fbaReturns,mfnReturns){
   const bySku=new Map();
   const get=sku=>{let e=bySku.get(sku);
     if(!e){e={sku,sales:0,units:0,refundValue:0,unitsReturned:0,
-      fbaBack:0,fbaSellable:0,fbaDamaged:0,mfnReq:0,mfnBack:0,mfnNotBack:0,mfnLabel:0,
+      fbaBack:0,fbaSellable:0,fbaDamaged:0,mfnReq:0,mfnBack:0,mfnNotBack:0,mfnTransit:0,mfnLabel:0,mfnRefunded:0,
       reasons:new Map()};bySku.set(sku,e);}return e;};
   for(const s of base){
     const e=get(s.sku);
@@ -8915,12 +8918,21 @@ function returnsCompute(settlements,fbaReturns,mfnReturns){
     if(r.disposition==="SELLABLE") e.fbaSellable+=q; else e.fbaDamaged+=q;
     bump(e,r.reason,q);
   }
+  /* A return requested days ago that simply hasn't arrived yet is not a
+     loss. Coverage = the newest request date in the report; anything younger
+     than 21 days with no delivery recorded counts as in transit. */
+  let mfnCoverEnd=null;
+  for(const r of mfnReturns||[]) if(r.requestDate&&(!mfnCoverEnd||r.requestDate>mfnCoverEnd)) mfnCoverEnd=r.requestDate;
+  const dayDiff=(a,b)=>(Date.parse(b)-Date.parse(a))/86400000;
   for(const r of mfnReturns||[]){
     const e=get(r.sku||"(no SKU)");
     e.mfnReq++;
-    if(r.deliveryDate) e.mfnBack++; else e.mfnNotBack++;
+    if(r.deliveryDate) e.mfnBack++;
+    else if(r.requestDate&&mfnCoverEnd&&dayDiff(r.requestDate,mfnCoverEnd)<21) e.mfnTransit++;
+    else e.mfnNotBack++;
     e.mfnLabel+=r.labelCost||0;
-    bump(e,r.reason,1);
+    e.mfnRefunded+=r.refundedAmount||0;
+    bump(e,r.reason,r.quantity||1);
   }
   const skus=[...bySku.values()].filter(e=>e.sales>0.005||e.refundValue>0.005||e.fbaBack>0||e.mfnReq>0);
   for(const e of skus){
@@ -8930,7 +8942,7 @@ function returnsCompute(settlements,fbaReturns,mfnReturns){
   skus.sort((a,b)=>b.refundValue-a.refundValue);
   // Account totals + reason pareto with buckets.
   const t={sales:0,refundValue:0,unitsReturned:0,fbaBack:0,fbaSellable:0,fbaDamaged:0,
-    mfnReq:0,mfnBack:0,mfnNotBack:0,mfnLabel:0};
+    mfnReq:0,mfnBack:0,mfnNotBack:0,mfnTransit:0,mfnLabel:0,mfnRefunded:0};
   const reasonAgg=new Map();
   for(const e of skus){
     for(const k of Object.keys(t)) t[k]+=e[k]||0;
@@ -8945,7 +8957,14 @@ function returnsCompute(settlements,fbaReturns,mfnReturns){
     .concat([{k:"other",name:"Other / unmapped reasons",advice:"Reasons Amazon reports that fit no bucket — read them in the table below.",
       units:reasons.filter(r=>r.bucket==="other").reduce((a,x)=>a+x.units,0)}])
     .filter(b=>b.units>0).sort((a,b)=>b.units-a.units);
-  return {skus,totals:t,reasons,buckets,
+  /* Coverage windows so nobody compares numbers across mismatched periods. */
+  const rng=(rows,f)=>{let a=null,b=null;for(const r of rows||[]){const d=f(r);if(!d)continue;if(!a||d<a)a=d;if(!b||d>b)b=d;}return a?[a,b]:null;};
+  const coverage={
+    settle:rng(settlements.filter(p=>p.summary),p=>saParseDate(p.summary.settlementStartDate))&&
+      [rng(settlements.filter(p=>p.summary),p=>saParseDate(p.summary.settlementStartDate))[0],
+       rng(settlements.filter(p=>p.summary),p=>saParseDate(p.summary.settlementEndDate))[1]],
+    fba:rng(fbaReturns,r=>r.date),mfn:rng(mfnReturns,r=>r.requestDate)};
+  return {skus,totals:t,reasons,buckets,coverage,
     have:{settle:settlements.length>0,fba:(fbaReturns||[]).length>0,mfn:(mfnReturns||[]).length>0}};
 }
 window.returnsCompute=returnsCompute; // exposed for verification/debugging
@@ -8953,7 +8972,7 @@ window.returnsCompute=returnsCompute; // exposed for verification/debugging
 function rtStatus(e){
   if(e.sku==="(no SKU)") return {k:"info",l:"Account-level"};
   if(e.refundPct===null) return {k:"data",l:"No sales loaded"};
-  if(e.refundPct>=30&&e.refundValue>=2000) return {k:"loss",l:"Return-driven loss"};
+  if(e.refundPct>=30&&e.refundValue>=2000) return {k:"loss",l:"Return-heavy"};
   if(e.refundPct>=20) return {k:"problem",l:"Problem"};
   if(e.refundPct>=10) return {k:"watch",l:"Watch"};
   return {k:"good",l:"OK"};
@@ -9027,11 +9046,16 @@ function rtRenderResults(){
   const t=r.totals;
   const refundPct=t.sales>0?t.refundValue/t.sales*100:null;
   h+=`<div class="stats">
-    <div class="stat ${refundPct!==null&&refundPct>15?"red":""}"><div class="k">Refunds (by value)</div><div class="v">${t.refundValue?inr0(t.refundValue):"—"}</div><div class="sa-sub" style="margin-top:3px">${refundPct===null?"load settlements for the money side":refundPct.toFixed(1)+"% of gross sales"}</div></div>
+    <div class="stat ${refundPct!==null&&refundPct>15?"red":""}"><div class="k">Refunds (by value)</div><div class="v">${t.refundValue?inr0(t.refundValue):(!r.have.settle&&t.mfnRefunded?inr0(t.mfnRefunded):"—")}</div><div class="sa-sub" style="margin-top:3px">${refundPct!==null?refundPct.toFixed(1)+"% of gross sales":(!r.have.settle&&t.mfnRefunded?"refunded per the report's own column — load settlements for the full money side":"load settlements for the money side")}</div></div>
     <div class="stat ${r.have.fba?(t.fbaBack&&t.fbaSellable/t.fbaBack<0.5?"red":"green"):""}"><div class="k">FBA stock recovered sellable</div><div class="v">${r.have.fba?(t.fbaBack?Math.round(100*t.fbaSellable/t.fbaBack)+"%":"—"):"—"}</div><div class="sa-sub" style="margin-top:3px">${r.have.fba?num(t.fbaSellable)+" of "+num(t.fbaBack)+" returned units":"needs the FBA customer returns report"}</div></div>
-    <div class="stat"><div class="k">Seller-fulfilled: item came back</div><div class="v">${r.have.mfn?(t.mfnReq?Math.round(100*t.mfnBack/t.mfnReq)+"%":"—"):"—"}</div><div class="sa-sub" style="margin-top:3px">${r.have.mfn?num(t.mfnNotBack)+" of "+num(t.mfnReq)+" never recorded back":"needs the seller-fulfilled Return Report"}</div></div>
+    <div class="stat"><div class="k">Seller-fulfilled: item came back</div><div class="v">${r.have.mfn?(t.mfnReq?Math.round(100*t.mfnBack/t.mfnReq)+"%":"—"):"—"}</div><div class="sa-sub" style="margin-top:3px">${r.have.mfn?num(t.mfnNotBack)+" never recorded back"+(t.mfnTransit?" · "+num(t.mfnTransit)+" still in transit":"")+" of "+num(t.mfnReq):"needs the seller-fulfilled Return Report"}</div></div>
     <div class="stat ${t.mfnLabel>0?"red":""}"><div class="k">Return labels you paid</div><div class="v">${r.have.mfn?inr0(t.mfnLabel):"—"}</div><div class="sa-sub" style="margin-top:3px">${r.have.mfn?"from the Label cost column":"—"}</div></div>
   </div>`;
+  const cov=[];
+  if(r.coverage.settle) cov.push("settlements "+saFmtDay(r.coverage.settle[0])+" → "+saFmtDay(r.coverage.settle[1]));
+  if(r.coverage.fba) cov.push("FBA returns "+saFmtDay(r.coverage.fba[0])+" → "+saFmtDay(r.coverage.fba[1]));
+  if(r.coverage.mfn) cov.push("seller-fulfilled requests "+saFmtDay(r.coverage.mfn[0])+" → "+saFmtDay(r.coverage.mfn[1]));
+  if(cov.length>1) h+=`<div class="banner info">Coverage — ${cov.join(" · ")}. The reports cover different windows; compare rates, not raw counts, across them.</div>`;
   const missing=[];
   if(!r.have.settle) missing.push("settlement files (the money side — refund value per SKU)");
   if(!r.have.fba) missing.push("the FBA customer returns report (dispositions — how much came back sellable)");
@@ -9042,7 +9066,7 @@ function rtRenderResults(){
     h+=`<div class="panel"><h4>Why things come back <span class="sa-sub">— ${num(tot)} returned units, grouped by what you can do about them</span></h4>
       ${r.buckets.map(b=>`<div style="margin:10px 0">
         <div style="display:flex;justify-content:space-between;gap:10px;font-size:13.5px"><b>${esc(b.name)}</b><span>${num(b.units)} · ${(100*b.units/tot).toFixed(0)}%</span></div>
-        <div style="height:8px;background:var(--bg);border-radius:99px;margin:4px 0"><div style="height:8px;width:${Math.max(2,100*b.units/tot)}%;background:${b.k==="rto"?"#f5872b":b.k==="product"?"#e5484d":b.k==="switcheroo"?"#b91c1c":"#2f5af0"};border-radius:99px"></div></div>
+        <div style="height:8px;background:var(--bg);border-radius:99px;margin:4px 0"><div style="height:8px;width:${Math.max(2,100*b.units/tot)}%;background:${b.k==="rto"?"#f5872b":b.k==="product"?"#e5484d":b.k==="amzdamaged"?"#d97706":b.k==="switcheroo"?"#b91c1c":"#2f5af0"};border-radius:99px"></div></div>
         <div class="sa-sub">${esc(b.advice)}</div></div>`).join("")}
     </div>`;
   }
@@ -9055,7 +9079,7 @@ function rtRenderResults(){
   h+=`<div style="display:flex;justify-content:flex-end;margin:14px 0 2px"><button type="button" class="fbtn" id="rt-csv">⬇ Export CSV</button></div>
     <div class="panel"><h4>Per-SKU return economics <span class="sa-sub">(${r.skus.length}${r.skus.length>60?", worst 60 shown — export has all":""})</span></h4>
     <div class="tblwrap"><table class="sa">
-      <thead><tr><th>SKU</th><th>Status</th><th class="num">Refunds ₹</th><th class="num">% of sales</th><th class="num" title="FBA returned units that came back SELLABLE — restocked, not lost">Back sellable</th><th class="num" title="Seller-fulfilled: return requests where the item was never recorded delivered back">Never back</th><th class="num" title="Return labels billed to you (seller-fulfilled)">Labels ₹</th><th>Top reason</th></tr></thead>
+      <thead><tr><th>SKU</th><th>Status</th><th class="num">Refunds ₹</th><th class="num">% of sales</th><th class="num" title="FBA returned units that came back SELLABLE — restocked, not lost">Back sellable</th><th class="num" title="Seller-fulfilled: return requests where the item was never recorded delivered back (requests younger than 21 days count as in transit, not lost)">Never back</th><th class="num" title="Return labels billed to you (seller-fulfilled)">Labels ₹</th><th>Top reason</th></tr></thead>
       <tbody>${vis.map(e=>{
         const top=[...e.reasons.entries()].sort((a,b)=>b[1]-a[1])[0];
         return `<tr>
@@ -9071,10 +9095,10 @@ function rtRenderResults(){
     <span class="htag">Formulas &amp; sources</span>
     <ol>
       <li><b>Refunds ₹</b> and <b>% of sales</b> come from the settlement files: refunded principal ÷ gross principal per SKU, by value.</li>
-      <li><b>Back sellable</b> is the FBA customer returns report's disposition column — SELLABLE means the unit was restocked; everything else (customer-damaged, defective, carrier-damaged) is stock you lost.</li>
-      <li><b>Never back</b> is the seller-fulfilled Return Report: requests with no return delivery date recorded. Those rows are the raw material for SAFE-T — <a href="#/reconcile">Reconciliation</a> sorts them into claims.</li>
+      <li><b>Back sellable</b> is the FBA customer returns report's disposition column — SELLABLE means the unit was restocked; customer-damaged and defective is stock you lost; FC- or carrier-damaged stock is Amazon's responsibility — reimbursable, and <a href="#/reconcile">Reconciliation</a> checks whether the reimbursement arrived.</li>
+      <li><b>Never back</b> is the seller-fulfilled Return Report: requests with no return delivery date recorded, excluding requests younger than 21 days (counted as in transit — the courier may simply not have arrived). Those rows are the raw material for SAFE-T — <a href="#/reconcile">Reconciliation</a> sorts them into claims.</li>
       <li><b>Labels ₹</b> sums the Label cost column where the label was billed to you.</li>
-      <li>Status: <span class="st st-loss">Return-driven loss</span> ≥30% of sales and ₹2,000+ · <span class="st st-problem">Problem</span> ≥20% · <span class="st st-watch">Watch</span> ≥10% · <span class="st st-good">OK</span> otherwise.</li>
+      <li>Status: <span class="st st-loss">Return-heavy</span> ≥30% of sales and ₹2,000+ · <span class="st st-problem">Problem</span> ≥20% · <span class="st st-watch">Watch</span> ≥10% · <span class="st st-good">OK</span> otherwise. Refund ₹ is <b>revenue returned</b>, not net loss — stock that came back sellable was restocked, and the real cost is the fees and logistics around it.</li>
       <li>Buckets group Amazon's reason codes by the ACTION they call for; the mapping is fixed and shown per reason above. Nothing is estimated.</li>
     </ol>
   </div></details>`;
@@ -9147,7 +9171,8 @@ function parseStorageFees(text){
   const iAsin=ix("asin"),iName=ix("product-name"),iFc=ix("fulfillment-center"),
         iQty=ix("average-quantity-on-hand"),iVol=ix("estimated-total-item-volume"),
         iMonth=ix("month-of-charge"),iRate=ix("storage-rate"),iFee=ix("estimated-monthly-storage-fee"),
-        iOrders=ix("average-quantity-customer-orders"),iItemVol=ix("item-volume");
+        iOrders=ix("average-quantity-customer-orders"),iItemVol=ix("item-volume"),
+        iPend=ix("average-quantity-pending-removal");
   if(iAsin<0||iFee<0||iMonth<0) return null;
   const rows=[];
   for(let r=1;r<recs.length;r++){
@@ -9157,7 +9182,8 @@ function parseStorageFees(text){
       fc:iFc>=0?(f[iFc]||"").trim():"",
       qty:Number(f[iQty])||0,volume:Number(f[iVol])||0,itemVolume:iItemVol>=0?(Number(f[iItemVol])||0):0,
       month:(f[iMonth]||"").trim(),rate:Number(f[iRate])||0,
-      fee:Number(f[iFee])||0,orders:iOrders>=0?(Number(f[iOrders])||0):0});
+      fee:Number(f[iFee])||0,orders:iOrders>=0?(Number(f[iOrders])||0):0,
+      pending:iPend>=0?(Number(f[iPend])||0):0});
   }
   return rows.length?{rows}:null;
 }
@@ -9178,17 +9204,21 @@ function storageCompute(rows){
   const byAsin=new Map();
   for(const r of cur){
     let e=byAsin.get(r.asin);
-    if(!e){e={asin:r.asin,name:r.name,fee:0,qty:0,volume:0,orders:0,fcs:new Set()};byAsin.set(r.asin,e);}
+    if(!e){e={asin:r.asin,name:r.name,fee:0,qty:0,volume:0,orders:0,pending:0,fcs:new Set()};byAsin.set(r.asin,e);}
     if(!e.name&&r.name) e.name=r.name;
-    e.fee+=r.fee; e.qty+=r.qty; e.volume+=r.volume; e.orders+=r.orders; e.fcs.add(r.fc);
+    e.fee+=r.fee; e.qty+=r.qty; e.volume+=r.volume; e.orders+=r.orders; e.pending+=r.pending||0; e.fcs.add(r.fc);
   }
+  /* qty and orders are DAILY averages in this report (that is why a
+     100-unit-a-month seller shows orders ≈ 3.3) — multiply by the days in
+     the charge month to get monthly units, or cover comes out 30x too deep. */
+  const dm=String(latest||"").match(/^(\d{4})-(\d{2})$/);
+  const daysInMonth=dm?new Date(Date.UTC(+dm[1],+dm[2],0)).getUTCDate():30;
   const asins=[...byAsin.values()];
   for(const e of asins){
     e.fcCount=e.fcs.size; delete e.fcs;
-    /* qty and orders are the month's daily averages of stock and of units
-       ordered; their ratio is months of cover at the month's sales pace. */
-    e.monthsCover=e.orders>0?e.qty/e.orders:null;   // null = sold nothing
-    e.rentPerSold=e.orders>0?e.fee/e.orders:null;
+    e.monthlyUnits=e.orders*daysInMonth;
+    e.monthsCover=e.monthlyUnits>0?e.qty/e.monthlyUnits:null;   // null = sold nothing
+    e.rentPerSold=e.monthlyUnits>0?e.fee/e.monthlyUnits:null;
   }
   asins.sort((a,b)=>b.fee-a.fee);
   const t={fee:0,qty:0,volume:0,orders:0,deadFee:0,deadAsins:0,overFee:0};
@@ -9198,11 +9228,12 @@ function storageCompute(rows){
     else if(e.monthsCover!==null&&e.monthsCover>6) t.overFee+=e.fee;
   }
   const rate=cur.length?cur[0].rate:0;
-  return {months:monthTotals,latest,asins,totals:t,rate};
+  return {months:monthTotals,latest,asins,totals:t,rate,daysInMonth};
 }
 window.storageCompute=storageCompute; // exposed for verification/debugging
 function stoStatus(e){
   if(e.qty<=0) return {k:"info",l:"No stock"};
+  if(e.orders===0&&e.pending>0) return {k:"watch",l:"Removal in progress"};
   if(e.orders===0) return {k:"loss",l:"Paying rent, selling nothing"};
   if(e.monthsCover>6) return {k:"problem",l:"Overstocked"};
   if(e.monthsCover>3) return {k:"watch",l:"Heavy cover"};
@@ -9280,29 +9311,29 @@ function stoRenderResults(){
   h+=`<div style="display:flex;justify-content:flex-end;margin:14px 0 2px"><button type="button" class="fbtn" id="sto-csv">⬇ Export CSV</button></div>
     <div class="panel"><h4>Who pays the rent — ${esc(mLabel(r.latest))} <span class="sa-sub">(${r.asins.length} ASIN${r.asins.length===1?"":"s"}${r.asins.length>60?", top 60 shown — export has all":""})</span></h4>
     <div class="tblwrap"><table class="sa">
-      <thead><tr><th>ASIN</th><th>Product</th><th>Status</th><th class="num">Fee/month</th><th class="num" title="Daily-average units on hand across all fulfilment centres">Avg stock</th><th class="num" title="Daily-average units ordered this month">Avg orders</th><th class="num" title="Stock ÷ orders — months the current stock lasts at this month's pace">Months of cover</th><th class="num" title="This month's storage fee ÷ units ordered">Rent per unit sold</th></tr></thead>
+      <thead><tr><th>ASIN</th><th>Product</th><th>Status</th><th class="num">Fee/month</th><th class="num" title="Daily-average units on hand across all fulfilment centres">Avg stock</th><th class="num" title="Daily-average orders × days in the month">Units sold/month</th><th class="num" title="Stock ÷ orders — months the current stock lasts at this month's pace">Months of cover</th><th class="num" title="This month's storage fee ÷ units ordered">Rent per unit sold</th></tr></thead>
       <tbody>${vis.map(e=>`<tr>
         <td>${esc(e.asin)}</td><td class="sa-sub" style="max-width:220px">${esc(e.name.slice(0,60))}</td><td>${stChip(stoStatus(e))}</td>
         <td class="num"><b>${inr(e.fee)}</b></td>
         <td class="num">${e.qty.toFixed(1)}</td>
-        <td class="num">${e.orders.toFixed(2)}</td>
+        <td class="num">${e.monthlyUnits.toFixed(0)}</td>
         <td class="num">${e.monthsCover===null?"∞":e.monthsCover>99?">99":e.monthsCover.toFixed(1)}</td>
         <td class="num">${e.rentPerSold===null?"—":inr(e.rentPerSold)}</td></tr>`).join("")}
       </tbody></table></div></div>`;
   h+=`<details class="howto"><summary>How every number here is computed</summary><div class="hbody">
     <span class="htag">Formulas &amp; sources</span>
     <ol>
-      <li>Every figure is read straight from Amazon's Monthly Storage Fees report — the same file Amazon bills from. Nothing is estimated.</li>
-      <li><b>Avg stock</b> and <b>avg orders</b> are Amazon's daily averages for the month (that's why they aren't whole numbers). One row per ASIN per fulfilment centre; merged per ASIN here.</li>
-      <li><b>Months of cover</b> = avg stock ÷ avg monthly orders. <b>∞</b> means the ASIN sold nothing while stocked.</li>
-      <li><b>Rent per unit sold</b> = the month's storage fee ÷ units ordered — add it to your per-unit costs in the <a href="#/sku-report">SKU report</a>.</li>
-      <li>Status: <span class="st st-loss">Paying rent, selling nothing</span> stock &gt; 0, orders 0 · <span class="st st-problem">Overstocked</span> &gt; 6 months cover · <span class="st st-watch">Heavy cover</span> &gt; 3 months · <span class="st st-good">OK</span> otherwise.</li>
+      <li>Every figure is read straight from Amazon's Monthly Storage Fees report. The fee column is Amazon's own per-month estimate (the column is literally named "estimated-monthly-storage-fee") — the charged amount lands in the following month's settlement; confirm it there.</li>
+      <li><b>Avg stock</b> is Amazon's daily average for the month (that's why it isn't a whole number); the report's order column is a daily average too, so <b>units sold/month</b> = that average × the days in the month. One row per ASIN per fulfilment centre; merged per ASIN here.</li>
+      <li><b>Months of cover</b> = avg stock ÷ units sold per month. <b>∞</b> means the ASIN sold nothing while stocked.</li>
+      <li><b>Rent per unit sold</b> = the month's storage fee ÷ units sold in the month — add it to your per-unit costs in the <a href="#/sku-report">SKU report</a>.</li>
+      <li>Status: <span class="st st-loss">Paying rent, selling nothing</span> stock &gt; 0, orders 0 · <span class="st st-watch">Removal in progress</span> orders 0 but units already pending removal · <span class="st st-problem">Overstocked</span> &gt; 6 months cover · <span class="st st-watch">Heavy cover</span> &gt; 3 months · <span class="st st-good">OK</span> otherwise.</li>
       <li>The Aged Inventory Surcharge report is separate and only lists items already charged the ageing surcharge — if this tool has flagged nothing there, your account isn't paying it.</li>
     </ol>
   </div></details>`;
   const dead=r.asins.filter(e=>e.orders===0&&e.qty>0);
   h+=`<div class="panel"><h4>What should I do next?</h4><ul style="margin:8px 0 0 18px;line-height:1.9;font-size:13.5px">
-    ${dead.length?`<li><b>${num(dead.length)} ASIN${dead.length===1?"":"s"}</b> paid ${inr0(t.deadFee)} rent this month and sold zero units. For each: cut the price, advertise it, or file a removal order — doing nothing is the only guaranteed loss.</li>`:""}
+    ${dead.length?`<li><b>${num(dead.length)} ASIN${dead.length===1?"":"s"}</b> paid ${inr0(t.deadFee)} rent this month and sold zero units${dead.filter(e=>e.pending>0).length?` (${num(dead.filter(e=>e.pending>0).length)} already have removals in progress)`:""}. For each: cut the price, advertise it, or file a removal order — but compare Amazon's per-unit removal fee against the monthly rent first: for an ASIN paying ₹30/month, removal can cost more than a year of storage.</li>`:""}
     ${t.overFee>0?`<li>Stock deeper than 6 months of cover paid ${inr0(t.overFee)} — stop restocking those ASINs until cover normalises.</li>`:""}
     <li>Storage compounds with ageing: stock that crosses Amazon's age thresholds starts paying the Aged Inventory Surcharge on top. Clearing slow stock now avoids both.</li>
     <li>Whether a rent-heavy ASIN is still profitable after storage is a <a href="#/sku-report">SKU report</a> question — add the rent per unit sold to its cost.</li>
@@ -9316,8 +9347,8 @@ function stoWire(out,r){
   const csv=out.querySelector("#sto-csv");
   if(csv&&r) csv.addEventListener("click",()=>{
     saCsvDownload("storage-fees.csv",
-      ["ASIN","Product","Status","Month","Storage fee (INR)","Avg stock on hand","Avg monthly orders","Months of cover","Rent per unit sold (INR)","Fulfilment centres"],
-      r.asins.map(e=>[e.asin,e.name,stoStatus(e).l,r.latest,e.fee.toFixed(2),e.qty.toFixed(1),e.orders.toFixed(2),
+      ["ASIN","Product","Status","Month","Storage fee (INR)","Avg stock on hand","Units sold in month","Months of cover","Rent per unit sold (INR)","Fulfilment centres"],
+      r.asins.map(e=>[e.asin,e.name,stoStatus(e).l,r.latest,e.fee.toFixed(2),e.qty.toFixed(1),e.monthlyUnits.toFixed(1),
         e.monthsCover===null?"never sold":e.monthsCover.toFixed(1),e.rentPerSold===null?"":e.rentPerSold.toFixed(2),e.fcCount]));
   });
 }
