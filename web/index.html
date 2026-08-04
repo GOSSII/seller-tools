@@ -1554,7 +1554,7 @@ const HELP={
     steps:["Drop the settlement file.","Sort by Net to see which products actually make money after fees, taxes and refunds.","Sort by Refund % to spot problem products. Units ÷ days gives the daily sales rate for the Restock Planner."]},
   "ad-profit":{input:`Two files. <b>Payments → All Statements → Flat File V2</b> (or a Monthly Unified Transaction report) for what each SKU actually earned — and, from the <b>Advertising console → Sponsored Ads → Reports</b>, a <b>Sponsored Products “Advertised product”</b> report for the same period, which is the only place ad spend is broken down per SKU.`,
     steps:["Drop the settlement (or unified transaction) file, and the advertised-product report for the same dates.","Fill in product costs for your main SKUs — without them the table shows payout, not profit.","Read the “ads turn profit into loss” list first: those SKUs earn money until the advertising is counted.","Compare each SKU's ACOS against its break-even ACOS — anything above it is being advertised at a loss."]},
-  "reconcile":{input:`Settlement file(s): <b>Payments → All Statements → Download Flat File V2</b> — drop every statement for the period you're checking, <b>from both Account Types</b>: All Statements keeps a separate weekly series for <i>Electronic Transactions</i> and for <i>Cash On Delivery Transactions and Non-Transactional Fees</i>, and orders paid through the series you skip will look unpaid. Optional: the <b>Inventory Ledger</b> (detailed view) finds stock Amazon misplaced and never reimbursed, and the <b>Replacements</b> report stops replacement flows being misread as unreturned refunds. Optional: the <b>FBA customer returns</b> and <b>Reimbursements</b> reports (<b>Reports → Fulfilment</b>, Download tab, exact dates matching your statements — both together) unlock the refunded-never-returned and damaged-at-Amazon checks. Optional but recommended: the matching MTR — <b>Reports → Tax Document Library → Merchant Tax Reports → B2C</b> (.csv) — so shipped-but-unpaid orders can be caught too.`,
+  "reconcile":{input:`Settlement file(s): <b>Payments → All Statements → Download Flat File V2</b> — drop every statement for the period you're checking, <b>from both Account Types</b>: All Statements keeps a separate weekly series for <i>Electronic Transactions</i> and for <i>Cash On Delivery Transactions and Non-Transactional Fees</i>, and orders paid through the series you skip will look unpaid. Optional for Easy Ship / self-ship sellers: the <b>seller-fulfilled Return Report</b> (Orders → Manage Returns → View reports → All Returns, 60-day ranges) sorts the SAFE-T list by strength — refunds whose item never came back rise to the top, items delivered back drop down, and claims already filed disappear. Optional: the <b>Inventory Ledger</b> (detailed view) finds stock Amazon misplaced and never reimbursed, and the <b>Replacements</b> report stops replacement flows being misread as unreturned refunds. Optional: the <b>FBA customer returns</b> and <b>Reimbursements</b> reports (<b>Reports → Fulfilment</b>, Download tab, exact dates matching your statements — both together) unlock the refunded-never-returned and damaged-at-Amazon checks. Optional but recommended: the matching MTR — <b>Reports → Tax Document Library → Merchant Tax Reports → B2C</b> (.csv) — so shipped-but-unpaid orders can be caught too.`,
     steps:["Drop your settlement file(s), and the MTR for the same months if you have it.","Work through each issue list — every row shows the order, the amount at stake and the exact Seller Central path to claim it.","Tick rows off as you raise them (ticks are saved in your browser), and export the checklist as CSV to track claims."]},
   "fnsku-labels":{input:`Your FNSKU (starts with X0) is in <b>Inventory → FBA Inventory</b> — the FNSKU column — or on the <b>Print item labels</b> page (<b>Manage Inventory</b> → tick your FBA listings → <b>Print item labels</b>). Copy it from either place; the product name can be anything your packers will recognise.`,
     steps:["Add a row per product: FNSKU/code, product name, condition (defaults to New) and how many stickers you need.","Pick the paper: A4 sticker sheets with 65, 40 or 24 labels per page, or a 4×6 thermal sheet (12 per page).","Generate, check the preview, download — and print at 100% scale (never \"fit to page\", or the barcode dimensions shift).","Stick one label per unit, covering any existing barcode on the retail packaging."]},
@@ -4553,10 +4553,47 @@ function parseReplacements(text){
   return rows.length?{rows}:null;
 }
 window.parseReplacements=parseReplacements; // exposed for verification/debugging
+/* Seller-fulfilled Return Report (Manage Returns → View reports → All
+   Returns). One row per return request, with the columns SAFE-T actually
+   turns on: was a return requested at all, was the item ever recorded
+   delivered back, and has a SAFE-T claim already been filed. */
+const MFN_MONTHS={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+function mfnDate(sv){
+  const m=String(sv||"").trim().match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/);
+  if(!m) return null;
+  const mo=MFN_MONTHS[m[2].toLowerCase()];
+  return mo?m[3]+"-"+String(mo).padStart(2,"0")+"-"+m[1].padStart(2,"0"):null;
+}
+function parseMfnReturns(text){
+  const lines=String(text||"").replace(/^\ufeff/,"").split(/\r\n|\r|\n/);
+  let hln=-1; for(let i=0;i<lines.length;i++){if(lines[i].trim()!==""){hln=i;break;}}
+  if(hln===-1) return null;
+  const delim=lines[hln].includes("\t")?"\t":",";
+  const cols=saSplit(lines[hln],delim).map(h=>h.trim().toLowerCase());
+  const ix=n=>cols.indexOf(n);
+  const iOrder=ix("order id"),iReq=ix("return request date"),iRes=ix("resolution"),
+        iDel=ix("return delivery date"),iSku=ix("merchant sku"),iSafeT=ix("safet claim id"),
+        iType=ix("return type"),iRefAmt=ix("refunded amount");
+  if(iOrder<0||iReq<0||iRes<0) return null;
+  const rows=[];
+  for(let i=hln+1;i<lines.length;i++){
+    if(!lines[i].trim()) continue;
+    const f=saSplit(lines[i],delim).map(x=>x.trim());
+    if(f.length<4||!f[iOrder]) continue;
+    rows.push({orderId:f[iOrder],sku:iSku>=0?(f[iSku]||""):"",
+      requestDate:mfnDate(f[iReq]),deliveryDate:iDel>=0?mfnDate(f[iDel]):null,
+      resolution:iRes>=0?(f[iRes]||""):"",returnType:iType>=0?(f[iType]||""):"",
+      safetId:iSafeT>=0?(f[iSafeT]||""):"",
+      refundedAmount:iRefAmt>=0?(saParseAmount(f[iRefAmt])||0):0});
+  }
+  return rows.length?{rows}:null;
+}
+window.parseMfnReturns=parseMfnReturns; // exposed for verification/debugging
 function recCompute(settlements,mtrRows,extra){
   extra=extra||{};
   const fbaReturns=extra.returns||[], reimbRows=extra.reimb||[];
   const ledger=extra.ledger||null, replRows=extra.replacements||[];
+  const mfnRet=extra.mfnReturns||[];
   const records=[]; for(const p of settlements) records.push(...p.records);
   const ordersById=new Map(); let refundsChecked=0;
   for(const rec of records){
@@ -4915,6 +4952,33 @@ function recCompute(settlements,mtrRows,extra){
           +(val===undefined?"; value not in the loaded statements":"")});
     }
   }
+  /* ---- Seller-fulfilled Return Report × SAFE-T candidates ----
+     A SAFE-T claim turns on facts the settlement cannot see: was a return
+     even requested, did the item ever get recorded delivered back, is a
+     claim already filed. When the report is loaded, every candidate is
+     sorted into one of four honest classes instead of one big pile. */
+  let safeTClaimed=0,safeTNotBack=0,safeTBack=0,safeTNoReq=0;
+  if(mfnRet.length&&safeT.length){
+    const byOrder2=new Map();
+    for(const r of mfnRet){ const a=byOrder2.get(r.orderId)||[]; a.push(r); byOrder2.set(r.orderId,a); }
+    const kept=[];
+    for(const x of safeT){
+      const reqs=byOrder2.get(x.orderId)||[];
+      if(reqs.some(r=>r.safetId)){ safeTClaimed++; continue; }   // already claimed — off the list
+      if(reqs.length===0){ safeTNoReq++; x.cls=2;
+        x.note+=" — no return request exists for this refund at all; if it was a courier RTO or goodwill refund, SAFE-T for the item's value may apply";
+      } else if(reqs.some(r=>r.deliveryDate)){ safeTBack++; x.cls=3;
+        const d=reqs.find(r=>r.deliveryDate).deliveryDate;
+        x.note+=" — the item WAS recorded delivered back on "+saFmtDay(d)+"; claim only if it came back damaged or incomplete";
+      } else { safeTNotBack++; x.cls=1;
+        const r0=reqs[0];
+        x.note+=" — return "+(r0.resolution==="RefundAtFirstScan"?"was refunded at first courier scan":"approved "+(r0.requestDate?saFmtDay(r0.requestDate):""))+" but never recorded delivered back: the strongest SAFE-T case";
+      }
+      kept.push(x);
+    }
+    safeT.length=0; safeT.push(...kept);
+    safeT.sort((a,b)=>(a.cls||9)-(b.cls||9)||(b.amount||0)-(a.amount||0));
+  }
   /* ---- Lost in the warehouse (Inventory Ledger × Reimbursements) ----
      Reason M is Amazon misplacing a unit; F is finding one again. What stays
      lost after netting found units, was lost 30+ days ago (Amazon's own
@@ -4987,7 +5051,8 @@ function recCompute(settlements,mtrRows,extra){
       skippedCancelled,skippedRecent,gaps,covEnd,cutoff,mtrOrders,manyUnmatched,
       haveReturns:fbaReturns.length>0,haveReimb:reimbRows.length>0,
       returnRows:fbaReturns.length,reimbRows:reimbRows.length,retCoverEnd,nrTooRecent,nrSuspicious,
-      haveLedger:!!ledger,ledgerCoverEnd,ledgerAdjustments,destroyedSellable,haveRepl:replRows.length>0,replRows:replRows.length}};
+      haveLedger:!!ledger,ledgerCoverEnd,ledgerAdjustments,destroyedSellable,haveRepl:replRows.length>0,replRows:replRows.length,
+      haveMfnRet:mfnRet.length>0,mfnRetRows:mfnRet.length,safeTClaimed,safeTNotBack,safeTBack,safeTNoReq}};
 }
 window.recCompute=recCompute; // exposed for verification/debugging
 
@@ -5060,6 +5125,8 @@ function recAddFiles(list){
     const finish=()=>{ if(--pending===0) recRenderResults(); };
     saReadDropped(f,text=>{
       recFiles=recFiles.filter(x=>x.name!==f.name); // re-drop replaces
+      const mr=parseMfnReturns(text);
+      if(mr){ recFiles.push({name:f.name,kind:"mfnret",rows:mr.rows}); finish(); return; }
       const led=parseInventoryLedger(text);
       if(led&&led.adjustments){ recFiles.push({name:f.name,kind:"ledger",ledger:led}); finish(); return; }
       const rp=parseReplacements(text);
@@ -5088,7 +5155,7 @@ function recAddFiles(list){
 }
 function recRenderResults(){
   const out=document.getElementById("rec-out"); if(!out) return;
-  const kindLabel={settlement:"Settlement",mtr:"MTR",returns:"FBA returns",reimb:"Reimbursements",ledger:"Inventory Ledger",repl:"Replacements",error:"Skipped"};
+  const kindLabel={settlement:"Settlement",mtr:"MTR",returns:"FBA returns",reimb:"Reimbursements",ledger:"Inventory Ledger",repl:"Replacements",mfnret:"Seller returns",error:"Skipped"};
   const kindOf=f=>f.kind==="error"?"⚠ "+kindLabel.error
     :f.kind==="settlement"&&f.parsed&&f.parsed.source==="unified"?"Unified txn":kindLabel[f.kind];
   let h=`<div class="rec-files">${recFiles.map((f,i)=>`<span class="rec-file"${f.kind==="error"?` title="${esc(f.msg)}"`:""}><b>${esc(f.name)}</b><span class="rf-kind">${kindOf(f)}</span><button type="button" data-rm="${i}" aria-label="Remove ${esc(f.name)}">✕</button></span>`).join("")}</div>`;
@@ -5104,8 +5171,9 @@ function recRenderResults(){
   const reimbRows=recFiles.filter(f=>f.kind==="reimb").flatMap(f=>f.rows);
   const ledgerFile=recFiles.find(f=>f.kind==="ledger");
   const replacements=recFiles.filter(f=>f.kind==="repl").flatMap(f=>f.rows);
+  const mfnReturns=recFiles.filter(f=>f.kind==="mfnret").flatMap(f=>f.rows);
   const res=recCompute(settlements,mtrRows,{returns:fbaReturns,reimb:reimbRows,
-    ledger:ledgerFile?ledgerFile.ledger:null,replacements});
+    ledger:ledgerFile?ledgerFile.ledger:null,replacements,mfnReturns});
   const done=loadRecDone();
   const allIssues=REC_ORDER.flatMap(k=>res.issues[k]);
   const openCount=allIssues.filter(x=>!done[recKey(x)]).length;
@@ -5150,6 +5218,8 @@ function recRenderResults(){
   }
   if(n.negativeNoRevenue)
     h+=`<div class="banner info">${n.negativeNoRevenue} order${n.negativeNoRevenue>1?"s carry":" carries"} fulfilment fees here but no sale — the revenue is in a statement you haven't loaded, so ${n.negativeNoRevenue>1?"they were":"it was"} left out of the loss-making check rather than counted as a loss.</div>`;
+  if(n.haveMfnRet)
+    h+=`<div class="banner info">Seller-fulfilled Return Report loaded (${num(n.mfnRetRows)} request${n.mfnRetRows===1?"":"s"}) — the SAFE-T list is now sorted by strength: <b>${num(n.safeTNotBack)}</b> refund${n.safeTNotBack===1?"":"s"} where the item was <b>never recorded delivered back</b> (the strongest case), ${num(n.safeTNoReq)} with no return request at all, ${num(n.safeTBack)} where the item did come back (claim only if damaged)${n.safeTClaimed?`, and ${num(n.safeTClaimed)} already claimed via SAFE-T — removed from the list`:""}.</div>`;
   if(n.haveLedger)
     h+=`<div class="banner info">Inventory Ledger loaded (${num(n.ledgerAdjustments)} adjustment${n.ledgerAdjustments===1?"":"s"}, coverage to ${n.ledgerCoverEnd?esc(saFmtDay(n.ledgerCoverEnd)):"—"}) — misplaced stock is netted against found stock and inventory-side reimbursements${n.haveReimb?"":", <b>but no Reimbursements report is loaded</b>, so a reimbursed loss cannot be told from an unpaid one — add it for an honest answer"}. ${n.destroyedSellable?`<b>${n.destroyedSellable} sellable unit${n.destroyedSellable>1?"s were":" was"} removed as damaged</b> — worth a look in the ledger.`:""}</div>`;
   if(n.haveRepl)
