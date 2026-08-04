@@ -623,6 +623,11 @@
   .rec-file button:hover{color:var(--red)}
   tr.rec-done td{opacity:.5}
   tr.rec-done td:not(:first-child){text-decoration:line-through}
+  /* A row the seller's own measurements have ruled out: dimmed, but still
+     readable — the numbers in it are the reason it was ruled out. */
+  tr.fb-off td{opacity:.6}
+  td.fb-parcel{min-width:212px}
+  td.fb-parcel .fb-row{display:flex;gap:4px;align-items:center;flex-wrap:nowrap}
   .rec-claim{margin-top:10px;font-size:12.5px;color:#1e3a5f;background:var(--blue-soft);border:1px solid var(--blue-line);border-radius:10px;padding:9px 12px;line-height:1.55}
   .rec-claim b{color:var(--ink)}
 
@@ -1551,7 +1556,7 @@ const HELP={
   "trends":{input:`Several settlement files: <b>Payments → All Statements → Download Flat File V2</b> for each statement — the more months you drop, the better the picture.`,
     steps:["Drop all your settlement files at once (or add them one by one — duplicates are skipped).","Read the month-by-month charts: sales, fees as % of sales, refund rate and net payout.","Pick a SKU to see its own monthly units, sales and net — is it growing, and is it still worth the fees?"]},
   "fee-bands":{input:`Settlement file(s): <b>Payments → All Statements → Download Flat File V2</b>. Drop as many as you have — the more units behind each SKU, the more certain its usual price and weight band are. Statements where Amazon bills your selling fees on a separate invoice can't be used for the price side: there is no fee line to read a band from.`,
-    steps:["Drop your settlement file(s) — several at once is fine.","Work down the price-step list: each row is a SKU that nets more per unit at the lower price, with the revenue you give up already subtracted.","Test the price on one SKU before editing in bulk — a lower price can also mean fewer or more orders, which no settlement file can tell you.","On the weight list, start with the SKUs that have already shipped in the lower band, then weigh and measure the rest — volumetric weight (L×W×H ÷ 5000) often decides the band, so a smaller box can win it without removing a gram."]},
+    steps:["Drop your settlement file(s) — several at once is fine.","Work down the price-step list: each row is a SKU that nets more per unit at the lower price, with the revenue you give up already subtracted.","Test the price on one SKU before editing in bulk — a lower price can also mean fewer or more orders, which no settlement file can tell you.","On the weight list, weigh one packed parcel per SKU and type it in (dimensions too, if the box is large for its weight — volumetric weight often decides the band). The tool then says which of three things is true: Amazon is billing a band heavier than your parcel, so claim it; the band is a packaging change away; or the product itself is too heavy and no repacking reaches it. Weights are saved in your browser only."]},
 };
 function helpHtml(id){
   const e=HELP[id];
@@ -4645,6 +4650,16 @@ const FB_RATE_TOL=0.004;      // 0.4pp, to absorb rounding in Amazon's own fee l
 const FB_RECENT_DAYS=30;      // the tail of the coverage that counts as "now"
 const FB_PROVEN_MIN=3;        // shipments in a lighter band before it counts as done
 const FB_PROVEN_SHARE=0.1;    // …and that many as a share of the SKU's shipments
+/* How much weight a repack can plausibly take off. Amazon's own allowance for
+   packaging is 100 g, so anything beyond that is the product, not the box. */
+const FB_TRIM_G=100;
+/* And how close to the band edge above is close enough to be worth warning
+   about: heavier tape, a thicker box or a bubble-wrap change can add this
+   much without anyone noticing, and the next band is never a small step. */
+const FB_EDGE_G=150;
+const FB_WEIGHTS_KEY="fb_weights";
+function loadFbWeights(){try{return JSON.parse(localStorage.getItem(FB_WEIGHTS_KEY)||"{}")||{};}catch(e){return {};}}
+function saveFbWeights(w){try{localStorage.setItem(FB_WEIGHTS_KEY,JSON.stringify(w));}catch(e){}}
 /* Weighted mode: the value carrying the most units, ties going to the lower
    one so a coin-flip never flatters the saving. */
 function fbMode(list){
@@ -4654,7 +4669,8 @@ function fbMode(list){
   for(const [k,w] of m) if(w>best||(w===best&&k<v)){best=w;v=k;}
   return {v,share:tot?best/tot:0,units:best,total:tot};
 }
-function fbCompute(settlements){
+function fbCompute(settlements,weights){
+  weights=weights||{};
   const records=[]; for(const p of settlements) records.push(...p.records);
   /* Easy Ship, postage and base fees are billed against the ORDER on rows
      carrying no SKU — same rule as the SKU report: attribute them back only
@@ -4725,7 +4741,7 @@ function fbCompute(settlements){
   }
   const days=(from&&to)?(recDayNo(to)-recDayNo(from)+1):0;
   const recentFrom=to?recShiftDays(to,-FB_RECENT_DAYS):null;
-  const price=[],weight=[]; let variedPrice=0,unknownRate=0,noFees=0;
+  const price=[],weight=[]; let variedPrice=0,unknownRate=0,noFees=0,underBilled=0;
   for(const s of bySku.values()){
     // GST inside this SKU's own price: a price cut hands back the tax too,
     // and that part was never the seller's money to lose.
@@ -4783,7 +4799,9 @@ function fbCompute(settlements){
     if(s.wt.length>=FB_MIN_SHIP){
       const md=fbMode(s.wt.map(x=>({v:x.slab,w:1})));
       const fam=fbMode(s.wt.map(x=>({v:x.family,w:1}))).v;
-      if(md.share>=0.6&&md.v>0){
+      // The lightest band has nothing below it, but it can still sit a few
+      // grams under the band above — which is worth knowing.
+      if(md.share>=0.6){
         const atMode=s.wt.filter(x=>x.slab===md.v);
         const unitsAtMode=atMode.reduce((a,x)=>a+x.units,0);
         /* Has this SKU ever been billed lighter? Then the lighter band is not
@@ -4795,20 +4813,75 @@ function fbCompute(settlements){
            share of the SKU's shipments before "we have already done this"
            is a fair thing to tell someone. */
         const proven=lower.length>=Math.max(FB_PROVEN_MIN,s.wt.length*FB_PROVEN_SHARE);
-        const target=proven?fbMode(lower.map(x=>({v:x.slab,w:1}))).v:md.v-1;
-        const cur=REC_FEE_FOR(fam,md.v),to=REC_FEE_FOR(fam,target);
-        if(cur!==null&&cur!==undefined&&to!==null&&to!==undefined&&cur>to)
-          weight.push({sku:s.sku,slab:md.v,target,family:fam,per:cur,perTarget:to,save:cur-to,
-            units:unitsAtMode,prize:(cur-to)*unitsAtMode,proven,provenN:lower.length,ships:s.wt.length,
-            kg:FB_SLAB_KG[target],fba:/^fba/.test(fam)});
+        const fba=/^fba/.test(fam);
+        let target=proven?fbMode(lower.map(x=>({v:x.slab,w:1}))).v:md.v-1;
+        /* A settlement says which band Amazon billed, never what the parcel
+           weighs — so on its own a lighter band is only ever a target. Given
+           the real weight, the same charge answers a better question: a 750 g
+           product cannot reach the 500 g band however it is packed, and
+           telling someone to try is worse than saying nothing. */
+        const wi=weights[s.sku]||null;
+        const kgIn=wi?Math.max(0,Number(wi.kg)||0):0;
+        const vol=wi?volWeight(Number(wi.l)||0,Number(wi.w)||0,Number(wi.h)||0):0;
+        const bw=Math.max(kgIn,vol);
+        let verdict="unknown",gramsOff=null,implied=null;
+        const volDriven=vol>kgIn&&vol>0;
+        if(bw>0){
+          const sw=fba?fbaShipWeight(bw):esShipWeight(bw);
+          implied=sw<=0.5?0:sw<=1?1:sw<=2?2:3;
+          if(implied<md.v){
+            // Billed heavier than the parcel the seller packed: the lighter
+            // band is not something to aim at, it is something to claim.
+            verdict="overbilled"; target=implied;
+          }
+          else if(implied>md.v) verdict="underbilled";   // billed lighter than it is — leave it alone
+          else{
+            const allowance=FB_SLAB_KG[target]-(fba?0.1:0);
+            gramsOff=Math.round((bw-allowance)*1000);
+            verdict=gramsOff<=FB_TRIM_G?"trim":(volDriven?"box":"blocked");
+          }
+        }
+        /* The other direction, which only a weighed parcel can see: how much
+           room is left before the band ABOVE. A SKU 120 g under the edge is
+           one packaging change away from paying the next band on every unit,
+           and nothing in a settlement warns about that until it happens. */
+        let edgeG=null,edgeCost=null;
+        if(bw>0&&verdict!=="underbilled"){
+          const allowance=FB_SLAB_KG[implied]-(fba?0.1:0);
+          const head=Math.round((allowance-bw)*1000);
+          const now=REC_FEE_FOR(fam,implied),up=REC_FEE_FOR(fam,implied+1);
+          if(head>=0&&head<=FB_EDGE_G&&now!==null&&now!==undefined&&up!==null&&up!==undefined&&up>now){
+            edgeG=head; edgeCost=up-now;
+          }
+        }
+        if(verdict==="underbilled") underBilled++;
+        else{
+          const cur=REC_FEE_FOR(fam,md.v),to=md.v>0?REC_FEE_FOR(fam,target):null;
+          const canSave=md.v>0&&cur!==null&&cur!==undefined&&to!==null&&to!==undefined&&cur>to;
+          if(canSave||edgeG!==null)
+            weight.push({sku:s.sku,slab:md.v,target,family:fam,per:cur,perTarget:to,
+              save:canSave?cur-to:0,units:unitsAtMode,prize:canSave?(cur-to)*unitsAtMode:0,
+              proven:canSave&&proven&&verdict!=="blocked",provenN:lower.length,ships:s.wt.length,
+              kg:canSave?FB_SLAB_KG[target]:null,fba,verdict:canSave?verdict:"edge",
+              gramsOff,implied,volDriven,edgeG,edgeCost,
+              parcelKg:bw||null,provenConflict:canSave&&proven&&verdict==="blocked"});
+        }
       }
     }
   }
   price.sort((a,b)=>b.prize-a.prize); weight.sort((a,b)=>b.prize-a.prize);
   const sum=a=>a.reduce((s,x)=>s+x.prize,0);
+  /* Three buckets, never added together in the headline: what the SKU has
+     already done (or is demonstrably overbilled for), what is worth trying,
+     and what the seller's own weights have ruled out. */
+  const real=weight.filter(w=>w.proven||w.verdict==="overbilled");
+  const blocked=weight.filter(w=>w.verdict==="blocked");
+  const open=weight.filter(w=>!real.includes(w)&&!blocked.includes(w));
   return {price,weight,
-    totals:{price:sum(price),proven:sum(weight.filter(w=>w.proven)),potential:sum(weight.filter(w=>!w.proven))},
-    notes:{skus:bySku.size,priceLines,wtLines,wtUnknown,variedPrice,unknownRate,noFees,from,to,days}};
+    totals:{price:sum(price),proven:sum(real),potential:sum(open),blocked:sum(blocked)},
+    notes:{skus:bySku.size,priceLines,wtLines,wtUnknown,variedPrice,unknownRate,noFees,underBilled,
+      weighed:weight.filter(w=>w.parcelKg).length,
+      atEdge:weight.filter(w=>w.edgeG!==null&&w.edgeG!==undefined).length,from,to,days}};
 }
 window.fbCompute=fbCompute; // exposed for verification/debugging
 
@@ -4881,8 +4954,29 @@ function fbPriceNote(o){
   bits.push("you give up "+inr(o.give));
   return bits.join(" · ");
 }
+/* What the settlement and the seller's own scales together can say about one
+   SKU's weight band. Without a weight this can only ever name a target. */
+function fbWeightVerdict(w){
+  const g=kg=>Math.round(kg*1000).toLocaleString("en-IN")+" g";
+  const ships=w.proven?`already billed band ${w.target+1} on ${w.provenN} of its ${w.ships} shipments`
+    :`${w.ships} shipments, all in this band`;
+  const hasEdge=w.edgeG!==null&&w.edgeG!==undefined;
+  const edge=hasEdge?` <b>${w.edgeG} g of headroom</b> before the band above — add that much tape or padding and every unit costs ${inr(w.edgeCost)} more.`:"";
+  if(w.verdict==="edge")
+    return `nothing to win below this band, and the ${g(w.parcelKg)} parcel has just${edge}`;
+  if(w.verdict==="overbilled")
+    return `your parcel belongs in <b>band ${w.implied+1}</b> (${g(w.parcelKg)}${w.volDriven?" volumetric":""}), but Amazon billed band ${w.slab+1} — it is measuring heavier than you packed.${edge}`;
+  if(w.verdict==="trim")
+    return `<b>${w.gramsOff} g to come off</b> the ${g(w.parcelKg)} parcel and it drops a band — that is a packaging change, not a product one. (${ships})`;
+  if(w.verdict==="box")
+    return `the box is what's billed — volumetric ${g(w.parcelKg)} beats the actual weight, so a smaller carton wins the band without removing a gram. (${ships})`;
+  if(w.verdict==="blocked")
+    return `<b>out of reach</b>: the parcel is ${g(w.parcelKg)} and band ${w.target+1} needs ${esc(fbTargetKg(w))}, so ${w.gramsOff} g of product would have to go.${w.provenConflict?` ${w.provenN} of its ${w.ships} shipments were billed lighter even so — Amazon's own measurement varies, and those charges are worth checking in Reconciliation.`:""}${edge}`;
+  return `${ships} — needs ${esc(fbTargetKg(w))}. Weigh one and type it in to see whether that is possible.`;
+}
 function fbRenderResults(){
   const out=document.getElementById("fb-out"); if(!out) return;
+  const wts=loadFbWeights();
   let h=`<div class="rec-files">${fbFiles.map((f,i)=>`<span class="rec-file"${f.kind==="error"?` title="${esc(f.msg)}"`:""}><b>${esc(f.name)}</b><span class="rf-kind">${f.kind==="error"?"⚠ Skipped":(f.parsed&&f.parsed.source==="unified"?"Unified txn":"Settlement")}</span><button type="button" data-rm="${i}" aria-label="Remove ${esc(f.name)}">✕</button></span>`).join("")}</div>`;
   const bad=fbFiles.filter(f=>f.kind==="error");
   if(bad.length) h+=`<div class="banner warn">${bad.map(f=>`<b>${esc(f.name)}</b>: ${esc(f.msg)}`).join("<br>")}</div>`;
@@ -4891,15 +4985,16 @@ function fbRenderResults(){
     if(fbFiles.length) h+=`<div class="banner info">Add at least one <b>settlement flat file</b> (Payments → All Statements → Download Flat File V2) — that's the file the fee bands are read from.</div>`;
     out.innerHTML=h; fbWire(out); return;
   }
-  const res=fbCompute(settlements),n=res.notes;
+  const res=fbCompute(settlements,wts),n=res.notes;
   const perMonth=x=>n.days>=20?x*30/n.days:null;
   const testing=res.totals.price+res.totals.potential;
   const total=res.totals.proven+testing;
+  const openW=res.weight.filter(w=>!w.proven&&w.verdict!=="overbilled"&&w.verdict!=="blocked").length;
   const pm=perMonth(total);
   h+=`<div class="stats">
     <div class="stat blue"><div class="k">SKUs read</div><div class="v">${n.skus}</div><div class="sa-sub" style="margin-top:3px">${n.days?esc(saFmtDay(n.from))+" → "+esc(saFmtDay(n.to)):"period unknown"}</div></div>
-    <div class="stat green"><div class="k">Already done it once</div><div class="v">${inr(res.totals.proven)}</div><div class="sa-sub" style="margin-top:3px">weight bands these SKUs have shipped in before</div></div>
-    <div class="stat"><div class="k">Worth testing</div><div class="v">${inr(testing)}</div><div class="sa-sub" style="margin-top:3px">${res.price.length} price step${res.price.length===1?"":"s"} · ${res.weight.filter(w=>!w.proven).length} weight target${res.weight.filter(w=>!w.proven).length===1?"":"s"}</div></div>
+    <div class="stat green"><div class="k">Proven, not guessed</div><div class="v">${inr(res.totals.proven)}</div><div class="sa-sub" style="margin-top:3px">bands the SKU has shipped in, or your own weight says it is billed too heavy</div></div>
+    <div class="stat"><div class="k">Worth testing</div><div class="v">${inr(testing)}</div><div class="sa-sub" style="margin-top:3px">${res.price.length} price step${res.price.length===1?"":"s"} · ${openW} weight target${openW===1?"":"s"}</div></div>
     <div class="stat ${total>0?"blue":"green"}"><div class="k">Over this period</div><div class="v">${inr(total)}</div>${pm===null?"":`<div class="sa-sub" style="margin-top:3px">≈ ${inr0(pm)}/month at this rate</div>`}</div>
   </div>`;
   h+=`<div class="banner info">Every figure comes from fees Amazon actually charged these SKUs — the charge identifies the band, so nothing here depends on knowing your category or your parcel. Savings are <b>net of the revenue you give up</b> and exclude GST on the fee, which you claim back as input tax credit anyway. This is money not to spend again; money to <i>claim back</i> is in <a href="#/reconcile">Reconciliation</a>.</div>`;
@@ -4925,20 +5020,32 @@ function fbRenderResults(){
   }
   if(res.weight.length){
     const proven=res.weight.filter(w=>w.proven),maybe=res.weight.filter(w=>!w.proven);
-    h+=`<div class="panel"><h4>⚖️ Weight bands worth winning <span class="sa-sub">(${res.weight.length})</span></h4>
+    const savers=res.weight.filter(w=>w.prize>0&&w.verdict!=="blocked").length;
+    h+=`<div class="panel"><h4>⚖️ Weight bands <span class="sa-sub">(${savers} worth winning${n.atEdge?`, ${n.atEdge} close to the band above`:""})</span></h4>
       <p class="sa-sub" style="margin:4px 0 10px">Weight handling is charged by band, on the greater of actual and volumetric weight (L×W×H ÷ 5000). A parcel a few grams over a band edge pays the whole band, and at a fulfilment centre Amazon adds 100 g of packaging before it picks one — so an FBA target weight is what the scales must read, not the band edge.${proven.length?` <b>${proven.length} of these ${proven.length===1?"has":"have"} already shipped in the lower band</b> — for ${proven.length===1?"it":"those"} the lighter band isn't a theory, it's something the SKU has done.`:""}</p>
+      <p class="sa-sub" style="margin:0 0 10px">Weigh a packed parcel once and type it in below (dimensions too, if the box is big for its weight). The settlement says which band Amazon <i>billed</i>; only the parcel says which band it <b>belongs</b> in — and a product heavier than the band below can never reach it, however it's packed. Weights stay in this browser.</p>
       <div class="tblwrap"><table class="sa">
-        <thead><tr><th>SKU</th><th>Billed in</th><th>Could ship in</th><th class="num">Saved / unit</th><th class="num">Units</th><th class="num">Over the period</th><th>Evidence</th></tr></thead>
-        <tbody>${res.weight.map(w=>`<tr>
-          <td>${esc(w.sku)}</td><td>${esc(fbBandLabel(w.slab))}</td><td>${esc(fbBandLabel(w.target))}</td>
-          <td class="num"><b>${inr(w.save)}</b></td><td class="num">${num(w.units)}</td><td class="num">${inr(w.prize)}</td>
-          <td class="sa-sub">${w.proven
-            ? `already billed band ${w.target+1} on ${w.provenN} of its ${w.ships} shipments`
-            : `${w.ships} shipments, all in this band`} — needs ${esc(fbTargetKg(w))}</td></tr>`).join("")}
+        <thead><tr><th>SKU</th><th>Billed in</th><th>Your packed parcel</th><th class="num">Saved / unit</th><th class="num">Units</th><th class="num">Over the period</th><th>What that means</th></tr></thead>
+        <tbody>${res.weight.map(w=>{
+          const wi=wts[w.sku]||{};
+          const inp=(k,ph,wd)=>`<input type="number" min="0" step="0.01" inputmode="decimal" class="fb-w" data-fbw-sku="${esc(w.sku)}" data-fbw-k="${k}" value="${wi[k]!==undefined&&wi[k]!==""?esc(wi[k]):""}" placeholder="${ph}" style="width:${wd}px;padding:5px 6px;font-size:12.5px" aria-label="${ph} for ${esc(w.sku)}">`;
+          return `<tr class="${w.verdict==="blocked"?"fb-off":""}">
+          <td>${esc(w.sku)}</td><td>${esc(fbBandLabel(w.slab))}</td>
+          <td class="fb-parcel"><div class="fb-row">${inp("kg","kg",60)}<span class="sa-sub" style="font-size:11px">cm</span>${inp("l","L",42)}${inp("w","W",42)}${inp("h","H",42)}</div></td>
+          <td class="num">${w.verdict==="blocked"?`<span class="sa-sub">${inr(w.save)}</span>`:`<b>${inr(w.save)}</b>`}</td>
+          <td class="num">${num(w.units)}</td>
+          <td class="num">${w.verdict==="blocked"?`<span class="sa-sub">${inr(w.prize)}</span>`:inr(w.prize)}</td>
+          <td class="sa-sub">${fbWeightVerdict(w)}</td></tr>`;}).join("")}
         </tbody></table></div>
-      <div class="rec-claim"><b>How to act:</b> weigh and measure the packed parcel — if volumetric weight is the higher of the two, a smaller box wins the band without removing a gram (check both in the <a href="#/fba-fee">FBA fee calculator</a>). Where a SKU is billed <i>heavier</i> than it usually ships, that specific charge may be reclaimable — <a href="#/reconcile">Reconciliation</a> lists those.</div></div>`;
-    if(!proven.length&&maybe.length)
-      h+=`<div class="banner info">None of these has ever been billed the lower band, so each one is a target rather than a proven saving — worth checking the scales before repacking anything.</div>`;
+      <div class="rec-claim"><b>How to act:</b> where your own weight says Amazon is billing a band too heavy, raise it as a fee claim — <a href="#/reconcile">Reconciliation</a> lists the individual charges and the 30-day window. Where the parcel really is in the band, only a lighter pack or a smaller box moves it; check both in the <a href="#/fba-fee">FBA fee calculator</a>.</div></div>`;
+    if(n.atEdge)
+      h+=`<div class="banner warn">${n.atEdge} SKU${n.atEdge>1?"s sit":" sits"} within ${FB_EDGE_G} g of the <b>next band up</b> — thicker tape, a bigger box or a heavier insert would push ${n.atEdge>1?"them":"it"} over, and the step costs more than the packaging ever will. Worth pinning the current pack down before anyone changes it.</div>`;
+    if(n.underBilled)
+      h+=`<div class="banner info">${n.underBilled} SKU${n.underBilled>1?"s are":" is"} billed a band <b>lighter</b> than the parcel you entered — nothing to win there, and if Amazon re-measures it will cost more, so ${n.underBilled>1?"they are":"it is"} left out of the list entirely.</div>`;
+    if(res.totals.blocked>0)
+      h+=`<div class="banner info">${inr(res.totals.blocked)} of the weight list is <b>ruled out by the weights you entered</b> — those products are heavier than the band below, so no repacking reaches it. Left in the table, greyed, but kept out of every total.</div>`;
+    if(!proven.length&&maybe.length&&!n.weighed)
+      h+=`<div class="banner info">No parcel weights entered yet, so each of these is a target rather than a saving — Amazon's charge shows the band it billed, not what the parcel weighs.</div>`;
   }
   const lim=[];
   if(n.wtLines||n.wtUnknown) lim.push(`read the weight band off <b>${num(n.wtLines)}</b> of ${num(n.wtLines+n.wtUnknown)} weight-handling charges — Amazon publishes flat rates only to 2 kg, above which the ladder is additive and the band can't be read back`);
@@ -4952,6 +5059,13 @@ function fbWire(out,res){
   out.querySelectorAll("[data-rm]").forEach(b=>b.addEventListener("click",()=>{
     fbFiles.splice(Number(b.dataset.rm),1); fbRenderResults();
   }));
+  out.querySelectorAll(".fb-w").forEach(inp=>inp.addEventListener("change",()=>{
+    const wts=loadFbWeights(),sku=inp.dataset.fbwSku,k=inp.dataset.fbwK,v=inp.value.trim();
+    const e=wts[sku]||{};
+    if(v===""||!(Number(v)>0)) delete e[k]; else e[k]=Number(v);
+    if(Object.keys(e).length) wts[sku]=e; else delete wts[sku];
+    saveFbWeights(wts); fbRenderResults();
+  }));
   const csv=out.querySelector("#fb-csv");
   if(csv&&res) csv.addEventListener("click",()=>{
     const q=v=>`"${String(v??"").replace(/"/g,'""')}"`;
@@ -4960,9 +5074,10 @@ function fbWire(out,res){
       lines.push(["Price step",o.sku,o.price.toFixed(2),o.target.toFixed(2),(o.refSave+o.closeSave).toFixed(2),
         o.give.toFixed(2),o.net.toFixed(2),o.units,o.prize.toFixed(2),fbPriceNote(o)].map(q).join(","));
     for(const w of res.weight)
-      lines.push(["Weight band",w.sku,"band "+(w.slab+1),"band "+(w.target+1),w.save.toFixed(2),"0.00",
-        w.save.toFixed(2),w.units,w.prize.toFixed(2),
-        w.proven?`already billed the lower band on ${w.provenN} of ${w.ships} shipments`:`${w.ships} shipments, all in this band`].map(q).join(","));
+      lines.push([w.verdict==="blocked"?"Weight band (ruled out)":"Weight band",w.sku,
+        "band "+(w.slab+1),"band "+(w.target+1),w.save.toFixed(2),"0.00",
+        w.save.toFixed(2),w.units,w.verdict==="blocked"?"0.00":w.prize.toFixed(2),
+        fbWeightVerdict(w).replace(/<[^>]+>/g,"")].map(q).join(","));
     const a=document.createElement("a");
     a.href=URL.createObjectURL(new Blob([lines.join("\r\n")],{type:"text/csv"}));
     a.download="fee-band-savings.csv";
