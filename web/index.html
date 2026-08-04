@@ -4748,19 +4748,39 @@ function recCompute(settlements,mtrRows,extra){
      ORDER, deliberately: on a multi-item order a return of any line counts,
      so a false claim is never generated at the cost of missing a few. */
   const haveReturns=fbaReturns.length>0, haveReimb=reimbRows.length>0;
+  let retCoverEnd=null, nrTooRecent=0;
   if(haveReturns&&haveReimb){
     const returnedOrders=new Set(fbaReturns.map(r=>r.orderId).filter(Boolean));
     const reimbOrders=new Set(reimbRows.map(r=>r.orderId).filter(Boolean));
+    /* The returns report only proves absence WITHIN ITS OWN DATES. A refund's
+       return can arrive up to 45 days later, and the reimbursement a little
+       after that — so a refund is only judged when the report's coverage
+       (proxied by its newest return row) extends 45 days past the refund,
+       plus a week for the reimbursement to post. Export the reports through
+       TODAY, not through the statement end, and nothing is left unjudged. */
+    for(const r of fbaReturns) if(r.date&&(!retCoverEnd||r.date>retCoverEnd)) retCoverEnd=r.date;
+    const coverDay=retCoverEnd?recDayNo(retCoverEnd):null;
     for(const rec of records){
       if(!/refund/i.test(rec.transactionType)||rec.fulfillmentId!=="AFN"||rec.principal>=-0.005) continue;
       if(returnedOrders.has(rec.orderId)||reimbOrders.has(rec.orderId)) continue;
       const d=saParseDate(rec.postedDate);
       const days=d?Math.floor((Date.now()-new Date(d+"T00:00:00Z").getTime())/86400000):null;
       if(days===null||days<45) continue;   // the buyer's return window is still open
+      if(coverDay===null||recDayNo(d)+45+7>coverDay){ nrTooRecent++; continue; }
       notReturned.push({check:"notReturned",orderId:rec.orderId,sku:rec.sku,date:rec.postedDate,
         amount:Math.round(Math.abs(rec.principal)*100)/100,days,
         note:"Refunded "+days+" days ago — the item never reached a fulfilment centre and no reimbursement was ever issued"});
     }
+    /* One order can carry a refund record per unit; a claim quotes the order
+       once, so merge them and sum the money. */
+    {const m=new Map();
+     for(const x of notReturned){
+       const k=x.orderId+"|"+(x.sku||"");
+       const e=m.get(k);
+       if(e){ e.amount=Math.round((e.amount+x.amount)*100)/100; e.note=e.note.replace(/^Refunded/,"Refunded (2+ units)"); }
+       else m.set(k,x);
+     }
+     notReturned.length=0; notReturned.push(...m.values());}
     notReturned.sort((a,b)=>(b.amount||0)-(a.amount||0));
     /* Returns damaged in Amazon's hands. CUSTOMER_DAMAGED and DEFECTIVE are
        excluded on purpose — policy puts those on the buyer or the product,
@@ -4795,7 +4815,7 @@ function recCompute(settlements,mtrRows,extra){
     notes:{feesItemised,feeLinesPresent,ordersWithFee,refundsNoOriginal,refundsNoFee,negativeNoRevenue,feeLinesAudited,weightLinesAudited,
       skippedCancelled,skippedRecent,gaps,covEnd,cutoff,mtrOrders,manyUnmatched,
       haveReturns:fbaReturns.length>0,haveReimb:reimbRows.length>0,
-      returnRows:fbaReturns.length,reimbRows:reimbRows.length}};
+      returnRows:fbaReturns.length,reimbRows:reimbRows.length,retCoverEnd,nrTooRecent}};
 }
 window.recCompute=recCompute; // exposed for verification/debugging
 
@@ -4949,7 +4969,7 @@ function recRenderResults(){
   if(n.negativeNoRevenue)
     h+=`<div class="banner info">${n.negativeNoRevenue} order${n.negativeNoRevenue>1?"s carry":" carries"} fulfilment fees here but no sale — the revenue is in a statement you haven't loaded, so ${n.negativeNoRevenue>1?"they were":"it was"} left out of the loss-making check rather than counted as a loss.</div>`;
   if(n.haveReturns&&n.haveReimb)
-    h+=`<div class="banner info">FBA returns (${num(n.returnRows)} rows) and Reimbursements (${num(n.reimbRows)} rows) loaded — the <b>refunded-never-returned</b> and <b>damaged-in-Amazon's-hands</b> checks ran against every FBA refund.</div>`;
+    h+=`<div class="banner info">FBA returns (${num(n.returnRows)} rows) and Reimbursements (${num(n.reimbRows)} rows) loaded — the <b>refunded-never-returned</b> and <b>damaged-in-Amazon's-hands</b> checks ran against every FBA refund.${n.nrTooRecent?` <b>${n.nrTooRecent} refund${n.nrTooRecent>1?"s":""}</b> could not be judged: the returns report's newest row is ${esc(saFmtDay(n.retCoverEnd))}, and their 45-day return window runs past it — re-export both reports <b>through today</b> and they can be.`:""}</div>`;
   else if(n.haveReturns||n.haveReimb)
     h+=`<div class="banner warn">Only ${n.haveReturns?"the FBA returns report":"the Reimbursements report"} is loaded — the returns checks need <b>both</b>, or a missing reimbursement can't be told from an unloaded one. Add ${n.haveReturns?"<b>Payments → Reimbursements</b>":"<b>Fulfilment → FBA customer returns</b>"} (Reports → Fulfilment, Download tab, same date range as your statements).</div>`;
   else
