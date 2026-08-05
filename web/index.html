@@ -1568,6 +1568,8 @@ const HELP={
     steps:["Drop all your settlement files at once (or add them one by one — duplicates are skipped).","Read the month-by-month charts: sales, fees as % of sales, refund rate and net payout.","Pick a SKU to see its own monthly units, sales and net — is it growing, and is it still worth the fees?"]},
   "ads-optimizer":{input:`<b>Advertising console → Sponsored ads → Reports (or Measurement &amp; reporting) → Sponsored Products → Search term</b> — export for 30–60 days. The .xlsx it hands out drops straight in; CSV works too.`,
     steps:["Drop the Search Term report (several files at once is fine — re-drops replace). Optional but worth it: add the Advertised-product report for the same period, plus your settlement files — terms in single-SKU ad groups are then judged against that SKU's own break-even ACOS instead of a flat line.","Export the negatives list and paste each term as a negative exact into the campaign it spent in.","Move the winners into their own exact-match keywords, then negate them where they came from so the two never bid against each other.","Check the campaign scoreboard monthly — and judge affordability per SKU in Ad Profitability, which knows each product's break-even ACOS."]},
+  "stranded":{input:`<b>Fulfilment Reports → Inventory → Stranded Inventory</b> → Request .csv Download (no date range — it is a live snapshot). Optional: add settlement files so rows whose listings were deleted can be valued at the SKU's own average selling price.`,
+    steps:["Drop the report — the snapshot lists every unit in the warehouse with no active listing to sell through.","Work the reasons panel: listing errors are minutes to fix and need no removal; deleted listings need a relist; under-review stock needs a case, not an edit.","Watch the auto-removal column — Amazon removes stranded stock itself after a deadline, and that removal is not free.","Cross-check the same ASINs in the Storage Fee Analyzer — stranded stock pays rent the whole time."]},
   "rto":{input:`<b>Fulfilment Reports → Sales → All Orders</b> → Order Date → last 30 days → Request Download (a .txt file). Optional: the <b>seller-fulfilled Return Report</b> (Orders → Manage Returns → View reports) to see which RTOs were already refunded.`,
     steps:["Drop the All Orders file — several files with overlapping periods are fine, duplicates are removed by order item.","Read the state table worst-first: a state shipping back 10%+ of parcels needs prepaid-only offers or COD verification there, not better products.","Check the repeat-RTO pincodes — two or more parcels back from one pincode is a pattern, not luck.","Cross-check refunded RTOs in Reconciliation: refunded + never delivered back is the strongest SAFE-T case."]},
   "storage":{input:`<b>Reports → Fulfilment Reports → Payments → Monthly Storage Fees</b> → pick the month → Request .csv Download. One file per month; the newest complete month is usually last month (the current month shows "No Data Available" until Amazon bills it).`,
@@ -2279,6 +2281,10 @@ const PW_MOCKS={
     <div class="row"><span>"lunch box steel" · 9 orders</span><b class="amt pos">12% ACOS</b></div>
     <div class="row"><span>Terms to negate</span><b class="big">31</b></div>
     <div class="row"><span>Spend they were eating</span><b class="amt neg">−₹4,812</b></div>`,
+  stranded:`<div class="row"><span>Units stranded</span><b class="big">406</b></div>
+    <div class="row"><span>Value stuck</span><b class="amt neg">−₹1,43,766</b></div>
+    <div class="row"><span>Longest stuck · under review</span><b class="big">142 days</b></div>
+    <div class="row"><span>Fix = edit the listing</span><b class="big">4 rows</b></div>`,
   rto:`<div class="row"><span>RTO rate · 30 days</span><b class="big">3.8%</b></div>
     <div class="row"><span>JHARKHAND · 16 shipped</span><b class="amt neg">18.8% back</b></div>
     <div class="row"><span>Order value on RTO parcels</span><b class="amt neg">−₹13,983</b></div>
@@ -2331,6 +2337,11 @@ const ADSO_INFO={route:"ads-optimizer",title:"Ads Optimizer",plan:"Pro",needPro:
   desc:"The Search Term report shows what buyers actually typed. This turns it into the four lists worth acting on.",
   feats:["Search terms eating spend with zero orders — a paste-ready negative list","Winners under broad/auto that earned their own exact match","Terms converting at a loss, campaign scoreboard with verdicts","Reads the .xlsx straight from the ads console"],
   mock:PW_MOCKS.adsopt};
+const STR_INFO={route:"stranded",title:"Stranded Inventory",plan:"Pro",needPro:true,
+  price:"₹499/month — unlock with Pro",priceAlt:"or ₹2,499/year (save ~58%)",
+  desc:"Stock in Amazon's warehouse that cannot sell — paying rent, earning nothing. The report names the fix; this adds the value and the clock.",
+  feats:["Every stranded listing with Amazon's own reason and suggested fix","Value stuck — listing price, or the SKU's settlement average when the listing is gone","Days stuck per listing; 90+ day rows flagged","Auto-removal warnings before Amazon removes the stock itself"],
+  mock:PW_MOCKS.stranded};
 const RTO_INFO={route:"rto",title:"RTO Radar",plan:"Pro",needPro:true,
   price:"₹499/month — unlock with Pro",priceAlt:"or ₹2,499/year (save ~58%)",
   desc:"Every undelivered parcel costs two courier journeys. Amazon records the outcome — this totals it up by state, pincode and SKU.",
@@ -2528,6 +2539,7 @@ function renderAccount(){
             <a href="#/returns">↩️ Returns Analyzer</a>
             <a href="#/storage">📦 Storage Fee Analyzer</a>
             <a href="#/rto">🔁 RTO Radar</a>
+            <a href="#/stranded">🚧 Stranded Inventory</a>
             <a href="#/trends">📈 Multi-Month Trends</a>
           </div>
         </div>
@@ -3006,6 +3018,7 @@ function renderHome(){
         <a class="tile" href="#/returns"><span class="pill">Pro</span><div class="ico">↩️</div><h3>Returns Analyzer</h3><p>What returns cost per SKU, how much stock comes back sellable, and Amazon's reasons bucketed into RTO, product and listing problems.</p></a>
         <a class="tile" href="#/storage"><span class="pill">Pro</span><div class="ico">📦</div><h3>Storage Fee Analyzer</h3><p>Which ASINs pay the warehouse rent, which pay rent while selling nothing, and months of cover per ASIN — from Amazon's own billing report.</p></a>
         <a class="tile" href="#/rto"><span class="pill">Pro</span><div class="ico">🔁</div><h3>RTO Radar</h3><p>RTO rate by state and pincode, per-SKU return-to-origin economics, and the order value stuck in transit back to you.</p></a>
+        <a class="tile" href="#/stranded"><span class="pill">Pro</span><div class="ico">🚧</div><h3>Stranded Inventory</h3><p>Stock in the warehouse that cannot sell — its value, how long it has been stuck, and Amazon's own fix for every row.</p></a>
       </div>
 
       <section class="lp2-sec">
@@ -3145,6 +3158,7 @@ function renderPricing(){
             <li><span class="tick">✓</span> Returns Analyzer</li>
             <li><span class="tick">✓</span> Storage Fee Analyzer</li>
             <li><span class="tick">✓</span> RTO Radar</li>
+            <li><span class="tick">✓</span> Stranded Inventory</li>
             <li><span class="tick">✓</span> Multi-month Trends</li>
           </ul>
           ${paidBtn(pr," sec")}
@@ -9603,6 +9617,214 @@ function rtoWire(out,r){
   });
 }
 
+/* ============================================================
+   STRANDED INVENTORY (Pro) — stock in the warehouse that cannot
+   sell. Amazon's Stranded Inventory report lists every unit that
+   is physically in an FC but has no active listing to sell
+   through — deleted listings, listing errors, stock under
+   review. It pays storage rent and earns nothing, and the
+   report even names the fix per row. Where the report has no
+   price (the listing is gone), the value is taken from the
+   SKU's own average selling price in your settlements — and
+   marked as such, never silently.
+   ============================================================ */
+let strFiles=[];
+const STR_REASON_ADVICE={
+  "listing error":"The listing exists but something in it blocks selling — open Fix stranded inventory in Seller Central, correct the detail, and the stock returns to sale without moving.",
+  "deleted listing":"The listing was deleted while stock remained — relist the SKU (Amazon's suggested action is usually 'Create a new listing') and the units become sellable again.",
+  "inventory under review":"Amazon is holding this stock while it reviews the product — nothing to fix in the listing; chase the review through Case Log if it has sat for weeks.",
+  "expired":"Past its expiry window — removal is usually the only path.",
+  "qualification required":"The category or brand needs approval before the stock can sell — apply, or remove the stock.",
+};
+function strDate(sv){
+  const m=String(sv||"").trim().match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  return m?`${m[3]}-${m[1]}-${m[2]}`:null;   // MM/DD/YYYY → ISO
+}
+function parseStranded(text){
+  const recs=saCsvRecords(text);
+  if(!recs.length) return null;
+  const cols=recs[0].map(h=>h.trim().toLowerCase());
+  const ix=n=>cols.indexOf(n);
+  const iAction=ix("primary-action"),iDate=ix("date-stranded"),iAuto=ix("date-to-take-auto-removal"),
+        iReason=ix("stranded-reason"),iAsin=ix("asin"),iSku=ix("sku"),iName=ix("product-name"),
+        iQty=ix("fulfillable-qty"),iPrice=ix("your-price"),iUnf=ix("unfulfillable-qty"),
+        iRes=ix("reserved-quantity"),iErr=ix("error-message");
+  if(iReason<0||iSku<0||iDate<0) return null;
+  const rows=[];
+  for(let i=1;i<recs.length;i++){
+    const f=recs[i];
+    if(!f[iSku]&&!f[iAsin]) continue;
+    rows.push({sku:(f[iSku]||"").trim(),asin:iAsin>=0?(f[iAsin]||"").trim():"",
+      name:iName>=0?(f[iName]||"").replace(/\s+/g," ").trim():"",
+      reason:(f[iReason]||"").trim(),action:iAction>=0?(f[iAction]||"").trim():"",
+      error:iErr>=0?(f[iErr]||"").trim():"",
+      dateStranded:strDate(f[iDate]),autoRemoval:iAuto>=0?strDate(f[iAuto]):null,
+      qty:Number(f[iQty])||0,unfQty:iUnf>=0?(Number(f[iUnf])||0):0,
+      reserved:iRes>=0?(Number(f[iRes])||0):0,
+      price:iPrice>=0?(saParseAmount(f[iPrice])||0):0});
+  }
+  return rows.length?{rows}:null;
+}
+window.parseStranded=parseStranded; // exposed for verification/debugging
+function strandedCompute(rows,settlements,today){
+  const now=today?new Date(today+"T00:00:00Z"):new Date();
+  /* price fallback: the SKU's average unit principal from settlements */
+  const avgPrice=new Map();
+  if(settlements&&settlements.length){
+    for(const s of skuCompute({records:settlements.flatMap(p=>p.records)}))
+      if(s.units>0&&s.sales>0) avgPrice.set(s.sku,s.sales/s.units);
+  }
+  const items=rows.map(r=>{
+    const days=r.dateStranded?Math.max(0,Math.round((now-new Date(r.dateStranded+"T00:00:00Z"))/86400000)):null;
+    const units=r.qty+r.unfQty;
+    let unitValue=r.price>0?r.price:(avgPrice.get(r.sku)||0);
+    return {...r,units,days,
+      value:unitValue>0?units*unitValue:null,
+      valueBasis:r.price>0?"price":(avgPrice.has(r.sku)?"settlements":"unknown")};
+  }).sort((a,b)=>(b.value||0)-(a.value||0)||b.units-a.units);
+  const t={items:items.length,units:0,value:0,valueUnknownUnits:0,oldest:0,over90:0,autoRemovals:0};
+  const byReason=new Map();
+  for(const x of items){
+    t.units+=x.units;
+    if(x.value!==null) t.value+=x.value; else t.valueUnknownUnits+=x.units;
+    if(x.days!==null&&x.days>t.oldest) t.oldest=x.days;
+    if(x.days!==null&&x.days>90) t.over90++;
+    if(x.autoRemoval) t.autoRemovals++;
+    const k=x.reason.toLowerCase();
+    const e=byReason.get(k)||{reason:x.reason,items:0,units:0,value:0};
+    e.items++; e.units+=x.units; e.value+=x.value||0; byReason.set(k,e);
+  }
+  const reasons=[...byReason.values()].map(e=>({...e,
+    advice:STR_REASON_ADVICE[e.reason.toLowerCase()]||"Amazon's own row-level suggested action (in the table) is the fix path."}))
+    .sort((a,b)=>b.units-a.units);
+  return {items,reasons,totals:t,havePrices:avgPrice.size>0};
+}
+window.strandedCompute=strandedCompute; // exposed for verification/debugging
+function strStatus(x){
+  if(x.days!==null&&x.days>90) return {k:"loss",l:"Stuck 90+ days"};
+  if(x.days!==null&&x.days>30) return {k:"problem",l:"Stuck 30+ days"};
+  if(x.autoRemoval) return {k:"watch",l:"Auto-removal set"};
+  return {k:"watch",l:"Stranded"};
+}
+window.strStatus=strStatus; // exposed for verification/debugging
+
+function renderStranded(){
+  setMeta("Stranded Inventory — Seller Tools India",
+    "Drop Amazon's Stranded Inventory report and see the stock sitting in the warehouse that cannot sell — its value, how long it has been stuck, and the exact fix per row.");
+  backBtn.hidden=false;
+  gatePremium(STR_INFO, strBody);
+}
+function strBody(){
+  app.innerHTML=`
+    <div class="wrap page">
+      <h2>Stranded Inventory</h2>
+      <p class="lede">Stranded stock is in Amazon's warehouse, paying storage rent, and <b>cannot sell</b> — the listing is broken, deleted or under review. Amazon's report names the fix for every row; this adds what it's worth and how long it has been stuck.</p>
+      ${helpHtml("stranded")}
+      <label class="sa-drop" id="str-drop">
+        <div class="ico">🚧</div>
+        <h3>Drop the Stranded Inventory report here</h3>
+        <p>Fulfilment Reports → Inventory → Stranded Inventory → Request .csv Download. Optional: add settlement files to value the rows whose listings are gone. (.csv, .txt, .xlsx)</p>
+        <input type="file" id="str-file" multiple accept=".csv,.txt,.tsv,.xlsx,text/plain,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+      </label>
+      <div class="sa-priv">🔒 Private by design — your files never leave your device. Every figure is computed locally on this page.</div>
+      <div id="str-out"></div>
+    </div>`;
+  const drop=document.getElementById("str-drop"),file=document.getElementById("str-file");
+  ["dragenter","dragover"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add("over");}));
+  ["dragleave","drop"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove("over");}));
+  drop.addEventListener("drop",ev=>{strAddFiles(ev.dataTransfer.files);});
+  file.addEventListener("change",()=>{strAddFiles(file.files);file.value="";});
+  if(strFiles.length) strRenderResults();
+}
+function strAddFiles(list){
+  const files=[...(list||[])]; if(!files.length) return;
+  let pending=files.length;
+  files.forEach(f=>{
+    const finish=()=>{ if(--pending===0) strRenderResults(); };
+    saReadDropped(f,text=>{
+      strFiles=strFiles.filter(x=>x.name!==f.name);
+      const st=parseStranded(text);
+      if(st){ strFiles.push({name:f.name,kind:"stranded",rows:st.rows}); finish(); return; }
+      const p=parseUnifiedTransaction(text)||parseSettlement(text);
+      if(p&&(p.records.length||p.summary)){
+        const dup=p.summary&&strFiles.some(x=>x.kind==="settlement"&&x.parsed.summary&&x.parsed.summary.settlementId===p.summary.settlementId);
+        if(dup) strFiles.push({name:f.name,kind:"error",msg:"same settlement ID as a file already loaded — skipped."});
+        else strFiles.push({name:f.name,kind:"settlement",parsed:p});
+      }
+      else strFiles.push({name:f.name,kind:"error",msg:"not recognised as a Stranded Inventory report or a settlement file."+saDescribeColumns(text)});
+      finish();
+    },msg=>{ strFiles=strFiles.filter(x=>x.name!==f.name); strFiles.push({name:f.name,kind:"error",msg}); finish(); });
+  });
+}
+function strRenderResults(){
+  const out=document.getElementById("str-out"); if(!out) return;
+  const kindLabel={stranded:"Stranded report",settlement:"Settlement",error:"Skipped"};
+  let h=`<div class="rec-files">${strFiles.map((f,i)=>`<span class="rec-file"${f.kind==="error"?` title="${esc(f.msg)}"`:""}><b>${esc(f.name)}</b><span class="rf-kind">${f.kind==="error"?"⚠ "+kindLabel.error:kindLabel[f.kind]}</span><button type="button" data-rm="${i}" aria-label="Remove ${esc(f.name)}">✕</button></span>`).join("")}</div>`;
+  const bad=strFiles.filter(f=>f.kind==="error");
+  if(bad.length) h+=`<div class="banner warn">${bad.map(f=>`<b>${esc(f.name)}</b>: ${esc(f.msg)}`).join("<br>")}</div>`;
+  const rows=strFiles.filter(f=>f.kind==="stranded").flatMap(f=>f.rows);
+  const settlements=strFiles.filter(f=>f.kind==="settlement").map(f=>f.parsed);
+  if(!rows.length){
+    if(strFiles.length) h+=`<div class="banner info">Waiting for the Stranded Inventory report.</div>`;
+    out.innerHTML=h; strWire(out); return;
+  }
+  const r=strandedCompute(rows,settlements);
+  const t=r.totals;
+  h+=`<div class="stats">
+    <div class="stat ${t.units>0?"red":"green"}"><div class="k">Units stranded</div><div class="v">${num(t.units)}</div><div class="sa-sub" style="margin-top:3px">${num(t.items)} listing${t.items===1?"":"s"} — in the warehouse, unable to sell</div></div>
+    <div class="stat ${t.value>0?"red":""}"><div class="k">Value stuck</div><div class="v">${t.value>0?inr0(t.value):"—"}</div><div class="sa-sub" style="margin-top:3px">${t.valueUnknownUnits>0?num(t.valueUnknownUnits)+" units have no known price — "+(r.havePrices?"not seen in the settlements either":"add settlement files to value them"):"at listing price, or the SKU's own settlement average where the listing is gone"}</div></div>
+    <div class="stat ${t.oldest>90?"red":""}"><div class="k">Longest stuck</div><div class="v">${t.oldest?num(t.oldest)+" days":"—"}</div><div class="sa-sub" style="margin-top:3px">${t.over90?num(t.over90)+" listing"+(t.over90===1?"":"s")+" stranded 90+ days":"no listing over 90 days"}</div></div>
+    <div class="stat ${t.autoRemovals>0?"red":""}"><div class="k">Auto-removal scheduled</div><div class="v">${num(t.autoRemovals)}</div><div class="sa-sub" style="margin-top:3px">${t.autoRemovals?"Amazon will remove these itself — act before it does":"none scheduled"}</div></div>
+  </div>`;
+  h+=`<div class="panel"><h4>Why it's stranded — and the fix</h4>
+    ${r.reasons.map(e=>`<div style="margin:10px 0">
+      <div style="display:flex;justify-content:space-between;gap:10px;font-size:13.5px"><b>${esc(e.reason)}</b><span>${num(e.units)} units${e.value>0?" · "+inr0(e.value):""}</span></div>
+      <div class="sa-sub">${esc(e.advice)}</div></div>`).join("")}
+  </div>`;
+  h+=`<div style="display:flex;justify-content:flex-end;margin:14px 0 2px"><button type="button" class="fbtn" id="str-csv">⬇ Export CSV</button></div>
+    <div class="panel"><h4>Every stranded listing</h4>
+    <div class="tblwrap"><table class="sa">
+      <thead><tr><th>SKU</th><th>Product</th><th>Status</th><th class="num">Units</th><th class="num">Value</th><th class="num" title="Days since the date-stranded column">Days stuck</th><th>Reason</th><th>Amazon's suggested action</th></tr></thead>
+      <tbody>${r.items.map(x=>`<tr>
+        <td>${esc(x.sku.slice(0,28))}</td><td class="sa-sub" style="max-width:180px">${esc(x.name.slice(0,45))}</td>
+        <td>${stChip(strStatus(x))}</td>
+        <td class="num"><b>${num(x.units)}</b></td>
+        <td class="num">${x.value!==null?inr0(x.value)+(x.valueBasis==="settlements"?'<span class="sa-sub" title="valued at the SKU average selling price in your settlements — the listing has no price">*</span>':""):'<span class="sa-sub">unknown</span>'}</td>
+        <td class="num">${x.days!==null?num(x.days):"—"}</td>
+        <td class="sa-sub">${esc(x.reason)}</td><td class="sa-sub">${esc(x.action||"—")}</td></tr>`).join("")}
+      </tbody></table></div>
+    ${r.items.some(x=>x.valueBasis==="settlements")?`<div class="sa-sub" style="margin-top:6px">* valued at the SKU's own average selling price from your settlements — the stranded listing itself no longer carries a price.</div>`:""}</div>`;
+  h+=`<details class="howto"><summary>How every number here is computed</summary><div class="hbody">
+    <span class="htag">Formulas &amp; sources</span>
+    <ol>
+      <li>Rows come straight from Amazon's Stranded Inventory report — its stranded-reason and suggested-action columns are Amazon's own.</li>
+      <li><b>Units</b> = fulfillable + unfulfillable quantity. <b>Days stuck</b> counts from the report's date-stranded to today.</li>
+      <li><b>Value</b> = units × the listing's your-price; where the listing is gone, units × the SKU's average unit selling price from your settlements (marked *). No price in either source → "unknown", never guessed.</li>
+      <li>Stranded stock still pays monthly storage — the <a href="#/storage">Storage Fee Analyzer</a> shows what these very units cost to keep.</li>
+      <li>Status: <span class="st st-loss">Stuck 90+ days</span> · <span class="st st-problem">Stuck 30+ days</span> · <span class="st st-watch">Auto-removal set / Stranded</span>.</li>
+    </ol>
+  </div></details>`;
+  const worst=r.items[0];
+  h+=`<div class="panel"><h4>What should I do next?</h4><ul style="margin:8px 0 0 18px;line-height:1.9;font-size:13.5px">
+    ${worst&&worst.value?`<li>Start with <b>${esc(worst.sku)}</b> — ${num(worst.units)} units${worst.value?" worth "+inr0(worst.value):""} stuck${worst.days?" for "+num(worst.days)+" days":""}. Reason: ${esc(worst.reason)}. ${esc((STR_REASON_ADVICE[worst.reason.toLowerCase()]||"Follow Amazon's suggested action in the table."))}</li>`:""}
+    <li>Fixing a listing error takes minutes and needs no removal order — work the "Listing error" rows first; the stock returns to sale where it stands.</li>
+    <li>Every week stranded is another week of storage rent on stock earning nothing — cross-check these ASINs in the <a href="#/storage">Storage Fee Analyzer</a>.</li>
+  </ul></div>`;
+  out.innerHTML=h; strWire(out,r);
+}
+function strWire(out,r){
+  out.querySelectorAll("[data-rm]").forEach(b=>b.addEventListener("click",()=>{
+    strFiles.splice(Number(b.dataset.rm),1); strRenderResults();
+  }));
+  const csv=out.querySelector("#str-csv");
+  if(csv&&r) csv.addEventListener("click",()=>{
+    saCsvDownload("stranded-inventory.csv",
+      ["SKU","ASIN","Product","Status","Units","Value (INR)","Value basis","Days stuck","Reason","Suggested action","Auto-removal date"],
+      r.items.map(x=>[x.sku,x.asin,x.name,strStatus(x).l,x.units,x.value!==null?x.value.toFixed(2):"",x.valueBasis,
+        x.days!==null?x.days:"",x.reason,x.action,x.autoRemoval||""]));
+  });
+}
+
 function renderAdsOptimizer(){
   setMeta("Ads Optimizer — Seller Tools India",
     "Drop your Sponsored Products Search Term report and get the lists that matter: search terms to negate, terms that earned an exact-match campaign, terms converting at a loss, and a campaign scoreboard — computed in your browser.");
@@ -9781,6 +10003,7 @@ function route(){
   if(h==="returns"){renderReturnsAnalyzer();window.scrollTo(0,0);return;}
   if(h==="storage"){renderStorageFees();window.scrollTo(0,0);return;}
   if(h==="rto"){renderRtoRadar();window.scrollTo(0,0);return;}
+  if(h==="stranded"){renderStranded();window.scrollTo(0,0);return;}
   if(h==="ad-profit"){renderAdProfit();window.scrollTo(0,0);return;}
   if(h==="link-builder"){renderLinkBuilder();window.scrollTo(0,0);return;}
   if(h==="keyword-combiner"){renderKeywordCombiner();window.scrollTo(0,0);return;}
@@ -9796,7 +10019,7 @@ function route(){
 window.addEventListener("hashchange",route);
 /* Premium tools re-check entitlement when the tab regains focus, so a session
    kicked on another device locks here within seconds of the user returning. */
-const PREMIUM_ROUTES=["settlement-analyzer","gst-report","sku-report","reconcile","trends","ad-profit","fee-bands","ads-optimizer","returns","storage","rto"];
+const PREMIUM_ROUTES=["settlement-analyzer","gst-report","sku-report","reconcile","trends","ad-profit","fee-bands","ads-optimizer","returns","storage","rto","stranded"];
 window.addEventListener("focus",()=>{
   const h=location.hash.replace(/^#\/?/,"");
   if(!PREMIUM_ROUTES.includes(h) || saUnlocked() || !sessionUser()) return;
@@ -9830,6 +10053,7 @@ function pingNow(){ _lastPing=0; try{ sendPing(); }catch(e){} }
    entry per shipped change a seller can actually feel.
    ============================================================ */
 const CHANGELOG=[
+  {d:"2026-08-05",t:"Stranded Inventory — a new Pro tool",n:"Stock in Amazon's warehouse that cannot sell: every stranded listing with its value (priced from your settlements when the listing is gone), days stuck, Amazon's own reason and suggested fix, and auto-removal warnings."},
   {d:"2026-08-05",t:"RTO Radar — a new Pro tool",n:"The All Orders report records which parcels came back undelivered — it just never totals it up. Now: RTO rate by state (with a minimum-sample guard), repeat-RTO pincodes, per-SKU RTO economics, cancellations separated out, and which RTOs were already refunded."},
   {d:"2026-08-04",t:"Storage Fee Analyzer — a new Pro tool",n:"Amazon's Monthly Storage Fees report, turned into the question that matters: which stock pays rent without paying its way. Per-ASIN fee, months of cover, rent per unit sold, and the ASINs that paid rent while selling zero units."},
   {d:"2026-08-04",t:"Returns Analyzer — a new Pro tool",n:"Settlements plus Amazon's two return reports, turned into per-SKU return economics: what refunds eat of each SKU's sales, how much FBA stock comes back sellable, the courier-RTO share, return labels you paid, and every reason bucketed into an action."},
