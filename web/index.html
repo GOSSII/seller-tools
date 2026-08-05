@@ -5216,7 +5216,7 @@ const REC_CHECKS={
     claim:`<b>Seller Central → Help → Get Support → Selling on Amazon</b> → describe it as "Referral fee not credited back on refund" and quote the Order ID and refund date. Ask them to compare the refund's fee lines with the original order.`},
   safeT:{icon:"🛡️",title:"SAFE-T-eligible refunds (seller-fulfilled)",
     why:"Amazon refunded the buyer on these Easy Ship / Self Ship orders. If the item never came back, came back damaged or the refund was against policy, claim reimbursement through SAFE-T.",
-    claim:`<b>Seller Central → Help → Get Support → Selling on Amazon → search "SAFE-T"</b> → File a SAFE-T claim → enter the Order ID. File within <b>60 days</b> of the refund date — older rows are marked.`},
+    claim:`<b>Seller Central → Help → Get Support → Selling on Amazon → search "SAFE-T"</b> → File a SAFE-T claim → enter the Order ID, and paste the text from the row's <b>📋 Claim</b> button. File within <b>60 days</b> of the refund date — older rows are marked.`},
   shipped:{icon:"📦",title:"Shipped but no payment line",
     why:"These orders are shipments in your MTR with no Order payment in any settlement you loaded. Cancelled and refunded shipments, and anything shipped in the last fortnight of the loaded period, are already excluded — but the payment still most often sits in a statement you haven't loaded. Load every statement covering the period before raising a claim.",
     claim:`First search the Order ID in <b>Payments → Transaction View</b>. If the shipment is over 30 days old and still unpaid: <b>Help → Get Support → Selling on Amazon → Payments</b>, quoting the Order ID and ship date.`},
@@ -5382,14 +5382,15 @@ function recRenderResults(){
     h+=`<div class="panel"><h4>${c.icon} ${esc(c.title)} <span class="sa-sub">(${rows.length})</span></h4>
       <p class="sa-sub" style="margin:4px 0 10px">${esc(c.why)}</p>
       <div class="tblwrap"><table class="sa">
-        <thead><tr><th style="width:36px">Done</th><th>Order</th><th>SKU</th><th>Date</th><th class="num">₹ at stake</th><th>Note</th></tr></thead>
-        <tbody>${rows.map(x=>{const key=recKey(x),dn=!!done[key];
+        <thead><tr><th style="width:36px">Done</th><th>Order</th><th>SKU</th><th>Date</th><th class="num">₹ at stake</th><th>Note</th><th style="width:86px"></th></tr></thead>
+        <tbody>${rows.map(x=>{const key=recKey(x),dn=!!done[key];const ct=recClaimText(x);
           return `<tr class="${dn?"rec-done":""}">
             <td><input type="checkbox" data-done="${esc(key)}"${dn?" checked":""} aria-label="Mark ${esc(x.orderId||"row")} done"></td>
             <td>${esc(x.orderId||"—")}</td><td>${esc(x.sku||"—")}</td>
             <td>${esc(x.date||"—")}</td>
             <td class="num">${x.amount===null?"—":inr(x.amount)}</td>
-            <td class="sa-sub">${esc(x.note||"")}</td></tr>`;}).join("")}
+            <td class="sa-sub">${esc(x.note||"")}</td>
+            <td>${ct?`<button type="button" class="fbtn rec-copy" data-claim="${esc(ct)}" title="Copy a ready-to-paste claim text for this order">📋 Claim</button>`:""}</td></tr>`;}).join("")}
         </tbody></table></div>
       <div class="rec-claim"><b>How to claim:</b> ${c.claim}</div></div>`;
   }
@@ -5397,9 +5398,42 @@ function recRenderResults(){
   out.innerHTML=h; recWire(out,settlements,mtrRows,res);
 }
 const recKey=x=>x.check+"|"+(x.orderId||"")+"|"+(x.sku||"")+"|"+(x.date||"");
+/* Ready-to-paste claim text per item. Amazon support reads English; the
+   text quotes only facts the files proved — order, amount, dates, and the
+   evidence class — and never promises what Amazon will decide. */
+function recClaimText(x){
+  const amt=x.amount!=null?"Rs. "+Math.abs(x.amount).toFixed(2):"the refunded amount";
+  const oid=x.orderId||"(order id)";
+  const dt=x.date?(" dated "+x.date):"";
+  switch(x.check){
+    case "safeT":
+      if(x.cls===3) return null; // item came back — only claimable if damaged, which the files cannot prove
+      if(x.cls===2) return `SAFE-T claim — Order ${oid}. A refund of ${amt}${dt} was issued on this seller-fulfilled order, but my Return Report for the covering period contains NO return request for this order. As the refund was issued without a buyer return request, I request reimbursement of the item value under the SAFE-T policy. Supporting data: settlement refund line for this order, and the seller-fulfilled Return Report for the same period showing no request.`;
+      return `SAFE-T claim — Order ${oid}. A refund of ${amt}${dt} was issued on this seller-fulfilled order. My Return Report shows the return ${x.note&&/first.*scan/i.test(x.note)?"was refunded at first carrier scan":"was approved"}, but the item was NEVER recorded as delivered back to me — there is no return delivery date against this order to date. I request reimbursement of the item value under SAFE-T. Supporting data: settlement refund line, and the Return Report row for this order with an empty return-delivery date.`;
+    case "notReturned":
+      return `Reimbursement request — Order ${oid}${x.sku?" (SKU "+x.sku+")":""}. This FBA order was refunded ${amt}${dt}, and the FBA Customer Returns report contains no return of this unit in the 45 days following the refund, nor does the Reimbursements report show any reimbursement for it. Per FBA policy, when a refunded unit is not returned within 45 days the seller is to be reimbursed. Please review and reimburse. Supporting data: settlement refund line, FBA Customer Returns report and Reimbursements report covering the window.`;
+    case "refundFee":
+      return `Fee credit request — Order ${oid}. On the original order a referral fee was charged, but the refund${dt} credited none of it back. Referral fee is normally credited (less the administration portion) when an order is refunded. Please compare the refund's fee lines with the original order and credit the referral fee due. Amount at stake: ${amt}.`;
+    case "feeOver":
+      return `Fee correction request — Order ${oid}${x.sku?" (SKU "+x.sku+")":""}. The weight-handling fee charged on this order${dt} corresponds to a heavier weight band than this product's actual packed weight. Please re-check the charged band against the product's verified weight and dimensions and refund the difference. Amount at stake: ${amt}.`;
+    case "feeDup":
+      return `Duplicate fee charge — Order ${oid}. An identical fee line appears twice against the same order item${dt}. This is a single-unit order, so the second charge appears to be a duplicate. Please review and refund the duplicate. Amount: ${amt}.`;
+    case "shipped":
+      return `Missing payment enquiry — Order ${oid}${x.sku?" (SKU "+x.sku+")":""}. This order was shipped${dt} per my Merchant Tax Report, but no Order payment line for it appears in any settlement covering the period. Please confirm which settlement paid this order, or investigate the missing payment.`;
+    default: return null;
+  }
+}
+window.recClaimText=recClaimText; // exposed for verification/debugging
 function recWire(out,settlements,mtrRows,res){
   out.querySelectorAll("[data-rm]").forEach(b=>b.addEventListener("click",()=>{
     recFiles.splice(Number(b.dataset.rm),1); recRenderResults();
+  }));
+  out.querySelectorAll(".rec-copy").forEach(b=>b.addEventListener("click",async()=>{
+    const txt=b.dataset.claim; let ok=false;
+    try{ await navigator.clipboard.writeText(txt); ok=true; }
+    catch(e){ /* clipboard blocked — fall back to a selectable prompt */
+      try{ window.prompt("Copy the claim text:",txt); ok=true; }catch(e2){} }
+    if(ok){ const old=b.textContent; b.textContent="✓ Copied"; setTimeout(()=>{b.textContent=old;},1600); }
   }));
   out.querySelectorAll("[data-done]").forEach(cb=>cb.addEventListener("change",()=>{
     const d=loadRecDone();
