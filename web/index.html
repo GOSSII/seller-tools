@@ -250,6 +250,7 @@
   table.sa th,table.sa td{padding:9px 12px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
   table.sa th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);background:#fbfcfe}
   table.sa td.num,table.sa th.num{text-align:right;font-variant-numeric:tabular-nums}
+  table.sa td.wrap{white-space:normal;overflow-wrap:anywhere;min-width:150px;max-width:300px;line-height:1.45}
   table.sa tbody tr:last-child td{border-bottom:0}
   .amt-neg{color:var(--red)} .amt-pos{color:var(--green)}
   tr.exp{cursor:pointer} tr.exp:hover td{background:#fbfcfe}
@@ -9301,7 +9302,7 @@ function rtRenderResults(){
       <tbody>${vis.map(e=>{
         const top=[...e.reasons.entries()].sort((a,b)=>b[1]-a[1])[0];
         return `<tr>
-          <td>${esc(e.sku)}</td><td>${stChip(rtStatus(e))}</td>
+          <td class="wrap">${esc(e.sku)}</td><td>${stChip(rtStatus(e))}</td>
           <td class="num"><b>${e.refundValue?inr0(e.refundValue):"—"}</b></td>
           <td class="num">${e.refundPct===null?"—":e.refundPct.toFixed(1)+"%"}</td>
           <td class="num">${e.fbaBack?num(e.fbaSellable)+"/"+num(e.fbaBack):"—"}</td>
@@ -9533,7 +9534,7 @@ function stoRenderResults(){
     <div class="tblwrap"><table class="sa">
       <thead><tr><th>ASIN</th><th>Product</th><th>Status</th><th class="num">Fee/month</th><th class="num" title="Daily-average units on hand across all fulfilment centres">Avg stock</th><th class="num" title="Daily-average orders × days in the month">Units sold/month</th><th class="num" title="Stock ÷ orders — months the current stock lasts at this month's pace">Months of cover</th><th class="num" title="This month's storage fee ÷ units ordered">Rent per unit sold</th></tr></thead>
       <tbody>${vis.map(e=>`<tr>
-        <td>${esc(e.asin)}</td><td class="sa-sub" style="max-width:220px">${esc(e.name.slice(0,60))}</td><td>${stChip(stoStatus(e))}</td>
+        <td>${esc(e.asin)}</td><td class="sa-sub wrap">${esc(e.name)}</td><td>${stChip(stoStatus(e))}</td>
         <td class="num"><b>${inr(e.fee)}</b></td>
         <td class="num">${e.qty.toFixed(1)}</td>
         <td class="num">${e.monthlyUnits.toFixed(0)}</td>
@@ -9742,7 +9743,7 @@ function rtoRenderResults(){
     <div class="stat ${rate>=6?"red":rate>=4?"":"green"}"><div class="k">RTO rate</div><div class="v">${rate.toFixed(1)}%</div><div class="sa-sub" style="margin-top:3px">${num(t.rto)} of ${num(t.shipped)} shipped orders came back</div></div>
     <div class="stat ${t.rtoValue>0?"red":""}"><div class="k">Order value on RTO parcels</div><div class="v">${inr0(t.rtoValue)}</div><div class="sa-sub" style="margin-top:3px">${r.haveReturns?num(t.rtoRefunded)+" of "+num(t.rto)+" already refunded per the Return Report":"add the seller-fulfilled Return Report to see how many are already refunded"}</div></div>
     <div class="stat ${cancelRate>12?"red":""}"><div class="k">Cancelled before shipping</div><div class="v">${cancelRate.toFixed(1)}%</div><div class="sa-sub" style="margin-top:3px">${num(t.cancelled)} orders — cancellations, not RTO</div></div>
-    <div class="stat"><div class="k">Worst state (enough data)</div><div class="v">${(()=>{const w=r.states.find(s=>!s.thin&&s.rate!==null);return w?esc(w.state.slice(0,14)):"—";})()}</div><div class="sa-sub" style="margin-top:3px">${(()=>{const w=r.states.find(s=>!s.thin&&s.rate!==null);return w?w.rate.toFixed(1)+"% of "+num(w.shipped)+" shipped":"—";})()}</div></div>
+    <div class="stat"><div class="k">Worst state (enough data)</div><div class="v">${(()=>{const w=r.states.find(s=>!s.thin&&s.rate!==null);return w?esc(w.state):"—";})()}</div><div class="sa-sub" style="margin-top:3px">${(()=>{const w=r.states.find(s=>!s.thin&&s.rate!==null);return w?w.rate.toFixed(1)+"% of "+num(w.shipped)+" shipped":"—";})()}</div></div>
   </div>`;
   const visStates=r.states.filter(s=>s.shipped>0).slice(0,25);
   h+=`<div style="display:flex;justify-content:flex-end;gap:8px;margin:14px 0 2px"><button type="button" class="fbtn" id="rto-csv">⬇ Export CSV</button><button type="button" class="fbtn" id="rto-pdf">📄 Client PDF</button></div>
@@ -9766,7 +9767,7 @@ function rtoRenderResults(){
     <div class="tblwrap"><table class="sa">
       <thead><tr><th>SKU</th><th>Status</th><th class="num">Shipped</th><th class="num">Came back</th><th class="num">RTO rate</th><th class="num">Value</th></tr></thead>
       <tbody>${visSkus.map(e=>`<tr>
-        <td>${esc(e.sku.slice(0,40))}</td><td>${stChip(rtoStatus(e))}</td>
+        <td class="wrap">${esc(e.sku)}</td><td>${stChip(rtoStatus(e))}</td>
         <td class="num">${num(e.shipped)}</td><td class="num"><b>${num(e.rto)}</b></td>
         <td class="num">${e.thin?'<span class="sa-sub">—</span>':e.rate.toFixed(1)+"%"}</td>
         <td class="num">${e.rtoValue?inr(e.rtoValue):"—"}</td></tr>`).join("")}
@@ -9982,7 +9983,7 @@ function strRenderResults(){
     <div class="tblwrap"><table class="sa">
       <thead><tr><th>SKU</th><th>Product</th><th>Status</th><th class="num">Units</th><th class="num">Value</th><th class="num" title="Days since the date-stranded column">Days stuck</th><th>Reason</th><th>Amazon's suggested action</th></tr></thead>
       <tbody>${r.items.map(x=>`<tr>
-        <td>${esc(x.sku.slice(0,28))}</td><td class="sa-sub" style="max-width:180px">${esc(x.name.slice(0,45))}</td>
+        <td class="wrap">${esc(x.sku)}</td><td class="sa-sub wrap">${esc(x.name)}</td>
         <td>${stChip(strStatus(x))}</td>
         <td class="num"><b>${num(x.units)}</b></td>
         <td class="num">${x.value!==null?inr0(x.value)+(x.valueBasis==="settlements"?'<span class="sa-sub" title="valued at the SKU average selling price in your settlements — the listing has no price">*</span>':""):'<span class="sa-sub">unknown</span>'}</td>
@@ -10171,7 +10172,7 @@ function tdRenderResults(){
       <div class="tblwrap"><table class="sa">
       <thead><tr><th>ASIN</th><th>Product</th><th class="num">Sessions</th><th class="num">Conversion</th><th class="num">Buy Box</th><th class="num">Units</th><th class="num" title="Estimate: sessions × (account average − this ASIN's conversion)">Units lost vs avg*</th></tr></thead>
       <tbody>${r.noconv.slice(0,20).map(x=>`<tr>
-        <td>${esc(x.asin)}</td><td class="sa-sub" style="max-width:220px">${esc(x.title.slice(0,50))}</td>
+        <td>${esc(x.asin)}</td><td class="sa-sub wrap">${esc(x.title)}</td>
         <td class="num"><b>${num(x.sessions)}</b></td>
         <td class="num" style="color:var(--red);font-weight:700">${x.cvr.toFixed(2)}%</td>
         <td class="num">${x.buyBox===null?"—":x.buyBox.toFixed(0)+"%"}</td>
@@ -10183,13 +10184,13 @@ function tdRenderResults(){
   if(r.buybox.length){
     h+=`<div class="panel"><h4>🥊 Losing the Buy Box <span class="sa-sub">(${r.buybox.length})</span></h4>
       <div class="tblwrap"><table class="sa"><thead><tr><th>ASIN</th><th>Product</th><th class="num">Sessions</th><th class="num">Buy Box %</th><th class="num">Conversion</th></tr></thead>
-      <tbody>${r.buybox.slice(0,10).map(x=>`<tr><td>${esc(x.asin)}</td><td class="sa-sub">${esc(x.title.slice(0,50))}</td><td class="num">${num(x.sessions)}</td><td class="num" style="color:var(--red);font-weight:700">${x.buyBox.toFixed(0)}%</td><td class="num">${x.cvr.toFixed(2)}%</td></tr>`).join("")}</tbody></table></div>
+      <tbody>${r.buybox.slice(0,10).map(x=>`<tr><td>${esc(x.asin)}</td><td class="sa-sub wrap">${esc(x.title)}</td><td class="num">${num(x.sessions)}</td><td class="num" style="color:var(--red);font-weight:700">${x.buyBox.toFixed(0)}%</td><td class="num">${x.cvr.toFixed(2)}%</td></tr>`).join("")}</tbody></table></div>
       <div class="sa-sub" style="margin-top:6px">Visitors arrive but see another seller's offer — check price competitiveness and fulfilment eligibility before touching the listing.</div></div>`;
   }
   if(r.stars.length){
     h+=`<div class="panel"><h4>⭐ Feed the winners <span class="sa-sub">(${r.stars.length} — converting above ${r.starBar.toFixed(1)}%, 1.5× your average)</span></h4>
       <div class="tblwrap"><table class="sa"><thead><tr><th>ASIN</th><th>Product</th><th class="num">Sessions</th><th class="num">Conversion</th><th class="num">Sales</th></tr></thead>
-      <tbody>${r.stars.slice(0,10).map(x=>`<tr><td>${esc(x.asin)}</td><td class="sa-sub">${esc(x.title.slice(0,50))}</td><td class="num">${num(x.sessions)}</td><td class="num" style="color:var(--green);font-weight:700">${x.cvr.toFixed(2)}%</td><td class="num">${inr0(x.sales)}</td></tr>`).join("")}</tbody></table></div>
+      <tbody>${r.stars.slice(0,10).map(x=>`<tr><td>${esc(x.asin)}</td><td class="sa-sub wrap">${esc(x.title)}</td><td class="num">${num(x.sessions)}</td><td class="num" style="color:var(--green);font-weight:700">${x.cvr.toFixed(2)}%</td><td class="num">${inr0(x.sales)}</td></tr>`).join("")}</tbody></table></div>
       <div class="sa-sub" style="margin-top:6px">Every extra visitor converts here far above par — these are the ASINs worth advertising harder.</div></div>`;
   }
   if(r.invisible.length){
