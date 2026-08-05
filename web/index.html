@@ -1568,6 +1568,8 @@ const HELP={
     steps:["Drop all your settlement files at once (or add them one by one — duplicates are skipped).","Read the month-by-month charts: sales, fees as % of sales, refund rate and net payout.","Pick a SKU to see its own monthly units, sales and net — is it growing, and is it still worth the fees?"]},
   "ads-optimizer":{input:`<b>Advertising console → Sponsored ads → Reports (or Measurement &amp; reporting) → Sponsored Products → Search term</b> — export for 30–60 days. The .xlsx it hands out drops straight in; CSV works too.`,
     steps:["Drop the Search Term report (several files at once is fine — re-drops replace). Optional but worth it: add the Advertised-product report for the same period, plus your settlement files — terms in single-SKU ad groups are then judged against that SKU's own break-even ACOS instead of a flat line.","Export the negatives list and paste each term as a negative exact into the campaign it spent in.","Move the winners into their own exact-match keywords, then negate them where they came from so the two never bid against each other.","Check the campaign scoreboard monthly — and judge affordability per SKU in Ad Profitability, which knows each product's break-even ACOS."]},
+  "rto":{input:`<b>Fulfilment Reports → Sales → All Orders</b> → Order Date → last 30 days → Request Download (a .txt file). Optional: the <b>seller-fulfilled Return Report</b> (Orders → Manage Returns → View reports) to see which RTOs were already refunded.`,
+    steps:["Drop the All Orders file — several files with overlapping periods are fine, duplicates are removed by order item.","Read the state table worst-first: a state shipping back 10%+ of parcels needs prepaid-only offers or COD verification there, not better products.","Check the repeat-RTO pincodes — two or more parcels back from one pincode is a pattern, not luck.","Cross-check refunded RTOs in Reconciliation: refunded + never delivered back is the strongest SAFE-T case."]},
   "storage":{input:`<b>Reports → Fulfilment Reports → Payments → Monthly Storage Fees</b> → pick the month → Request .csv Download. One file per month; the newest complete month is usually last month (the current month shows "No Data Available" until Amazon bills it).`,
     steps:["Drop the file — several months at once builds the month-by-month trend.","Read the headline: how much of this month's rent sat on stock that sold nothing.","Work the table worst-first: zero-order ASINs need a price cut, ads, or a removal order — doing nothing is the only guaranteed loss.","Add the rent-per-unit-sold of heavy ASINs to their cost in the SKU report — storage is a real per-unit cost the settlement never shows."]},
   "returns":{input:`Any or all of: <b>settlement flat files</b> (Payments → All Statements → Download Flat File V2), the <b>FBA customer returns report</b> (Reports → Fulfilment → Customer Concessions → FBA customer returns), and the <b>seller-fulfilled Return Report</b> (Orders → Manage Returns → View reports → All Returns — 60-day ranges).`,
@@ -2277,6 +2279,10 @@ const PW_MOCKS={
     <div class="row"><span>"lunch box steel" · 9 orders</span><b class="amt pos">12% ACOS</b></div>
     <div class="row"><span>Terms to negate</span><b class="big">31</b></div>
     <div class="row"><span>Spend they were eating</span><b class="amt neg">−₹4,812</b></div>`,
+  rto:`<div class="row"><span>RTO rate · 30 days</span><b class="big">3.8%</b></div>
+    <div class="row"><span>JHARKHAND · 16 shipped</span><b class="amt neg">18.8% back</b></div>
+    <div class="row"><span>Order value on RTO parcels</span><b class="amt neg">−₹13,983</b></div>
+    <div class="row"><span>Repeat-RTO pincodes</span><b class="big">1</b></div>`,
   storage:`<div class="row"><span>Storage fee this month</span><b class="amt neg">−₹7,292</b></div>
     <div class="row"><span>Rent on stock that sold nothing</span><b class="amt neg">−₹1,683</b></div>
     <div class="row"><span>ASINs paying rent, zero orders</span><b class="big">18</b></div>
@@ -2325,6 +2331,11 @@ const ADSO_INFO={route:"ads-optimizer",title:"Ads Optimizer",plan:"Pro",needPro:
   desc:"The Search Term report shows what buyers actually typed. This turns it into the four lists worth acting on.",
   feats:["Search terms eating spend with zero orders — a paste-ready negative list","Winners under broad/auto that earned their own exact match","Terms converting at a loss, campaign scoreboard with verdicts","Reads the .xlsx straight from the ads console"],
   mock:PW_MOCKS.adsopt};
+const RTO_INFO={route:"rto",title:"RTO Radar",plan:"Pro",needPro:true,
+  price:"₹499/month — unlock with Pro",priceAlt:"or ₹2,499/year (save ~58%)",
+  desc:"Every undelivered parcel costs two courier journeys. Amazon records the outcome — this totals it up by state, pincode and SKU.",
+  feats:["RTO rate by state, from the All Orders report's own status column","Repeat-RTO pincodes — your blocklist candidates","Per-SKU RTO economics and the value stuck in transit back","Which RTOs were already refunded (with the Return Report added)"],
+  mock:PW_MOCKS.rto};
 const STO_INFO={route:"storage",title:"Storage Fee Analyzer",plan:"Pro",needPro:true,
   price:"₹499/month — unlock with Pro",priceAlt:"or ₹2,499/year (save ~58%)",
   desc:"FBA storage is billed every month whether the product sells or not. This shows which stock pays rent without paying its way.",
@@ -2516,6 +2527,7 @@ function renderAccount(){
             <a href="#/ads-optimizer">🎯 Ads Optimizer</a>
             <a href="#/returns">↩️ Returns Analyzer</a>
             <a href="#/storage">📦 Storage Fee Analyzer</a>
+            <a href="#/rto">🔁 RTO Radar</a>
             <a href="#/trends">📈 Multi-Month Trends</a>
           </div>
         </div>
@@ -2993,6 +3005,7 @@ function renderHome(){
         <a class="tile" href="#/ads-optimizer"><span class="pill">Pro</span><div class="ico">🎯</div><h3>Ads Optimizer</h3><p>Search terms to negate, winners that earned an exact match, and a campaign scoreboard — from the Search Term report.</p></a>
         <a class="tile" href="#/returns"><span class="pill">Pro</span><div class="ico">↩️</div><h3>Returns Analyzer</h3><p>What returns cost per SKU, how much stock comes back sellable, and Amazon's reasons bucketed into RTO, product and listing problems.</p></a>
         <a class="tile" href="#/storage"><span class="pill">Pro</span><div class="ico">📦</div><h3>Storage Fee Analyzer</h3><p>Which ASINs pay the warehouse rent, which pay rent while selling nothing, and months of cover per ASIN — from Amazon's own billing report.</p></a>
+        <a class="tile" href="#/rto"><span class="pill">Pro</span><div class="ico">🔁</div><h3>RTO Radar</h3><p>RTO rate by state and pincode, per-SKU return-to-origin economics, and the order value stuck in transit back to you.</p></a>
       </div>
 
       <section class="lp2-sec">
@@ -3131,6 +3144,7 @@ function renderPricing(){
             <li><span class="tick">✓</span> Ads Optimizer</li>
             <li><span class="tick">✓</span> Returns Analyzer</li>
             <li><span class="tick">✓</span> Storage Fee Analyzer</li>
+            <li><span class="tick">✓</span> RTO Radar</li>
             <li><span class="tick">✓</span> Multi-month Trends</li>
           </ul>
           ${paidBtn(pr," sec")}
@@ -9353,6 +9367,242 @@ function stoWire(out,r){
   });
 }
 
+/* ============================================================
+   RTO RADAR (Pro) — where your parcels come back from.
+   Reads the All Orders report (Fulfilment Reports → Sales → All
+   Orders), whose order-status column directly records RTO
+   outcomes ("Returned to Seller", "Undeliverable", "Rejected by
+   Buyer"). Per state, pincode and SKU: how much ships back
+   without ever selling — the cost centre Indian COD sellers feel
+   hardest and no Amazon page totals up. The seller-fulfilled
+   Return Report is optional and only enriches: it says which
+   RTOs were already refunded. Nothing is estimated; a state
+   with too few shipments is told so instead of given a rate.
+   ============================================================ */
+let rtoFiles=[];
+const RTO_STATUSES=new Set(["Shipped - Returned to Seller","Shipped - Returning to Seller",
+  "Shipped - Undeliverable","Shipped - Rejected by Buyer"]);
+const RTO_MIN_SHIPPED=10;   // below this a rate is noise, not a signal
+function parseAllOrders(text){
+  const lines=String(text||"").replace(/^﻿/,"").split(/\r\n|\r|\n/);
+  let hln=-1; for(let i=0;i<lines.length;i++){if(lines[i].trim()!==""){hln=i;break;}}
+  if(hln===-1) return null;
+  const cols=lines[hln].split("\t").map(h=>h.trim().toLowerCase());
+  const ix=n=>cols.indexOf(n);
+  const iOrder=ix("amazon-order-id"),iDate=ix("purchase-date"),iStatus=ix("order-status"),
+        iSku=ix("sku"),iQty=ix("quantity"),iPrice=ix("item-price"),iSvc=ix("ship-service-level"),
+        iCity=ix("ship-city"),iState=ix("ship-state"),iPin=ix("ship-postal-code"),
+        iItem=ix("order-item-id"),iChan=ix("fulfillment-channel");
+  if(iOrder<0||iStatus<0||iState<0) return null;
+  const rows=[];
+  for(let i=hln+1;i<lines.length;i++){
+    if(!lines[i].trim()) continue;
+    const f=lines[i].split("\t");
+    if(!f[iOrder]) continue;
+    rows.push({orderId:f[iOrder].trim(),itemId:iItem>=0?(f[iItem]||"").trim():"",
+      date:(f[iDate]||"").slice(0,10),status:(f[iStatus]||"").trim(),
+      sku:iSku>=0?(f[iSku]||"").trim():"",qty:iQty>=0?(Number(f[iQty])||0):0,
+      price:iPrice>=0?(saParseAmount(f[iPrice])||0):0,
+      service:iSvc>=0?(f[iSvc]||"").trim():"",channel:iChan>=0?(f[iChan]||"").trim():"",
+      city:iCity>=0?(f[iCity]||"").trim():"",
+      state:iState>=0?(f[iState]||"").trim().toUpperCase():"",
+      pin:iPin>=0?(f[iPin]||"").trim():""});
+  }
+  return rows.length?{rows}:null;
+}
+window.parseAllOrders=parseAllOrders; // exposed for verification/debugging
+function rtoCompute(orderRows,mfnReturns){
+  /* Several files may overlap in period — dedupe by order-item. */
+  const seen=new Set(),rows=[];
+  for(const r of orderRows){
+    /* order-item-id can be "0" on off-Amazon orders — never a key on its own */
+    const k=r.orderId+"|"+(r.itemId&&r.itemId!=="0"?r.itemId:r.sku+"|"+r.date);
+    if(seen.has(k)) continue; seen.add(k); rows.push(r);
+  }
+  const isRto=r=>RTO_STATUSES.has(r.status);
+  const isShipped=r=>r.status.startsWith("Shipped");
+  const isCancelled=r=>r.status==="Cancelled";
+  /* refunded RTOs — the money already left; the rest is stock in limbo */
+  const refunded=new Set();
+  for(const m of mfnReturns||[]) refunded.add(m.orderId);
+  const mk=()=>({shipped:0,rto:0,rtoValue:0,cancelled:0,orders:0});
+  const byState=new Map(),bySku=new Map(),bySvc=new Map(),byPin=new Map();
+  const t={rows:rows.length,shipped:0,rto:0,rtoValue:0,rtoRefunded:0,cancelled:0,pending:0,dates:[null,null]};
+  for(const r of rows){
+    if(r.date){ if(!t.dates[0]||r.date<t.dates[0]) t.dates[0]=r.date; if(!t.dates[1]||r.date>t.dates[1]) t.dates[1]=r.date; }
+    const st=byState.get(r.state)||mk(); byState.set(r.state,st);
+    const sk=bySku.get(r.sku)||mk(); bySku.set(r.sku,sk);
+    const sv=bySvc.get(r.service)||mk(); bySvc.set(r.service,sv);
+    st.orders++; sk.orders++; sv.orders++;
+    if(isCancelled(r)){ t.cancelled++; st.cancelled++; sk.cancelled++; continue; }
+    if(!isShipped(r)){ t.pending++; continue; }
+    t.shipped++; st.shipped++; sk.shipped++; sv.shipped++;
+    if(isRto(r)){
+      t.rto++; t.rtoValue+=r.price; st.rto++; st.rtoValue+=r.price; sk.rto++; sk.rtoValue+=r.price; sv.rto++;
+      if(refunded.has(r.orderId)) t.rtoRefunded++;
+      if(r.pin){ const p=byPin.get(r.pin)||{pin:r.pin,city:r.city,state:r.state,rto:0,value:0};
+        p.rto++; p.value+=r.price; byPin.set(r.pin,p); }
+    }
+  }
+  const states=[...byState.entries()].map(([state,v])=>({state:state||"(no state)",...v,
+    rate:v.shipped>0?v.rto/v.shipped*100:null,thin:v.shipped<RTO_MIN_SHIPPED}))
+    .filter(x=>x.orders>0)
+    .sort((a,b)=>(b.thin?-1:b.rate??-1)-(a.thin?-1:a.rate??-1)||b.rto-a.rto);
+  const skus=[...bySku.entries()].map(([sku,v])=>({sku:sku||"(no SKU)",...v,
+    rate:v.shipped>0?v.rto/v.shipped*100:null,thin:v.shipped<RTO_MIN_SHIPPED}))
+    .filter(x=>x.shipped>0).sort((a,b)=>b.rto-a.rto||b.shipped-a.shipped);
+  const services=[...bySvc.entries()].map(([service,v])=>({service:service||"(unknown)",...v,
+    rate:v.shipped>0?v.rto/v.shipped*100:null})).filter(x=>x.shipped>0)
+    .sort((a,b)=>b.shipped-a.shipped);
+  const pins=[...byPin.values()].filter(p=>p.rto>=2).sort((a,b)=>b.rto-a.rto);
+  return {states,skus,services,pins,totals:t,haveReturns:(mfnReturns||[]).length>0};
+}
+window.rtoCompute=rtoCompute; // exposed for verification/debugging
+function rtoStatus(e){
+  if(e.thin) return {k:"data",l:"Low volume"};
+  if(e.rate>=10) return {k:"loss",l:"RTO hotspot"};
+  if(e.rate>=6) return {k:"problem",l:"High RTO"};
+  if(e.rate>=4) return {k:"watch",l:"Watch"};
+  return {k:"good",l:"OK"};
+}
+window.rtoStatus=rtoStatus; // exposed for verification/debugging
+
+function renderRtoRadar(){
+  setMeta("RTO Radar — Seller Tools India",
+    "Drop Amazon's All Orders report and see where your parcels come back from: RTO rate by state, repeat-RTO pincodes, per-SKU RTO economics and the value stuck in transit back to you.");
+  backBtn.hidden=false;
+  gatePremium(RTO_INFO, rtoBody);
+}
+function rtoBody(){
+  app.innerHTML=`
+    <div class="wrap page">
+      <h2>RTO Radar</h2>
+      <p class="lede">Every parcel that ships and comes back undelivered costs you two courier journeys and often the product. Amazon records the outcome in the All Orders report — it just never totals it up. This does: <b>by state, by pincode, by SKU</b>.</p>
+      ${helpHtml("rto")}
+      <label class="sa-drop" id="rto-drop">
+        <div class="ico">🔁</div>
+        <h3>Drop the All Orders report here</h3>
+        <p>Fulfilment Reports → Sales → All Orders → last 30 days → Request Download (.txt). Optional: add the seller-fulfilled Return Report to see which RTOs were already refunded. (.txt, .csv, .tsv, .xlsx)</p>
+        <input type="file" id="rto-file" multiple accept=".csv,.txt,.tsv,.xlsx,text/plain,text/csv,text/tab-separated-values,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+      </label>
+      <div class="sa-priv">🔒 Private by design — your files never leave your device. Every figure is computed locally on this page.</div>
+      <div id="rto-out"></div>
+    </div>`;
+  const drop=document.getElementById("rto-drop"),file=document.getElementById("rto-file");
+  ["dragenter","dragover"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add("over");}));
+  ["dragleave","drop"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove("over");}));
+  drop.addEventListener("drop",ev=>{rtoAddFiles(ev.dataTransfer.files);});
+  file.addEventListener("change",()=>{rtoAddFiles(file.files);file.value="";});
+  if(rtoFiles.length) rtoRenderResults();
+}
+function rtoAddFiles(list){
+  const files=[...(list||[])]; if(!files.length) return;
+  let pending=files.length;
+  files.forEach(f=>{
+    const finish=()=>{ if(--pending===0) rtoRenderResults(); };
+    saReadDropped(f,text=>{
+      rtoFiles=rtoFiles.filter(x=>x.name!==f.name);
+      const mr=parseMfnReturns(text);
+      if(mr){ rtoFiles.push({name:f.name,kind:"mfnret",rows:mr.rows}); finish(); return; }
+      const ao=parseAllOrders(text);
+      if(ao){ rtoFiles.push({name:f.name,kind:"orders",rows:ao.rows}); finish(); return; }
+      if(parseUnifiedTransaction(text)||parseSettlement(text))
+        rtoFiles.push({name:f.name,kind:"error",msg:"this is a settlement file — RTO Radar reads the All Orders report (Fulfilment Reports → Sales → All Orders)."});
+      else rtoFiles.push({name:f.name,kind:"error",msg:"not recognised as an All Orders report or a seller-fulfilled Return Report."+saDescribeColumns(text)});
+      finish();
+    },msg=>{ rtoFiles=rtoFiles.filter(x=>x.name!==f.name); rtoFiles.push({name:f.name,kind:"error",msg}); finish(); });
+  });
+}
+function rtoRenderResults(){
+  const out=document.getElementById("rto-out"); if(!out) return;
+  const kindLabel={orders:"All Orders",mfnret:"Seller returns",error:"Skipped"};
+  let h=`<div class="rec-files">${rtoFiles.map((f,i)=>`<span class="rec-file"${f.kind==="error"?` title="${esc(f.msg)}"`:""}><b>${esc(f.name)}</b><span class="rf-kind">${f.kind==="error"?"⚠ "+kindLabel.error:kindLabel[f.kind]}</span><button type="button" data-rm="${i}" aria-label="Remove ${esc(f.name)}">✕</button></span>`).join("")}</div>`;
+  const bad=rtoFiles.filter(f=>f.kind==="error");
+  if(bad.length) h+=`<div class="banner warn">${bad.map(f=>`<b>${esc(f.name)}</b>: ${esc(f.msg)}`).join("<br>")}</div>`;
+  const orders=rtoFiles.filter(f=>f.kind==="orders").flatMap(f=>f.rows);
+  const mfn=rtoFiles.filter(f=>f.kind==="mfnret").flatMap(f=>f.rows);
+  if(!orders.length){
+    if(rtoFiles.length) h+=`<div class="banner info">Waiting for the All Orders report — it carries the outcome and the address for every order.</div>`;
+    out.innerHTML=h; rtoWire(out); return;
+  }
+  const r=rtoCompute(orders,mfn);
+  const t=r.totals;
+  const rate=t.shipped>0?t.rto/t.shipped*100:0;
+  const cancelRate=(t.shipped+t.cancelled)>0?t.cancelled/(t.shipped+t.cancelled)*100:0;
+  h+=`<div class="banner info">Coverage — orders placed ${esc(saFmtDay(t.dates[0]))} → ${esc(saFmtDay(t.dates[1]))} · ${num(t.rows)} order items${t.pending?` · ${num(t.pending)} still pending/unshipped (not judged)`:""}. Recent orders may still be in transit — an RTO can take 2–3 weeks to be recorded.</div>`;
+  h+=`<div class="stats">
+    <div class="stat ${rate>=6?"red":rate>=4?"":"green"}"><div class="k">RTO rate</div><div class="v">${rate.toFixed(1)}%</div><div class="sa-sub" style="margin-top:3px">${num(t.rto)} of ${num(t.shipped)} shipped orders came back</div></div>
+    <div class="stat ${t.rtoValue>0?"red":""}"><div class="k">Order value on RTO parcels</div><div class="v">${inr0(t.rtoValue)}</div><div class="sa-sub" style="margin-top:3px">${r.haveReturns?num(t.rtoRefunded)+" of "+num(t.rto)+" already refunded per the Return Report":"add the seller-fulfilled Return Report to see how many are already refunded"}</div></div>
+    <div class="stat ${cancelRate>12?"red":""}"><div class="k">Cancelled before shipping</div><div class="v">${cancelRate.toFixed(1)}%</div><div class="sa-sub" style="margin-top:3px">${num(t.cancelled)} orders — cancellations, not RTO</div></div>
+    <div class="stat"><div class="k">Worst state (enough data)</div><div class="v">${(()=>{const w=r.states.find(s=>!s.thin&&s.rate!==null);return w?esc(w.state.slice(0,14)):"—";})()}</div><div class="sa-sub" style="margin-top:3px">${(()=>{const w=r.states.find(s=>!s.thin&&s.rate!==null);return w?w.rate.toFixed(1)+"% of "+num(w.shipped)+" shipped":"—";})()}</div></div>
+  </div>`;
+  const visStates=r.states.filter(s=>s.shipped>0).slice(0,25);
+  h+=`<div style="display:flex;justify-content:flex-end;margin:14px 0 2px"><button type="button" class="fbtn" id="rto-csv">⬇ Export CSV</button></div>
+    <div class="panel"><h4>RTO by state <span class="sa-sub">(rates only shown at ${RTO_MIN_SHIPPED}+ shipped orders — below that it's noise)</span></h4>
+    <div class="tblwrap"><table class="sa">
+      <thead><tr><th>State</th><th>Status</th><th class="num">Shipped</th><th class="num">Came back</th><th class="num">RTO rate</th><th class="num">Value</th><th class="num" title="Orders cancelled before shipping — a different problem from RTO">Cancelled</th></tr></thead>
+      <tbody>${visStates.map(e=>`<tr>
+        <td>${esc(e.state)}</td><td>${stChip(rtoStatus(e))}</td>
+        <td class="num">${num(e.shipped)}</td><td class="num"><b>${num(e.rto)}</b></td>
+        <td class="num">${e.thin?'<span class="sa-sub">—</span>':e.rate.toFixed(1)+"%"}</td>
+        <td class="num">${e.rtoValue?inr(e.rtoValue):"—"}</td>
+        <td class="num">${num(e.cancelled)}</td></tr>`).join("")}
+      </tbody></table></div></div>`;
+  if(r.pins.length){
+    h+=`<div class="panel"><h4>Repeat-RTO pincodes <span class="sa-sub">(2+ parcels back from the same pincode)</span></h4>
+      <div class="tblwrap"><table class="sa"><thead><tr><th>Pincode</th><th>City</th><th>State</th><th class="num">RTOs</th><th class="num">Value</th></tr></thead>
+      <tbody>${r.pins.slice(0,15).map(p=>`<tr><td><b>${esc(p.pin)}</b></td><td>${esc(p.city)}</td><td class="sa-sub">${esc(p.state)}</td><td class="num">${num(p.rto)}</td><td class="num">${inr(p.value)}</td></tr>`).join("")}</tbody></table></div></div>`;
+  }
+  const visSkus=r.skus.filter(s=>s.rto>0||!s.thin).slice(0,20);
+  h+=`<div class="panel"><h4>RTO by SKU</h4>
+    <div class="tblwrap"><table class="sa">
+      <thead><tr><th>SKU</th><th>Status</th><th class="num">Shipped</th><th class="num">Came back</th><th class="num">RTO rate</th><th class="num">Value</th></tr></thead>
+      <tbody>${visSkus.map(e=>`<tr>
+        <td>${esc(e.sku.slice(0,40))}</td><td>${stChip(rtoStatus(e))}</td>
+        <td class="num">${num(e.shipped)}</td><td class="num"><b>${num(e.rto)}</b></td>
+        <td class="num">${e.thin?'<span class="sa-sub">—</span>':e.rate.toFixed(1)+"%"}</td>
+        <td class="num">${e.rtoValue?inr(e.rtoValue):"—"}</td></tr>`).join("")}
+      </tbody></table></div></div>`;
+  if(r.services.length>1){
+    h+=`<div class="panel"><h4>By delivery speed</h4>
+      <div class="tblwrap"><table class="sa"><thead><tr><th>Ship service</th><th class="num">Shipped</th><th class="num">Came back</th><th class="num">RTO rate</th></tr></thead>
+      <tbody>${r.services.map(s=>`<tr><td>${esc(s.service)}</td><td class="num">${num(s.shipped)}</td><td class="num">${num(s.rto)}</td><td class="num">${s.shipped>=RTO_MIN_SHIPPED?s.rate.toFixed(1)+"%":'<span class="sa-sub">low volume</span>'}</td></tr>`).join("")}</tbody></table></div>
+      <div class="sa-sub" style="margin-top:6px">Faster deliveries get refused less — the buyer is still expecting the parcel when it arrives.</div></div>`;
+  }
+  h+=`<details class="howto"><summary>How every number here is computed</summary><div class="hbody">
+    <span class="htag">Formulas &amp; sources</span>
+    <ol>
+      <li>Everything is read from the All Orders report's own <b>order-status</b> column: "Returned to Seller", "Returning to Seller", "Undeliverable" and "Rejected by Buyer" count as RTO; "Cancelled" is counted separately (never shipped, so it is not RTO); pending orders are excluded from every rate.</li>
+      <li><b>RTO rate</b> = RTO orders ÷ shipped orders. A state or SKU under ${RTO_MIN_SHIPPED} shipped orders shows no rate — a small sample proves nothing.</li>
+      <li><b>Value</b> is the item price of RTO orders — the revenue that travelled and came back. What you actually lose per RTO is the two-way shipping plus any damage; this report cannot price that, so it is not guessed.</li>
+      <li>This report does not say COD vs prepaid — Amazon doesn't export it here. Indian RTO is overwhelmingly a COD phenomenon, but that is context, not a number from your data.</li>
+      <li>With the seller-fulfilled Return Report added, RTO orders are matched by order ID to show how many were <b>already refunded</b> — those may be SAFE-T material in <a href="#/reconcile">Reconciliation</a>.</li>
+      <li>Status: <span class="st st-loss">RTO hotspot</span> ≥10% · <span class="st st-problem">High RTO</span> ≥6% · <span class="st st-watch">Watch</span> ≥4% · <span class="st st-good">OK</span> otherwise · <span class="st st-data">Low volume</span> under ${RTO_MIN_SHIPPED} shipped.</li>
+    </ol>
+  </div></details>`;
+  const hot=r.states.find(s=>!s.thin&&s.rate>=6);
+  h+=`<div class="panel"><h4>What should I do next?</h4><ul style="margin:8px 0 0 18px;line-height:1.9;font-size:13.5px">
+    ${hot?`<li><b>${esc(hot.state)}</b> ships back ${hot.rate.toFixed(0)}% of what you send it. Options that work in practice: prepaid-only or partial-advance offers for high-RTO regions, address/phone verification on COD orders, and keeping heavier/costlier SKUs off COD there.</li>`:""}
+    ${r.pins.length?`<li>The repeat-RTO pincodes above are your blocklist candidates — a pincode that has returned ${r.pins[0].rto} parcels is telling you something no average can.</li>`:""}
+    <li>An RTO that was <b>refunded</b> deserves a second look in <a href="#/reconcile">Reconciliation</a> — if the item never made it back to you, that's the strongest SAFE-T case there is.</li>
+    <li>RTO costs are invisible in per-order P&amp;L — the two-way freight lands as Easy Ship fees on OTHER orders' statements. Watch your fee share in <a href="#/trends">Trends</a> alongside this rate.</li>
+  </ul></div>`;
+  out.innerHTML=h; rtoWire(out,r);
+}
+function rtoWire(out,r){
+  out.querySelectorAll("[data-rm]").forEach(b=>b.addEventListener("click",()=>{
+    rtoFiles.splice(Number(b.dataset.rm),1); rtoRenderResults();
+  }));
+  const csv=out.querySelector("#rto-csv");
+  if(csv&&r) csv.addEventListener("click",()=>{
+    saCsvDownload("rto-radar.csv",
+      ["Type","Name","Status","Shipped","RTO","RTO rate %","RTO value (INR)","Cancelled"],
+      r.states.map(e=>["State",e.state,rtoStatus(e).l,e.shipped,e.rto,e.thin?"":(e.rate??0).toFixed(1),e.rtoValue.toFixed(2),e.cancelled])
+      .concat(r.skus.map(e=>["SKU",e.sku,rtoStatus(e).l,e.shipped,e.rto,e.thin?"":(e.rate??0).toFixed(1),e.rtoValue.toFixed(2),e.cancelled]))
+      .concat(r.pins.map(p=>["Pincode",p.pin+" "+p.city,"Repeat RTO","",p.rto,"",p.value.toFixed(2),""])));
+  });
+}
+
 function renderAdsOptimizer(){
   setMeta("Ads Optimizer — Seller Tools India",
     "Drop your Sponsored Products Search Term report and get the lists that matter: search terms to negate, terms that earned an exact-match campaign, terms converting at a loss, and a campaign scoreboard — computed in your browser.");
@@ -9530,6 +9780,7 @@ function route(){
   if(h==="ads-optimizer"){renderAdsOptimizer();window.scrollTo(0,0);return;}
   if(h==="returns"){renderReturnsAnalyzer();window.scrollTo(0,0);return;}
   if(h==="storage"){renderStorageFees();window.scrollTo(0,0);return;}
+  if(h==="rto"){renderRtoRadar();window.scrollTo(0,0);return;}
   if(h==="ad-profit"){renderAdProfit();window.scrollTo(0,0);return;}
   if(h==="link-builder"){renderLinkBuilder();window.scrollTo(0,0);return;}
   if(h==="keyword-combiner"){renderKeywordCombiner();window.scrollTo(0,0);return;}
@@ -9545,7 +9796,7 @@ function route(){
 window.addEventListener("hashchange",route);
 /* Premium tools re-check entitlement when the tab regains focus, so a session
    kicked on another device locks here within seconds of the user returning. */
-const PREMIUM_ROUTES=["settlement-analyzer","gst-report","sku-report","reconcile","trends","ad-profit","fee-bands","ads-optimizer","returns","storage"];
+const PREMIUM_ROUTES=["settlement-analyzer","gst-report","sku-report","reconcile","trends","ad-profit","fee-bands","ads-optimizer","returns","storage","rto"];
 window.addEventListener("focus",()=>{
   const h=location.hash.replace(/^#\/?/,"");
   if(!PREMIUM_ROUTES.includes(h) || saUnlocked() || !sessionUser()) return;
@@ -9579,6 +9830,7 @@ function pingNow(){ _lastPing=0; try{ sendPing(); }catch(e){} }
    entry per shipped change a seller can actually feel.
    ============================================================ */
 const CHANGELOG=[
+  {d:"2026-08-05",t:"RTO Radar — a new Pro tool",n:"The All Orders report records which parcels came back undelivered — it just never totals it up. Now: RTO rate by state (with a minimum-sample guard), repeat-RTO pincodes, per-SKU RTO economics, cancellations separated out, and which RTOs were already refunded."},
   {d:"2026-08-04",t:"Storage Fee Analyzer — a new Pro tool",n:"Amazon's Monthly Storage Fees report, turned into the question that matters: which stock pays rent without paying its way. Per-ASIN fee, months of cover, rent per unit sold, and the ASINs that paid rent while selling zero units."},
   {d:"2026-08-04",t:"Returns Analyzer — a new Pro tool",n:"Settlements plus Amazon's two return reports, turned into per-SKU return economics: what refunds eat of each SKU's sales, how much FBA stock comes back sellable, the courier-RTO share, return labels you paid, and every reason bucketed into an action."},
   {d:"2026-08-04",t:"Ads Optimizer — a new Pro tool",n:"The Search Term report, turned into the four lists worth acting on: terms to negate (with a paste-ready CSV), winners that earned their own exact match, terms converting at a loss, and a campaign scoreboard."},
