@@ -2327,8 +2327,8 @@ const ADP_INFO={route:"ad-profit",title:"Ad Profitability by SKU",plan:"Pro",nee
   desc:"Advertising is usually the biggest line in an Amazon P&L, and the one report Amazon never gives you is whether it pays.",
   feats:["True ACOS per SKU — ad spend against that SKU's real payout","Which SKUs are only profitable until the ads are counted","Break-even ACOS per SKU, from your own margins","Product costs included, so it's profit and not just payout"],
   mock:PW_MOCKS.adprofit};
-const TREND_INFO={route:"trends",title:"Multi-Month Trends",plan:"Pro",needPro:true,
-  price:"₹499/month — unlock with Pro",priceAlt:"or ₹2,499/year (save ~58%)",
+const TREND_INFO={route:"trends",title:"Multi-Month Trends",plan:"Starter",
+  price:"₹199/month — unlock with Starter",priceAlt:"or ₹999/year (save ~58%)",
   desc:"Drop several settlement files and see your business month by month.",
   feats:["Sales, fees % and refund rate, month by month","Net payout trend — is the business growing?","Per-SKU trends: units, sales and net over time"],
   mock:PW_MOCKS.trends};
@@ -3012,7 +3012,7 @@ function renderHome(){
         <a class="tile" href="#/sku-report"><span class="pill">Pro</span><div class="ico">⚡</div><h3>SKU P&amp;L with your costs</h3><p>Add product costs, see true P&amp;L per SKU and loss-makers flagged.</p></a>
         <a class="tile" href="#/reconcile"><span class="pill">Pro</span><div class="ico">🕵️</div><h3>Reconciliation &amp; SAFE-T Finder</h3><p>Cross-check settlements and your MTR to find missing referral-fee credits, SAFE-T-eligible refunds and unpaid shipments — with claim steps.</p></a>
         <a class="tile" href="#/ad-profit"><span class="pill">Pro</span><div class="ico">📉</div><h3>Ad Profitability by SKU</h3><p>True ACOS per SKU — and which products only make money until the ads are paid for.</p></a>
-        <a class="tile" href="#/trends"><span class="pill">Pro</span><div class="ico">📈</div><h3>Multi-Month Trends</h3><p>Sales, fees %, refund rate and net payout month by month — overall and per SKU.</p></a>
+        <a class="tile" href="#/trends"><span class="pill">Starter</span><div class="ico">📈</div><h3>Multi-Month Trends</h3><p>Sales, fees %, refund rate and net payout month by month — overall and per SKU.</p></a>
         <a class="tile" href="#/fee-bands"><span class="pill">Pro</span><div class="ico">🪜</div><h3>Fee Band Optimizer</h3><p>The SKUs sitting a rupee over a referral step or a gram over a weight band — and what moving under is worth.</p></a>
         <a class="tile" href="#/ads-optimizer"><span class="pill">Pro</span><div class="ico">🎯</div><h3>Ads Optimizer</h3><p>Search terms to negate, winners that earned an exact match, and a campaign scoreboard — from the Search Term report.</p></a>
         <a class="tile" href="#/returns"><span class="pill">Pro</span><div class="ico">↩️</div><h3>Returns Analyzer</h3><p>What returns cost per SKU, how much stock comes back sellable, and Amazon's reasons bucketed into RTO, product and listing problems.</p></a>
@@ -3132,6 +3132,7 @@ function renderPricing(){
         <div class="pr-card pop">
           <span class="pr-badge">Most popular</span>
           <h3>Starter</h3>
+          <div class="pr-alt" style="font-weight:600;color:var(--ink)">Know your numbers</div>
           <div class="pr-price">${st.big} <small>${st.per}</small></div>
           <div class="pr-alt">${st.alt}</div>
           <ul class="pr-feats">
@@ -3139,27 +3140,28 @@ function renderPricing(){
             <li><span class="tick">✓</span> Settlement Analyzer — every rupee itemised</li>
             <li><span class="tick">✓</span> GST &amp; TCS Report for filing</li>
             <li><span class="tick">✓</span> SKU Profitability Report</li>
+            <li><span class="tick">✓</span> Multi-Month Trends — your business, month by month</li>
             <li><span class="tick">✓</span> One active login, kept simple</li>
           </ul>
           ${paidBtn(st,"")}
         </div>
 
         <div class="pr-card">
+          <span class="pr-badge" style="background:var(--green-soft);color:var(--green)">Launch price</span>
           <h3>Pro</h3>
+          <div class="pr-alt" style="font-weight:600;color:var(--ink)">Find the money</div>
           <div class="pr-price">${pr.big} <small>${pr.per}</small></div>
           <div class="pr-alt">${pr.alt}</div>
           <ul class="pr-feats">
             <li><span class="tick">✓</span> Everything in Starter</li>
+            <li><span class="tick">✓</span> Reconciliation &amp; SAFE-T — refunds Amazon still owes you</li>
+            <li><span class="tick">✓</span> Returns Analyzer — why stock comes back, and what it costs</li>
+            <li><span class="tick">✓</span> RTO Radar — the states and pincodes shipping parcels back</li>
+            <li><span class="tick">✓</span> Stranded Inventory — stock paying rent, unable to sell</li>
+            <li><span class="tick">✓</span> Storage Fee Analyzer — dead stock on the shelf</li>
+            <li><span class="tick">✓</span> Fee Band Optimizer — a rupee over the wrong fee step</li>
+            <li><span class="tick">✓</span> Ads Optimizer + Ad Profitability — spend that never converts</li>
             <li><span class="tick">✓</span> SKU P&amp;L with your product costs</li>
-            <li><span class="tick">✓</span> Reconciliation &amp; SAFE-T finder</li>
-            <li><span class="tick">✓</span> Ad Profitability by SKU</li>
-            <li><span class="tick">✓</span> Fee Band Optimizer</li>
-            <li><span class="tick">✓</span> Ads Optimizer</li>
-            <li><span class="tick">✓</span> Returns Analyzer</li>
-            <li><span class="tick">✓</span> Storage Fee Analyzer</li>
-            <li><span class="tick">✓</span> RTO Radar</li>
-            <li><span class="tick">✓</span> Stranded Inventory</li>
-            <li><span class="tick">✓</span> Multi-month Trends</li>
           </ul>
           ${paidBtn(pr," sec")}
         </div>
