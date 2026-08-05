@@ -1594,6 +1594,8 @@ const HELP={
     steps:["Drop all your settlement files at once (or add them one by one — duplicates are skipped).","Read the month-by-month charts: sales, fees as % of sales, refund rate and net payout.","Pick a SKU to see its own monthly units, sales and net — is it growing, and is it still worth the fees?"]},
   "ads-optimizer":{input:`<b>Advertising console → Sponsored ads → Reports (or Measurement &amp; reporting) → Sponsored Products → Search term</b> — export for 30–60 days. The .xlsx it hands out drops straight in; CSV works too.`,
     steps:["Drop the Search Term report (several files at once is fine — re-drops replace). Optional but worth it: add the Advertised-product report for the same period, plus your settlement files — terms in single-SKU ad groups are then judged against that SKU's own break-even ACOS instead of a flat line.","Export the negatives list and paste each term as a negative exact into the campaign it spent in.","Move the winners into their own exact-match keywords, then negate them where they came from so the two never bid against each other.","Check the campaign scoreboard monthly — and judge affordability per SKU in Ad Profitability, which knows each product's break-even ACOS."]},
+  "traffic":{input:`<b>Business Reports → By ASIN → Detail Page Sales and Traffic By Child Item</b> → set roughly the last 30 days → Download (.csv). The By-Child version is the one with per-ASIN sessions and conversion.`,
+    steps:["Drop the .csv — one period at a time (mixing periods double-counts sessions).","Read the account conversion first: every judgement on the page is relative to it.","Work the 'Traffic comes, buyers don't' table worst-first — those pages already get the visitors; the listing is what loses them.","Feed the ⭐ winners in the Ads Optimizer, and fix invisible ASINs in search (keywords/ads), not in the listing editor."]},
   "stranded":{input:`<b>Fulfilment Reports → Inventory → Stranded Inventory</b> → Request .csv Download (no date range — it is a live snapshot). Optional: add settlement files so rows whose listings were deleted can be valued at the SKU's own average selling price.`,
     steps:["Drop the report — the snapshot lists every unit in the warehouse with no active listing to sell through.","Work the reasons panel: listing errors are minutes to fix and need no removal; deleted listings need a relist; under-review stock needs a case, not an edit.","Watch the auto-removal column — Amazon removes stranded stock itself after a deadline, and that removal is not free.","Cross-check the same ASINs in the Storage Fee Analyzer — stranded stock pays rent the whole time."]},
   "rto":{input:`<b>Fulfilment Reports → Sales → All Orders</b> → Order Date → last 30 days → Request Download (a .txt file). Optional: the <b>seller-fulfilled Return Report</b> (Orders → Manage Returns → View reports) to see which RTOs were already refunded.`,
@@ -2307,6 +2309,10 @@ const PW_MOCKS={
     <div class="row"><span>"lunch box steel" · 9 orders</span><b class="amt pos">12% ACOS</b></div>
     <div class="row"><span>Terms to negate</span><b class="big">31</b></div>
     <div class="row"><span>Spend they were eating</span><b class="amt neg">−₹4,812</b></div>`,
+  traffic:`<div class="row"><span>Sessions · 30 din</span><b class="big">1,12,921</b></div>
+    <div class="row"><span>Traffic wasted · 38 ASINs</span><b class="amt neg">31,514 sessions</b></div>
+    <div class="row"><span>8,188 visitors, 1.4% conversion</span><b class="amt neg">listing problem</b></div>
+    <div class="row"><span>Winners worth more ads</span><b class="big">12</b></div>`,
   stranded:`<div class="row"><span>Units stranded</span><b class="big">406</b></div>
     <div class="row"><span>Value stuck</span><b class="amt neg">−₹1,43,766</b></div>
     <div class="row"><span>Longest stuck · under review</span><b class="big">142 days</b></div>
@@ -2363,6 +2369,11 @@ const ADSO_INFO={route:"ads-optimizer",title:"Ads Optimizer",plan:"Pro",needPro:
   desc:"The Search Term report shows what buyers actually typed. This turns it into the four lists worth acting on.",
   feats:["Search terms eating spend with zero orders — a paste-ready negative list","Winners under broad/auto that earned their own exact match","Terms converting at a loss, campaign scoreboard with verdicts","Reads the .xlsx straight from the ads console"],
   mock:PW_MOCKS.adsopt};
+const TD_INFO={route:"traffic",title:"Traffic Doctor",plan:"Pro",needPro:true,
+  price:"₹499/month — unlock with Pro",priceAlt:"or ₹2,499/year (save ~58%)",
+  desc:"A SKU that doesn't sell fails one of three ways — no traffic, traffic that doesn't convert, or a lost Buy Box. This says which.",
+  feats:["Per-ASIN sessions, conversion and Buy Box share from Amazon's Business Report","Traffic-wasters flagged against your OWN account average, not a magic number","Winners that deserve more ads; invisible ASINs that need search fixes, not listing polish","Units-lost estimate per bleeder, clearly labelled as an estimate"],
+  mock:PW_MOCKS.traffic};
 const STR_INFO={route:"stranded",title:"Stranded Inventory",plan:"Pro",needPro:true,
   price:"₹499/month — unlock with Pro",priceAlt:"or ₹2,499/year (save ~58%)",
   desc:"Stock in Amazon's warehouse that cannot sell — paying rent, earning nothing. The report names the fix; this adds the value and the clock.",
@@ -2566,6 +2577,7 @@ function renderAccount(){
             <a href="#/storage">📦 Storage Fee Analyzer</a>
             <a href="#/rto">🔁 RTO Radar</a>
             <a href="#/stranded">🚧 Stranded Inventory</a>
+            <a href="#/traffic">🩺 Traffic Doctor</a>
             <a href="#/trends">📈 Multi-Month Trends</a>
           </div>
         </div>
@@ -3092,6 +3104,7 @@ function renderHome(){
         <a class="tile" href="#/storage"><span class="pill">Pro</span><div class="ico">📦</div><h3>Storage Fee Analyzer</h3><p>Which ASINs pay the warehouse rent, which pay rent while selling nothing, and months of cover per ASIN — from Amazon's own billing report.</p></a>
         <a class="tile" href="#/rto"><span class="pill">Pro</span><div class="ico">🔁</div><h3>RTO Radar</h3><p>RTO rate by state and pincode, per-SKU return-to-origin economics, and the order value stuck in transit back to you.</p></a>
         <a class="tile" href="#/stranded"><span class="pill">Pro</span><div class="ico">🚧</div><h3>Stranded Inventory</h3><p>Stock in the warehouse that cannot sell — its value, how long it has been stuck, and Amazon's own fix for every row.</p></a>
+        <a class="tile" href="#/traffic"><span class="pill">Pro</span><div class="ico">🩺</div><h3>Traffic Doctor</h3><p>Why an ASIN doesn't sell — no traffic, traffic that doesn't convert, or a lost Buy Box — from the Business Report.</p></a>
       </div>
 
       <section class="lp2-sec">
@@ -3231,6 +3244,7 @@ function renderPricing(){
             <li><span class="tick">✓</span> Returns Analyzer — why stock comes back, and what it costs</li>
             <li><span class="tick">✓</span> RTO Radar — the states and pincodes shipping parcels back</li>
             <li><span class="tick">✓</span> Stranded Inventory — stock paying rent, unable to sell</li>
+            <li><span class="tick">✓</span> Traffic Doctor — traffic that comes but doesn't buy</li>
             <li><span class="tick">✓</span> Storage Fee Analyzer — dead stock on the shelf</li>
             <li><span class="tick">✓</span> Fee Band Optimizer — a rupee over the wrong fee step</li>
             <li><span class="tick">✓</span> Ads Optimizer + Ad Profitability — spend that never converts</li>
@@ -10009,6 +10023,213 @@ function strWire(out,r){
   });
 }
 
+/* ============================================================
+   TRAFFIC DOCTOR (Pro) — why a SKU doesn't sell.
+   Reads Business Reports → Detail Page Sales and Traffic (By
+   Child Item). A weak SKU fails one of three ways and each has a
+   different fix: nobody SEES it (traffic problem — ads/SEO),
+   people see it and don't BUY (listing/price problem), or buyers
+   see someone else's offer (Buy Box problem). This report is the
+   only place Amazon says which — sessions, conversion and
+   Featured-Offer share per ASIN. Judgements are relative to the
+   account's own average, never a magic number; the one estimate
+   on the page (units lost vs your average) is labelled as one.
+   ============================================================ */
+let tdFiles=[];
+function parseTraffic(text){
+  const recs=saCsvRecords(text);
+  if(!recs.length) return null;
+  const cols=recs[0].map(h=>h.replace(/^﻿/,"").trim().toLowerCase());
+  const ix=n=>cols.indexOf(n);
+  const iAsin=ix("(child) asin"),iParent=ix("(parent) asin"),iTitle=ix("title"),
+        iSess=ix("sessions - total"),iPv=ix("page views - total"),
+        iBb=ix("featured offer percentage"),iUnits=ix("units ordered"),
+        iCvr=ix("unit session percentage"),iSales=ix("ordered product sales");
+  if(iAsin<0||iSess<0||iCvr<0) return null;
+  const num=v=>{const x=parseFloat(String(v||"").replace(/[₹,%\s]/g,"").replace(/,/g,""));return isFinite(x)?x:0;};
+  const rows=[];
+  for(let i=1;i<recs.length;i++){
+    const f=recs[i];
+    if(!f[iAsin]) continue;
+    rows.push({asin:f[iAsin].trim(),parent:iParent>=0?(f[iParent]||"").trim():"",
+      title:iTitle>=0?(f[iTitle]||"").replace(/\s+/g," ").trim():"",
+      sessions:num(f[iSess]),pageViews:iPv>=0?num(f[iPv]):0,
+      buyBox:iBb>=0?num(f[iBb]):null,units:iUnits>=0?num(f[iUnits]):0,
+      cvr:num(f[iCvr]),sales:iSales>=0?num(f[iSales]):0});
+  }
+  return rows.length?{rows}:null;
+}
+window.parseTraffic=parseTraffic; // exposed for verification/debugging
+const TD_MIN_SESS=100;   // below this a conversion rate is noise
+function trafficCompute(rowsIn){
+  /* several files (periods/accounts should NOT be mixed — dedupe by ASIN keeps
+     a re-drop from double counting) */
+  const seen=new Set(),rows=[];
+  for(const r of rowsIn){ if(seen.has(r.asin)) continue; seen.add(r.asin); rows.push(r); }
+  const t={asins:rows.length,sessions:0,units:0,sales:0};
+  for(const r of rows){ t.sessions+=r.sessions; t.units+=r.units; t.sales+=r.sales; }
+  t.cvr=t.sessions>0?t.units/t.sessions*100:0;
+  const lowBar=Math.max(1,t.cvr*0.5);        // 'no conversion' = below half your own average (floor 1%)
+  const starBar=t.cvr*1.5;                   // 'feed it traffic' = 1.5x your average
+  const items=rows.map(r=>{
+    let diag,fix;
+    if(r.sessions<10){ diag="invisible"; fix="Nobody sees it — this is an ads/SEO problem, not a listing problem."; }
+    else if(r.buyBox!==null&&r.buyBox<70&&r.sessions>=50){ diag="buybox"; fix="Visitors see someone else's offer — price/eligibility, not your listing."; }
+    else if(r.sessions>=TD_MIN_SESS&&r.cvr<lowBar){ diag="noconv"; fix="Traffic comes, buyers don't — images, price, reviews or the first bullet."; }
+    else if(r.sessions>=TD_MIN_SESS&&r.cvr>=starBar){ diag="star"; fix="Converts far above your average — it deserves more traffic (ads, deals)."; }
+    else if(r.sessions<TD_MIN_SESS){ diag="thin"; fix=""; }
+    else { diag="ok"; fix=""; }
+    /* the one estimate, clearly labelled: units the ASIN would have sold at
+       the ACCOUNT's average conversion, minus what it actually sold */
+    const lostUnits=diag==="noconv"?Math.max(0,r.sessions*(t.cvr-r.cvr)/100):0;
+    const unitPrice=r.units>0?r.sales/r.units:0;
+    return {...r,diag,fix,lostUnits,lostValue:unitPrice>0?lostUnits*unitPrice:null};
+  });
+  const g=k=>items.filter(x=>x.diag===k);
+  const noconv=g("noconv").sort((a,b)=>b.sessions-a.sessions);
+  const stars=g("star").sort((a,b)=>b.cvr-a.cvr);
+  const invisible=g("invisible").sort((a,b)=>b.units-a.units);
+  const buybox=g("buybox").sort((a,b)=>b.sessions-a.sessions);
+  t.wastedSessions=noconv.reduce((a,x)=>a+x.sessions,0);
+  t.lostUnits=noconv.reduce((a,x)=>a+x.lostUnits,0);
+  t.lostValue=noconv.reduce((a,x)=>a+(x.lostValue||0),0);
+  return {items,noconv,stars,invisible,buybox,totals:t,lowBar,starBar};
+}
+window.trafficCompute=trafficCompute; // exposed for verification/debugging
+function tdStatus(x){
+  if(x.diag==="noconv") return {k:"loss",l:"Traffic wasted"};
+  if(x.diag==="buybox") return {k:"problem",l:"Losing Buy Box"};
+  if(x.diag==="invisible") return {k:"watch",l:"Invisible"};
+  if(x.diag==="star") return {k:"good",l:"Feed it traffic"};
+  if(x.diag==="thin") return {k:"data",l:"Low sessions"};
+  return {k:"info",l:"OK"};
+}
+window.tdStatus=tdStatus; // exposed for verification/debugging
+
+function renderTraffic(){
+  setMeta("Traffic Doctor — Seller Tools India",
+    "Drop the Business Report (Detail Page Sales & Traffic by Child Item) and see why each ASIN doesn't sell: no traffic, traffic that doesn't convert, or a lost Buy Box — each with its own fix.");
+  backBtn.hidden=false;
+  gatePremium(TD_INFO, tdBody);
+}
+function tdBody(){
+  app.innerHTML=`
+    <div class="wrap page">
+      <h2>Traffic Doctor</h2>
+      <p class="lede">A SKU that doesn't sell fails one of three ways — <b>nobody sees it, people see it and don't buy, or buyers see someone else's offer.</b> Each needs a different fix, and this report is the only place Amazon says which one you have.</p>
+      ${helpHtml("traffic")}
+      <label class="sa-drop" id="td-drop">
+        <div class="ico">🩺</div>
+        <h3>Drop the Business Report here</h3>
+        <p>Business Reports → By ASIN → Detail Page Sales and Traffic <b>By Child Item</b> → pick ~30 days → Download (.csv). (.csv, .txt, .xlsx)</p>
+        <input type="file" id="td-file" multiple accept=".csv,.txt,.tsv,.xlsx,text/plain,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+      </label>
+      <div class="sa-priv">🔒 Private by design — your files never leave your device. Every figure is computed locally on this page.</div>
+      <div id="td-out"></div>
+    </div>`;
+  const drop=document.getElementById("td-drop"),file=document.getElementById("td-file");
+  ["dragenter","dragover"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add("over");}));
+  ["dragleave","drop"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove("over");}));
+  drop.addEventListener("drop",ev=>{tdAddFiles(ev.dataTransfer.files);});
+  file.addEventListener("change",()=>{tdAddFiles(file.files);file.value="";});
+  if(tdFiles.length) tdRenderResults();
+}
+function tdAddFiles(list){
+  const files=[...(list||[])]; if(!files.length) return;
+  let pending=files.length;
+  files.forEach(f=>{
+    const finish=()=>{ if(--pending===0) tdRenderResults(); };
+    saReadDropped(f,text=>{
+      tdFiles=tdFiles.filter(x=>x.name!==f.name);
+      const td=parseTraffic(text);
+      if(td) tdFiles.push({name:f.name,kind:"traffic",rows:td.rows});
+      else if(parseUnifiedTransaction(text)||parseSettlement(text))
+        tdFiles.push({name:f.name,kind:"error",msg:"this is a settlement file — Traffic Doctor reads the Business Report (Detail Page Sales & Traffic by Child Item)."});
+      else tdFiles.push({name:f.name,kind:"error",msg:"not recognised as a Detail Page Sales & Traffic (By Child Item) report."+saDescribeColumns(text)});
+      finish();
+    },msg=>{ tdFiles=tdFiles.filter(x=>x.name!==f.name); tdFiles.push({name:f.name,kind:"error",msg}); finish(); });
+  });
+}
+function tdRenderResults(){
+  const out=document.getElementById("td-out"); if(!out) return;
+  let h=`<div class="rec-files">${tdFiles.map((f,i)=>`<span class="rec-file"${f.kind==="error"?` title="${esc(f.msg)}"`:""}><b>${esc(f.name)}</b><span class="rf-kind">${f.kind==="error"?"⚠ Skipped":"Traffic report"}</span><button type="button" data-rm="${i}" aria-label="Remove ${esc(f.name)}">✕</button></span>`).join("")}</div>`;
+  const bad=tdFiles.filter(f=>f.kind==="error");
+  if(bad.length) h+=`<div class="banner warn">${bad.map(f=>`<b>${esc(f.name)}</b>: ${esc(f.msg)}`).join("<br>")}</div>`;
+  const rows=tdFiles.filter(f=>f.kind==="traffic").flatMap(f=>f.rows);
+  if(!rows.length){ out.innerHTML=h; tdWire(out); return; }
+  const r=trafficCompute(rows);
+  const t=r.totals;
+  h+=`<div class="stats">
+    <div class="stat"><div class="k">Sessions (visitors)</div><div class="v">${num(t.sessions)}</div><div class="sa-sub" style="margin-top:3px">${num(t.asins)} ASINs · ${num(t.units)} units ordered</div></div>
+    <div class="stat"><div class="k">Account conversion</div><div class="v">${t.cvr.toFixed(1)}%</div><div class="sa-sub" style="margin-top:3px">units ÷ sessions — your own benchmark</div></div>
+    <div class="stat ${r.noconv.length?"red":"green"}"><div class="k">Traffic being wasted</div><div class="v">${num(t.wastedSessions)}</div><div class="sa-sub" style="margin-top:3px">${num(r.noconv.length)} ASIN${r.noconv.length===1?"":"s"} converting below half your average</div></div>
+    <div class="stat ${r.invisible.length?"":"green"}"><div class="k">Invisible ASINs</div><div class="v">${num(r.invisible.length)}</div><div class="sa-sub" style="margin-top:3px">under 10 sessions — nobody sees them</div></div>
+  </div>`;
+  if(r.noconv.length){
+    h+=`<div class="panel"><h4>🩸 Traffic comes, buyers don't <span class="sa-sub">(${r.noconv.length} — converting below ${r.lowBar.toFixed(1)}%, half your account average)</span></h4>
+      <p class="sa-sub" style="margin:4px 0 10px">These pages get real visitors and lose them — the fix is the listing (images, price, reviews, first bullet), not more ads. The last column is an estimate: units this ASIN would have sold at your account's average conversion.</p>
+      <div class="tblwrap"><table class="sa">
+      <thead><tr><th>ASIN</th><th>Product</th><th class="num">Sessions</th><th class="num">Conversion</th><th class="num">Buy Box</th><th class="num">Units</th><th class="num" title="Estimate: sessions × (account average − this ASIN's conversion)">Units lost vs avg*</th></tr></thead>
+      <tbody>${r.noconv.slice(0,20).map(x=>`<tr>
+        <td>${esc(x.asin)}</td><td class="sa-sub" style="max-width:220px">${esc(x.title.slice(0,50))}</td>
+        <td class="num"><b>${num(x.sessions)}</b></td>
+        <td class="num" style="color:var(--red);font-weight:700">${x.cvr.toFixed(2)}%</td>
+        <td class="num">${x.buyBox===null?"—":x.buyBox.toFixed(0)+"%"}</td>
+        <td class="num">${num(x.units)}</td>
+        <td class="num">${Math.round(x.lostUnits)}${x.lostValue?`<span class="sa-sub"> ≈ ${inr0(x.lostValue)}</span>`:""}</td></tr>`).join("")}
+      </tbody></table></div>
+      ${t.lostUnits>0?`<div class="sa-sub" style="margin-top:6px">* Together ≈ <b>${num(Math.round(t.lostUnits))} units${t.lostValue?" / "+inr0(t.lostValue):""}</b> a month if these pages converted at your account average — an estimate, clearly, but of your own traffic at your own average.</div>`:""}</div>`;
+  }
+  if(r.buybox.length){
+    h+=`<div class="panel"><h4>🥊 Losing the Buy Box <span class="sa-sub">(${r.buybox.length})</span></h4>
+      <div class="tblwrap"><table class="sa"><thead><tr><th>ASIN</th><th>Product</th><th class="num">Sessions</th><th class="num">Buy Box %</th><th class="num">Conversion</th></tr></thead>
+      <tbody>${r.buybox.slice(0,10).map(x=>`<tr><td>${esc(x.asin)}</td><td class="sa-sub">${esc(x.title.slice(0,50))}</td><td class="num">${num(x.sessions)}</td><td class="num" style="color:var(--red);font-weight:700">${x.buyBox.toFixed(0)}%</td><td class="num">${x.cvr.toFixed(2)}%</td></tr>`).join("")}</tbody></table></div>
+      <div class="sa-sub" style="margin-top:6px">Visitors arrive but see another seller's offer — check price competitiveness and fulfilment eligibility before touching the listing.</div></div>`;
+  }
+  if(r.stars.length){
+    h+=`<div class="panel"><h4>⭐ Feed the winners <span class="sa-sub">(${r.stars.length} — converting above ${r.starBar.toFixed(1)}%, 1.5× your average)</span></h4>
+      <div class="tblwrap"><table class="sa"><thead><tr><th>ASIN</th><th>Product</th><th class="num">Sessions</th><th class="num">Conversion</th><th class="num">Sales</th></tr></thead>
+      <tbody>${r.stars.slice(0,10).map(x=>`<tr><td>${esc(x.asin)}</td><td class="sa-sub">${esc(x.title.slice(0,50))}</td><td class="num">${num(x.sessions)}</td><td class="num" style="color:var(--green);font-weight:700">${x.cvr.toFixed(2)}%</td><td class="num">${inr0(x.sales)}</td></tr>`).join("")}</tbody></table></div>
+      <div class="sa-sub" style="margin-top:6px">Every extra visitor converts here far above par — these are the ASINs worth advertising harder.</div></div>`;
+  }
+  if(r.invisible.length){
+    h+=`<div class="panel"><h4>👻 Invisible <span class="sa-sub">(${r.invisible.length} — under 10 sessions in the period)</span></h4>
+      <p class="sa-sub" style="margin:4px 0 8px">The listing may be fine — nobody reaches it. Fixes live in search: keywords, ads, category. Perfecting these pages first is effort in the wrong place.</p>
+      <div class="sa-sub">${r.invisible.slice(0,12).map(x=>esc(x.asin)).join(" · ")}${r.invisible.length>12?" · …":""}</div></div>`;
+  }
+  h+=`<details class="howto"><summary>How every number here is computed</summary><div class="hbody">
+    <span class="htag">Formulas &amp; sources</span>
+    <ol>
+      <li>Everything comes from Amazon's own Business Report: sessions (visitors), unit session percentage (conversion), Featured Offer share (Buy Box), units and sales per child ASIN.</li>
+      <li>Judgements are relative to <b>your account's own average conversion (${t.cvr.toFixed(1)}%)</b> — not an industry number: wasted-traffic below half of it, winners above 1.5× of it. Rates need ${TD_MIN_SESS}+ sessions; under 10 sessions an ASIN is "invisible", between the two it's "low sessions" and left unjudged.</li>
+      <li>The only estimate on this page is <b>units lost vs avg</b> = sessions × (account average − ASIN conversion), valued at the ASIN's own average selling price. It is labelled with * everywhere it appears.</li>
+      <li>Status: <span class="st st-loss">Traffic wasted</span> · <span class="st st-problem">Losing Buy Box</span> &lt;70% with 50+ sessions · <span class="st st-watch">Invisible</span> &lt;10 sessions · <span class="st st-good">Feed it traffic</span> ≥1.5× average · <span class="st st-data">Low sessions</span>.</li>
+    </ol>
+  </div></details>`;
+  const worst=r.noconv[0];
+  h+=`<div style="display:flex;justify-content:flex-end;gap:8px;margin:14px 0 2px"><button type="button" class="fbtn" id="td-csv">⬇ Export CSV</button><button type="button" class="fbtn" id="td-pdf">📄 Client PDF</button></div>
+  <div class="panel"><h4>What should I do next?</h4><ul style="margin:8px 0 0 18px;line-height:1.9;font-size:13.5px">
+    ${worst?`<li><b>${esc(worst.asin)}</b> got ${num(worst.sessions)} visitors and converted ${worst.cvr.toFixed(2)}% — run it through the <a href="#/listing-checker">Listing Checker</a> and compare its price against the top result for its main keyword before spending another rupee on ads.</li>`:""}
+    ${r.stars.length?`<li>The ⭐ winners convert far above your average — point ad budget at them in the <a href="#/ads-optimizer">Ads Optimizer</a> instead of at the bleeders.</li>`:""}
+    <li>Whether the extra sales would be profitable is a margin question — check the SKUs in the <a href="#/sku-report">SKU report</a> with your product costs.</li>
+  </ul></div>`;
+  out.innerHTML=h; tdWire(out,r);
+}
+function tdWire(out,r){
+  out.querySelectorAll("[data-rm]").forEach(b=>b.addEventListener("click",()=>{
+    tdFiles.splice(Number(b.dataset.rm),1); tdRenderResults();
+  }));
+  const pdf=out.querySelector("#td-pdf");
+  if(pdf) pdf.addEventListener("click",()=>saClientPdf("Traffic Doctor — findings",document.getElementById("td-out")));
+  const csv=out.querySelector("#td-csv");
+  if(csv&&r) csv.addEventListener("click",()=>{
+    saCsvDownload("traffic-doctor.csv",
+      ["ASIN","Product","Diagnosis","Sessions","Page views","Conversion %","Buy Box %","Units","Sales (INR)","Units lost vs avg (est)","Fix"],
+      r.items.map(x=>[x.asin,x.title,tdStatus(x).l,x.sessions,x.pageViews,x.cvr.toFixed(2),
+        x.buyBox===null?"":x.buyBox.toFixed(1),x.units,x.sales.toFixed(2),Math.round(x.lostUnits)||"",x.fix]));
+  });
+}
+
 function renderAdsOptimizer(){
   setMeta("Ads Optimizer — Seller Tools India",
     "Drop your Sponsored Products Search Term report and get the lists that matter: search terms to negate, terms that earned an exact-match campaign, terms converting at a loss, and a campaign scoreboard — computed in your browser.");
@@ -10188,6 +10409,7 @@ function route(){
   if(h==="storage"){renderStorageFees();window.scrollTo(0,0);return;}
   if(h==="rto"){renderRtoRadar();window.scrollTo(0,0);return;}
   if(h==="stranded"){renderStranded();window.scrollTo(0,0);return;}
+  if(h==="traffic"){renderTraffic();window.scrollTo(0,0);return;}
   if(h==="ad-profit"){renderAdProfit();window.scrollTo(0,0);return;}
   if(h==="link-builder"){renderLinkBuilder();window.scrollTo(0,0);return;}
   if(h==="keyword-combiner"){renderKeywordCombiner();window.scrollTo(0,0);return;}
@@ -10203,7 +10425,7 @@ function route(){
 window.addEventListener("hashchange",route);
 /* Premium tools re-check entitlement when the tab regains focus, so a session
    kicked on another device locks here within seconds of the user returning. */
-const PREMIUM_ROUTES=["settlement-analyzer","gst-report","sku-report","reconcile","trends","ad-profit","fee-bands","ads-optimizer","returns","storage","rto","stranded"];
+const PREMIUM_ROUTES=["settlement-analyzer","gst-report","sku-report","reconcile","trends","ad-profit","fee-bands","ads-optimizer","returns","storage","rto","stranded","traffic"];
 window.addEventListener("focus",()=>{
   const h=location.hash.replace(/^#\/?/,"");
   if(!PREMIUM_ROUTES.includes(h) || saUnlocked() || !sessionUser()) return;
@@ -10237,6 +10459,7 @@ function pingNow(){ _lastPing=0; try{ sendPing(); }catch(e){} }
    entry per shipped change a seller can actually feel.
    ============================================================ */
 const CHANGELOG=[
+  {d:"2026-08-06",t:"Traffic Doctor — a new Pro tool",n:"The Business Report's sessions, conversion and Buy Box share per ASIN, turned into a diagnosis: traffic-wasters judged against your own account average, winners that deserve more ads, invisible ASINs that need search fixes — and a clearly-labelled units-lost estimate."},
   {d:"2026-08-05",t:"Stranded Inventory — a new Pro tool",n:"Stock in Amazon's warehouse that cannot sell: every stranded listing with its value (priced from your settlements when the listing is gone), days stuck, Amazon's own reason and suggested fix, and auto-removal warnings."},
   {d:"2026-08-05",t:"RTO Radar — a new Pro tool",n:"The All Orders report records which parcels came back undelivered — it just never totals it up. Now: RTO rate by state (with a minimum-sample guard), repeat-RTO pincodes, per-SKU RTO economics, cancellations separated out, and which RTOs were already refunded."},
   {d:"2026-08-04",t:"Storage Fee Analyzer — a new Pro tool",n:"Amazon's Monthly Storage Fees report, turned into the question that matters: which stock pays rent without paying its way. Per-ASIN fee, months of cover, rent per unit sold, and the ASINs that paid rent while selling zero units."},
