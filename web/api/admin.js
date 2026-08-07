@@ -68,7 +68,7 @@ function revenuePrevMonthPaise(payments, nowMs) {
   }, 0);
 }
 // Subscription statuses that mean "will charge again on its own".
-const SUB_RENEWING = ['created_pending', 'authenticated', 'active', 'pending'];
+const SUB_RENEWING = ['authenticated', 'active', 'pending'];
 function subStatusOf(subs, userId) {
   // Most meaningful live status for a user, or null.
   const mine = (subs || []).filter(s => s.user_id === userId);
@@ -77,9 +77,14 @@ function subStatusOf(subs, userId) {
   return s ? s.status : null;
 }
 
+// Audit IP. Take Vercel's own header first, and otherwise the LAST X-Forwarded-For
+// hop: the first entry is whatever the caller sent, so trusting it lets anyone
+// attribute their actions to an IP of their choosing.
 function clientIp(req) {
+  const v = (req.headers['x-vercel-forwarded-for'] || '').toString();
+  if (v) return v.split(',').pop().trim();
   const xf = (req.headers['x-forwarded-for'] || '').toString();
-  return xf ? xf.split(',')[0].trim() : ((req.headers['x-real-ip'] || '').toString() || null);
+  return xf ? xf.split(',').pop().trim() : ((req.headers['x-real-ip'] || '').toString() || null);
 }
 async function jsonOf(r) { try { return await r.json(); } catch (e) { return null; } }
 
@@ -309,7 +314,9 @@ module.exports = async (req, res) => {
 
     if (action === 'grant') {
       const uid = String(body.user_id || ''); const plan = body.plan; const days = parseInt(body.days, 10);
-      if (!uid || (plan !== 'starter' && plan !== 'pro') || !(days > 0)) return res.status(400).json({ error: 'bad_input' });
+      // Cap at ~13 months: long enough for any yearly comp, short enough that a
+      // typo can't mint a decade of free Pro that looks like a normal grant.
+      if (!uid || (plan !== 'starter' && plan !== 'pro') || !(days > 0 && days <= 400)) return res.status(400).json({ error: 'bad_input' });
       const dt = grantDates(days, now);
       const r = await rest('POST', '/entitlements', { user_id: uid, plan, source: 'admin', starts_at: dt.starts_at, expires_at: dt.expires_at });
       await audit('grant:' + plan + ':' + days);

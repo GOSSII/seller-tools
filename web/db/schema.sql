@@ -45,6 +45,12 @@ create table if not exists public.entitlements (
 );
 create index if not exists entitlements_user_idx
   on public.entitlements (user_id, created_at desc);
+-- One entitlement per Razorpay payment. The webhook can be delivered twice for
+-- one charge (payment.captured + subscription.charged, or a Razorpay retry);
+-- this makes the second insert a no-op instead of a second paid period.
+-- Partial: admin grants carry no payment_id and must stay unconstrained.
+create unique index if not exists entitlements_payment_uniq
+  on public.entitlements (payment_id) where payment_id is not null;
 
 -- ---------------------------------------------------------------------------
 -- payments: one row per Razorpay order/payment
@@ -228,3 +234,32 @@ create table if not exists public.client_errors (
 );
 create index if not exists client_errors_at_idx on public.client_errors (at desc);
 alter table public.client_errors enable row level security;  -- service-role only
+
+-- ---------------------------------------------------------------------------
+-- Hardening (added after the 2026-08 monetization audit). Safe to re-run.
+-- ---------------------------------------------------------------------------
+
+-- One payments row per Razorpay order: the webhook flips a row to 'paid' by
+-- order id, and a duplicate pending row would make that PATCH ambiguous.
+create unique index if not exists payments_order_uniq
+  on public.payments (razorpay_order_id) where razorpay_order_id is not null;
+
+-- The active session token must not be readable by the browser: a signed-out
+-- tab could read the winning session's id and replay it as X-Session-Id,
+-- defeating the one-login rule. RLS scopes ROWS; this scopes COLUMNS.
+-- (The client only ever selects device_limit and email,is_admin.)
+revoke select on public.profiles from anon, authenticated;
+grant select (id, email, name, is_admin, device_limit, created_at)
+  on public.profiles to authenticated;
+
+-- Status vocabularies, documented above but never enforced. NOT VALID so
+-- existing rows can't block the migration.
+do $$ begin
+  alter table public.subscriptions add constraint subscriptions_status_chk
+    check (status in ('created','authenticated','active','pending','cancel_requested',
+                      'cancelled','halted','completed','paused','expired')) not valid;
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter table public.payments add constraint payments_status_chk
+    check (status in ('pending','paid','failed','refunded')) not valid;
+exception when duplicate_object then null; end $$;
