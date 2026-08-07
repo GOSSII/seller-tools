@@ -39,11 +39,7 @@ module.exports = async (req, res) => {
     // to the visitor — this endpoint is fire-and-forget by design.
     if (!r.ok) return res.status(200).json({ ok: false });
 
-    // Best-effort cleanup of month-old rows.
-    if (Math.random() < 0.05) {
-      const cutoff = new Date(Date.now() - 30 * 86400000).toISOString();
-      try { await rest('DELETE', '/client_errors?at=lt.' + encodeURIComponent(cutoff)); } catch (e) { /* ignore */ }
-    }
+    // Retention is handled by the scheduled purge in api/cleanup.js.
     return res.status(200).json({ ok: true });
   } catch (e) {
     return res.status(200).json({ ok: false });

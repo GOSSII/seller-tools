@@ -41,11 +41,7 @@ module.exports = async (req, res) => {
       await rest('POST', '/presence', { sid, user_id: userId, route, started_at: nowIso, last_seen_at: nowIso });
     }
 
-    // Occasional cleanup of week-old rows (best-effort).
-    if (Math.random() < 0.05) {
-      const cutoff = new Date(Date.now() - 7 * 86400000).toISOString();
-      try { await rest('DELETE', '/presence?last_seen_at=lt.' + encodeURIComponent(cutoff)); } catch (e) { /* ignore */ }
-    }
+    // Retention is handled by the scheduled purge in api/cleanup.js.
 
     return res.status(200).json({ ok: true });
   } catch (e) {
