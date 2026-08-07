@@ -4,14 +4,25 @@
 // id, no IP, no user-agent — the point is fixing the code, not tracking the
 // visitor. The client rate-limits itself; this end truncates and inserts.
 const { rest } = require('./_lib/supa');
+const { allow } = require('./_lib/ratelimit');
 
 function safeJson(s) { try { return typeof s === 'string' ? JSON.parse(s) : s; } catch (e) { return null; } }
 const cut = (v, n) => String(v == null ? '' : v).slice(0, n);
+const clampInt = (v) => {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  return Math.max(0, Math.min(2147483647, Math.trunc(n)));
+};
+// A real page throws a handful of times at most; the client already caps
+// itself at 5. Anything past this is a flood trying to bury real errors.
+const RL_MAX = 20, RL_WINDOW_MS = 10 * 60 * 1000;
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   try {
     if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' });
+    // Fire-and-forget by design: a throttled report is a silent no-op.
+    if (!allow(req, RL_MAX, RL_WINDOW_MS)) return res.status(200).json({ ok: false });
     const b = safeJson(req.body) || {};
     const message = cut(b.message, 300).trim();
     if (!message) return res.status(400).json({ error: 'no_message' });
@@ -19,8 +30,9 @@ module.exports = async (req, res) => {
       message,
       route: cut(b.route, 64),
       source: cut(b.source, 200),
-      line: Number.isFinite(Number(b.line)) ? Number(b.line) : null,
-      col: Number.isFinite(Number(b.col)) ? Number(b.col) : null
+      // Clamp to int4 — a finite but oversized value (1e30) fails the insert.
+      line: clampInt(b.line),
+      col: clampInt(b.col)
     };
     const r = await rest('POST', '/client_errors', row);
     // Table missing (schema.sql not re-run yet) must not surface as an error

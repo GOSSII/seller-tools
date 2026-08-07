@@ -4,14 +4,21 @@
 // sessions last. Privacy: sid is a random per-tab id, no IP or user-agent is
 // stored; user_id only when the caller sends a valid login token.
 const { userFromToken, rest, bearer } = require('./_lib/supa');
+const { allow } = require('./_lib/ratelimit');
 
 function safeJson(s) { try { return typeof s === 'string' ? JSON.parse(s) : s; } catch (e) { return null; } }
 const SID_RE = /^[a-zA-Z0-9-]{8,64}$/;
+// The client heartbeats once a minute per tab. This leaves room for a dozen
+// tabs behind one NAT while stopping a script from minting presence rows (and
+// GoTrue lookups) at will.
+const RL_MAX = 60, RL_WINDOW_MS = 60 * 1000;
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   try {
     if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' });
+    // Silent no-op when throttled: presence is best-effort telemetry.
+    if (!allow(req, RL_MAX, RL_WINDOW_MS)) return res.status(200).json({ ok: false });
     const body = safeJson(req.body) || {};
     const sid = String(body.sid || '');
     let route = String(body.route || '').slice(0, 64);
