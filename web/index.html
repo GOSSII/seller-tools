@@ -3185,7 +3185,7 @@ async function adminShowUser(uid,flash){
         <label>Grant plan</label>
         <div class="adm-row-inline">
           <select id="adm-grant-plan"><option value="starter">Starter</option><option value="pro">Pro</option></select>
-          <input id="adm-grant-days" type="number" min="1" value="30" style="max-width:90px" aria-label="Days">
+          <input id="adm-grant-days" type="number" min="1" max="400" value="30" style="max-width:90px" aria-label="Days">
           <button type="button" class="lp-btn" data-adm="grant">Grant</button>
         </div>
       </div>

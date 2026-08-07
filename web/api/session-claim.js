@@ -49,9 +49,13 @@ function evaluateClaim(activeSessionId, knownHashes, incomingHash, deviceLimit) 
   };
 }
 
+// The FIRST X-Forwarded-For entry is caller-supplied, so a login could be
+// logged against any IP the caller invented; take the trusted hop instead.
 function clientIp(req) {
+  const v = (req.headers['x-vercel-forwarded-for'] || '').toString();
+  if (v) return v.split(',').pop().trim();
   const xf = (req.headers['x-forwarded-for'] || '').toString();
-  if (xf) return xf.split(',')[0].trim();
+  if (xf) return xf.split(',').pop().trim();
   return (req.headers['x-real-ip'] || '').toString() || null;
 }
 
