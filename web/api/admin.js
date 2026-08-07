@@ -123,9 +123,13 @@ module.exports = async (req, res) => {
       const subs = (subRes && subRes.ok ? (await jsonOf(subRes)) : null) || [];
       const paidUsers = new Set(ents.filter(e => isActive(e, now)).map(e => e.user_id));
 
-      // Live plan per paid user (newest active entitlement wins per user).
+      // Live plan per paid user (highest live plan wins: pro > starter).
       const livePlan = {};
-      ents.forEach(e => { if (isActive(e, now) && !livePlan[e.user_id]) livePlan[e.user_id] = e; });
+      ents.forEach(e => {
+        if (!isActive(e, now)) return;
+        const cur = livePlan[e.user_id];
+        if (!cur || (e.plan === 'pro' && cur.plan !== 'pro')) livePlan[e.user_id] = e;
+      });
       const planCounts = { free: Math.max(0, profiles.length - paidUsers.size), starter: 0, pro: 0 };
       Object.values(livePlan).forEach(e => { if (planCounts[e.plan] != null) planCounts[e.plan]++; });
 
@@ -268,7 +272,8 @@ module.exports = async (req, res) => {
       }
       const rows = profiles.map(p => {
         const myEnt = ents.filter(x => x.user_id === p.id);
-        const live = myEnt.find(x => isActive(x, now));
+        const actives = myEnt.filter(x => isActive(x, now));
+        const live = actives.find(x => x.plan === 'pro') || actives[0];
         const lastLogin = logins.filter(x => x.user_id === p.id)[0];
         return {
           id: p.id, email: p.email, name: p.name, is_admin: p.is_admin, device_limit: p.device_limit,

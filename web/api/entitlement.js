@@ -42,10 +42,14 @@ module.exports = async (req, res) => {
     const rows = await er.json();
 
     const now = Date.now();
-    const live = (Array.isArray(rows) ? rows : []).find(
-      r => !r.expires_at || new Date(r.expires_at).getTime() > now
+    // Highest live plan wins: a user holding both a live Pro and a live
+    // Starter row is Pro, regardless of which row was created last.
+    const liveRows = (Array.isArray(rows) ? rows : []).filter(
+      r => (r.plan === 'starter' || r.plan === 'pro')
+        && (!r.expires_at || new Date(r.expires_at).getTime() > now)
     );
-    if (live && (live.plan === 'starter' || live.plan === 'pro')) {
+    const live = liveRows.find(r => r.plan === 'pro') || liveRows[0];
+    if (live) {
       return res.status(200).json({ plan: live.plan, expires_at: live.expires_at || null });
     }
     return res.status(200).json(FREE);
