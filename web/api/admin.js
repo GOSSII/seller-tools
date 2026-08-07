@@ -42,6 +42,40 @@ function signupsByDay(profiles, nowMs, nDays) {
 function isActive(ent, nowMs) {
   return (ent.plan === 'starter' || ent.plan === 'pro') && (!ent.expires_at || new Date(ent.expires_at).getTime() > nowMs);
 }
+function revenueByDay(payments, nowMs, nDays) {
+  const out = [];
+  const start = new Date(nowMs); start.setUTCHours(0, 0, 0, 0);
+  const sums = {};
+  (payments || []).forEach(p => {
+    if (p.status === 'paid' && p.created_at) {
+      const d = p.created_at.slice(0, 10);
+      sums[d] = (sums[d] || 0) + (p.amount_paise || 0);
+    }
+  });
+  for (let i = nDays - 1; i >= 0; i--) {
+    const day = new Date(start.getTime() - i * 86400000).toISOString().slice(0, 10);
+    out.push({ d: day, paise: sums[day] || 0 });
+  }
+  return out;
+}
+function revenuePrevMonthPaise(payments, nowMs) {
+  const d = new Date(nowMs);
+  let y = d.getUTCFullYear(), m = d.getUTCMonth() - 1;
+  if (m < 0) { m = 11; y--; }
+  return (payments || []).filter(p => p.status === 'paid' && p.created_at).reduce((sum, p) => {
+    const t = new Date(p.created_at);
+    return (t.getUTCFullYear() === y && t.getUTCMonth() === m) ? sum + (p.amount_paise || 0) : sum;
+  }, 0);
+}
+// Subscription statuses that mean "will charge again on its own".
+const SUB_RENEWING = ['created_pending', 'authenticated', 'active', 'pending'];
+function subStatusOf(subs, userId) {
+  // Most meaningful live status for a user, or null.
+  const mine = (subs || []).filter(s => s.user_id === userId);
+  const pick = order => order.map(st => mine.find(s => s.status === st)).find(Boolean);
+  const s = pick(['active', 'authenticated', 'pending', 'cancel_requested', 'halted', 'paused']);
+  return s ? s.status : null;
+}
 
 function clientIp(req) {
   const xf = (req.headers['x-forwarded-for'] || '').toString();
@@ -75,17 +109,77 @@ module.exports = async (req, res) => {
     }).catch(() => {});
 
     if (action === 'stats') {
-      const [pRes, eRes, payRes, prRes, ceRes] = await Promise.all([
+      const [pRes, eRes, payRes, prRes, ceRes, subRes] = await Promise.all([
         rest('GET', '/profiles?select=id,created_at&order=created_at.desc&limit=2000'),
         rest('GET', '/entitlements?select=user_id,plan,expires_at&limit=5000'),
-        rest('GET', '/payments?select=amount_paise,status,created_at&status=eq.paid&limit=5000'),
+        rest('GET', '/payments?select=user_id,plan,period,amount_paise,status,created_at&status=eq.paid&order=created_at.desc&limit=5000'),
         rest('GET', '/presence?select=user_id,route,started_at,last_seen_at&order=last_seen_at.desc&limit=2000'),
         // client_errors may not exist until schema.sql is re-run — degrade, don't 500
-        rest('GET', '/client_errors?select=at,route,message,source,line&order=at.desc&limit=50').catch(() => null)
+        rest('GET', '/client_errors?select=at,route,message,source,line&order=at.desc&limit=50').catch(() => null),
+        rest('GET', '/subscriptions?select=user_id,status&limit=5000').catch(() => null)
       ]);
       const profiles = (await jsonOf(pRes)) || [], ents = (await jsonOf(eRes)) || [], pays = (await jsonOf(payRes)) || [];
       const presence = (await jsonOf(prRes)) || [];
+      const subs = (subRes && subRes.ok ? (await jsonOf(subRes)) : null) || [];
       const paidUsers = new Set(ents.filter(e => isActive(e, now)).map(e => e.user_id));
+
+      // Live plan per paid user (newest active entitlement wins per user).
+      const livePlan = {};
+      ents.forEach(e => { if (isActive(e, now) && !livePlan[e.user_id]) livePlan[e.user_id] = e; });
+      const planCounts = { free: Math.max(0, profiles.length - paidUsers.size), starter: 0, pro: 0 };
+      Object.values(livePlan).forEach(e => { if (planCounts[e.plan] != null) planCounts[e.plan]++; });
+
+      // Auto-renewal buckets.
+      const renewing = new Set(subs.filter(s => SUB_RENEWING.includes(s.status)).map(s => s.user_id));
+      const subCounts = {
+        active: subs.filter(s => ['authenticated', 'active', 'pending'].includes(s.status)).length,
+        paused: subs.filter(s => ['halted', 'paused'].includes(s.status)).length,
+        ending: subs.filter(s => s.status === 'cancel_requested').length
+      };
+
+      // Follow-up lists need last logins + emails for the (few) paid users.
+      const paidIds = [...paidUsers].slice(0, 100);
+      let paidLogins = [], paidEmails = {};
+      if (paidIds.length) {
+        const inList = '(' + paidIds.map(encodeURIComponent).join(',') + ')';
+        const [lg, em] = await Promise.all([
+          rest('GET', '/login_events?select=user_id,at&user_id=in.' + inList + '&order=at.desc&limit=2000'),
+          rest('GET', '/profiles?select=id,email&id=in.' + inList)
+        ]);
+        paidLogins = (await jsonOf(lg)) || [];
+        ((await jsonOf(em)) || []).forEach(p => { paidEmails[p.id] = p.email; });
+      }
+      const lastLoginAt = {};
+      paidLogins.forEach(l => { if (!lastLoginAt[l.user_id]) lastLoginAt[l.user_id] = l.at; });
+
+      // Expiring within 7 days and won't renew on their own.
+      const expiringSoon = Object.values(livePlan).filter(e => {
+        if (!e.expires_at || renewing.has(e.user_id)) return false;
+        const left = new Date(e.expires_at).getTime() - now;
+        return left > 0 && left < 7 * 86400000;
+      }).map(e => ({
+        user_id: e.user_id, email: paidEmails[e.user_id] || null, plan: e.plan, expires_at: e.expires_at,
+        days_left: Math.ceil((new Date(e.expires_at).getTime() - now) / 86400000),
+        sub_status: subStatusOf(subs, e.user_id)
+      })).sort((a, b) => a.days_left - b.days_left).slice(0, 10);
+
+      // Paying users who stopped logging in (14+ days quiet).
+      const quietPaid = paidIds.filter(id => {
+        const at = lastLoginAt[id];
+        return !at || (now - new Date(at).getTime() > 14 * 86400000);
+      }).map(id => ({
+        user_id: id, email: paidEmails[id] || null, plan: livePlan[id] ? livePlan[id].plan : null,
+        expires_at: livePlan[id] ? livePlan[id].expires_at : null,
+        days_quiet: lastLoginAt[id] ? Math.floor((now - new Date(lastLoginAt[id]).getTime()) / 86400000) : null
+      })).sort((a, b) => (b.days_quiet || 999) - (a.days_quiet || 999)).slice(0, 10);
+
+      // Recent payments with emails.
+      const recentPays = pays.slice(0, 8);
+      const payIds = [...new Set(recentPays.map(p => p.user_id).filter(Boolean))].filter(id => !(id in paidEmails));
+      if (payIds.length) {
+        const em2 = await jsonOf(await rest('GET', '/profiles?select=id,email&id=in.(' + payIds.map(encodeURIComponent).join(',') + ')'));
+        (em2 || []).forEach(p => { paidEmails[p.id] = p.email; });
+      }
 
       // Presence: online = heartbeat in the last 2 minutes (client pings each
       // minute). Session length = last_seen - started, per tab-session.
@@ -118,12 +212,30 @@ module.exports = async (req, res) => {
         recentErrors = recentErrors.slice(0, 15);
       }
 
+      // Top routes in the last 24h (by session count).
+      const routeCounts = {};
+      day.forEach(r => { const rt = r.route || '—'; routeCounts[rt] = (routeCounts[rt] || 0) + 1; });
+      const topRoutes = Object.entries(routeCounts).sort((a, b) => b[1] - a[1]).slice(0, 5)
+        .map(([route, count]) => ({ route, count }));
+
       await audit('stats');
       return res.status(200).json({
         users_total: profiles.length,
         paid_count: paidUsers.size,
         revenue_month_paise: revenueThisMonthPaise(pays, now),
+        revenue_prev_month_paise: revenuePrevMonthPaise(pays, now),
         revenue_total_paise: pays.reduce((s, p) => s + (p.amount_paise || 0), 0),
+        payments_total: pays.length,
+        revenue_days: revenueByDay(pays, now, 30),
+        plan_counts: planCounts,
+        sub_counts: subCounts,
+        expiring_soon: expiringSoon,
+        quiet_paid: quietPaid,
+        recent_payments: recentPays.map(p => ({
+          created_at: p.created_at, plan: p.plan, period: p.period,
+          amount_paise: p.amount_paise, email: paidEmails[p.user_id] || null
+        })),
+        top_routes: topRoutes,
         signups: signupsByDay(profiles, now, 30),
         online_now: online.length,
         sessions_24h: day.length,
@@ -141,15 +253,18 @@ module.exports = async (req, res) => {
       const pRes = await rest('GET', '/profiles?select=id,email,name,is_admin,device_limit,created_at&order=created_at.desc&limit=50' + filter);
       const profiles = (await jsonOf(pRes)) || [];
       const ids = profiles.map(p => p.id);
-      let ents = [], devs = [], logins = [];
+      let ents = [], devs = [], logins = [], subs = [], pays = [];
       if (ids.length) {
         const inList = '(' + ids.map(encodeURIComponent).join(',') + ')';
-        const [e, d, l] = await Promise.all([
+        const [e, d, l, s, pay] = await Promise.all([
           rest('GET', '/entitlements?select=user_id,plan,expires_at,created_at&user_id=in.' + inList + '&order=created_at.desc&limit=1000'),
           rest('GET', '/devices?select=user_id&user_id=in.' + inList + '&limit=2000'),
-          rest('GET', '/login_events?select=user_id,at&user_id=in.' + inList + '&order=at.desc&limit=2000')
+          rest('GET', '/login_events?select=user_id,at&user_id=in.' + inList + '&order=at.desc&limit=2000'),
+          rest('GET', '/subscriptions?select=user_id,status&user_id=in.' + inList + '&limit=1000').catch(() => null),
+          rest('GET', '/payments?select=user_id,amount_paise&status=eq.paid&user_id=in.' + inList + '&limit=2000')
         ]);
         ents = (await jsonOf(e)) || []; devs = (await jsonOf(d)) || []; logins = (await jsonOf(l)) || [];
+        subs = (s && s.ok ? (await jsonOf(s)) : null) || []; pays = (await jsonOf(pay)) || [];
       }
       const rows = profiles.map(p => {
         const myEnt = ents.filter(x => x.user_id === p.id);
@@ -159,7 +274,9 @@ module.exports = async (req, res) => {
           id: p.id, email: p.email, name: p.name, is_admin: p.is_admin, device_limit: p.device_limit,
           plan: live ? live.plan : 'free', expires_at: live ? live.expires_at : null,
           devices: devs.filter(x => x.user_id === p.id).length,
-          last_login: lastLogin ? lastLogin.at : null
+          last_login: lastLogin ? lastLogin.at : null,
+          sub_status: subStatusOf(subs, p.id),
+          paid_paise: pays.filter(x => x.user_id === p.id).reduce((sum, x) => sum + (x.amount_paise || 0), 0)
         };
       });
       return res.status(200).json({ users: rows });
@@ -232,3 +349,6 @@ module.exports = async (req, res) => {
 module.exports.grantDates = grantDates;
 module.exports.revenueThisMonthPaise = revenueThisMonthPaise;
 module.exports.signupsByDay = signupsByDay;
+module.exports.revenueByDay = revenueByDay;
+module.exports.revenuePrevMonthPaise = revenuePrevMonthPaise;
+module.exports.subStatusOf = subStatusOf;
