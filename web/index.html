@@ -3389,7 +3389,7 @@ function renderHome(){
       </div>
       <div class="lp2-plan"><span class="tag pro">Pro · ₹499/mo</span><span>For serious sellers</span></div>
       <div class="grid" style="padding:14px 0 8px">
-        <a class="tile" href="#/sku-report"><span class="pill">Pro</span><div class="ico">⚡</div><h3>SKU P&amp;L with your costs</h3><p>Add product costs, see true P&amp;L per SKU and loss-makers flagged.</p></a>
+        <a class="tile" href="#/sku-report/advanced"><span class="pill">Pro</span><div class="ico">⚡</div><h3>SKU P&amp;L with your costs</h3><p>Add product costs, see true P&amp;L per SKU and loss-makers flagged.</p></a>
         <a class="tile" href="#/reconcile"><span class="pill">Pro</span><div class="ico">🕵️</div><h3>Reconciliation &amp; SAFE-T Finder</h3><p>Cross-check settlements and your MTR to find missing referral-fee credits, SAFE-T-eligible refunds and unpaid shipments — with claim steps.</p></a>
         <a class="tile" href="#/ad-profit"><span class="pill">Pro</span><div class="ico">📉</div><h3>Ad Profitability by SKU</h3><p>True ACOS per SKU — and which products only make money until the ads are paid for.</p></a>
         <a class="tile" href="#/trends"><span class="pill">Starter</span><div class="ico">📈</div><h3>Multi-Month Trends</h3><p>Sales, fees %, refund rate and net payout month by month — overall and per SKU.</p></a>
@@ -4588,7 +4588,7 @@ function gstRenderResults(){
    ============================================================ */
 let skuSort="net", skuQuery="";
 /* Advanced P&L (Phase 7a) — Pro-only overlay on the SKU report. */
-let skuAdvanced=false, skuIsPro=false, skuShowUpgrade=false;
+let skuAdvanced=false, skuIsPro=false, skuShowUpgrade=false, skuWantAdvanced=false;
 const skuExpanded=new Set();
 const SKU_COSTS_KEY="sku_costs";
 function loadSkuCosts(){try{return JSON.parse(localStorage.getItem(SKU_COSTS_KEY)||"{}")||{};}catch(e){return {};}}
@@ -4652,7 +4652,10 @@ function renderSkuReport(){
   const md=document.querySelector('meta[name="description"]');
   if(md) md.setAttribute("content","Upload your Amazon settlement report and see which SKUs actually make money after fees, taxes and refunds — computed locally in your browser.");
   backBtn.hidden=false;
-  gatePremium(SKU_INFO, skuReportBody);
+  /* "#/sku-report/advanced" (the Pro tile on home) lands with Advanced-P&L
+     intent: Pro users get the mode pre-armed, everyone else sees the Pro
+     pitch immediately instead of a silently basic tool. */
+  gatePremium(skuWantAdvanced?Object.assign({},SKU_INFO,{route:"sku-report/advanced"}):SKU_INFO, skuReportBody);
 }
 function skuReportBody(){
   app.innerHTML=`
@@ -4676,7 +4679,18 @@ function skuReportBody(){
   file.addEventListener("change",()=>{const f=file.files[0];if(f)skuRead(f);});
   // Advanced P&L is Pro-only.
   skuAdvanced=false; skuShowUpgrade=false; skuIsPro=false;
-  getEntitlement().then(e=>{ if(e&&e.plan==="pro") skuIsPro=true; }).catch(()=>{});
+  const applyAdvIntent=()=>{
+    if(!skuWantAdvanced) return;
+    skuWantAdvanced=false;
+    if(skuIsPro){ skuAdvanced=true; if(saParsed) skuRenderResults(); return; }
+    if(saParsed){ skuShowUpgrade=true; skuRenderResults(); return; }
+    const o=document.getElementById("sku-out");
+    if(o) o.innerHTML=`<div class="panel" style="border-color:var(--blue-line);background:var(--blue-soft)">
+      <h4>⚡ Advanced P&amp;L is a Pro feature</h4>
+      <p class="sa-sub">The basic SKU Profitability Report below is included in your plan. Adding <b>your product costs</b> to see true profit per SKU — with loss-makers flagged — needs <b>Pro (₹499/month)</b>.</p>
+      <a class="lp-btn" href="#/pricing" style="margin-top:8px">See Pro pricing</a></div>`;
+  };
+  getEntitlement().then(e=>{ if(e&&e.plan==="pro") skuIsPro=true; applyAdvIntent(); }).catch(applyAdvIntent);
   if(saParsed) skuRenderResults();
 }
 
@@ -10682,7 +10696,8 @@ function route(){
   if(h==="whoami"){renderWhoAmI();window.scrollTo(0,0);return;}
   if(h==="settlement-analyzer"){renderSettlementAnalyzer();window.scrollTo(0,0);return;}
   if(h==="gst-report"){renderGstReport();window.scrollTo(0,0);return;}
-  if(h==="sku-report"){renderSkuReport();window.scrollTo(0,0);return;}
+  if(h==="sku-report"){skuWantAdvanced=false;renderSkuReport();window.scrollTo(0,0);return;}
+  if(h==="sku-report/advanced"){skuWantAdvanced=true;renderSkuReport();window.scrollTo(0,0);return;}
   if(h==="reconcile"){renderReconcile();window.scrollTo(0,0);return;}
   if(h==="trends"){renderTrends();window.scrollTo(0,0);return;}
   if(h==="fee-bands"){renderFeeBands();window.scrollTo(0,0);return;}
@@ -10708,7 +10723,7 @@ function route(){
 window.addEventListener("hashchange",route);
 /* Premium tools re-check entitlement when the tab regains focus, so a session
    kicked on another device locks here within seconds of the user returning. */
-const PREMIUM_ROUTES=["settlement-analyzer","gst-report","sku-report","reconcile","trends","ad-profit","fee-bands","ads-optimizer","returns","storage","rto","stranded","traffic"];
+const PREMIUM_ROUTES=["settlement-analyzer","gst-report","sku-report","sku-report/advanced","reconcile","trends","ad-profit","fee-bands","ads-optimizer","returns","storage","rto","stranded","traffic"];
 window.addEventListener("focus",()=>{
   const h=location.hash.replace(/^#\/?/,"");
   if(!PREMIUM_ROUTES.includes(h) || !sessionUser()) return;
