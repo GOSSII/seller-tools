@@ -152,7 +152,7 @@ module.exports = async (req, res) => {
       if (paidIds.length) {
         const inList = '(' + paidIds.map(encodeURIComponent).join(',') + ')';
         const [lg, em] = await Promise.all([
-          rest('GET', '/login_events?select=user_id,at&user_id=in.' + inList + '&order=at.desc&limit=2000'),
+          rest('GET', '/login_events?select=user_id,at&user_id=in.' + inList + '&device_hash=not.like.admin-action:*&order=at.desc&limit=2000'),
           rest('GET', '/profiles?select=id,email&id=in.' + inList)
         ]);
         paidLogins = (await jsonOf(lg)) || [];
@@ -268,13 +268,14 @@ module.exports = async (req, res) => {
         const [e, d, l, s, pay] = await Promise.all([
           rest('GET', '/entitlements?select=user_id,plan,expires_at,created_at&user_id=in.' + inList + '&order=created_at.desc&limit=1000'),
           rest('GET', '/devices?select=user_id&user_id=in.' + inList + '&limit=2000'),
-          rest('GET', '/login_events?select=user_id,at&user_id=in.' + inList + '&order=at.desc&limit=2000'),
+          rest('GET', '/login_events?select=user_id,at&user_id=in.' + inList + '&device_hash=not.like.admin-action:*&order=at.desc&limit=2000'),
           rest('GET', '/subscriptions?select=user_id,status&user_id=in.' + inList + '&limit=1000').catch(() => null),
           rest('GET', '/payments?select=user_id,amount_paise&status=eq.paid&user_id=in.' + inList + '&limit=2000')
         ]);
         ents = (await jsonOf(e)) || []; devs = (await jsonOf(d)) || []; logins = (await jsonOf(l)) || [];
         subs = (s && s.ok ? (await jsonOf(s)) : null) || []; pays = (await jsonOf(pay)) || [];
       }
+      await audit('list_users' + (q ? ':q=' + q.slice(0, 40) : ''));
       const rows = profiles.map(p => {
         const myEnt = ents.filter(x => x.user_id === p.id);
         const actives = myEnt.filter(x => isActive(x, now));
@@ -299,10 +300,13 @@ module.exports = async (req, res) => {
       const [e, pay, l, d, p] = await Promise.all([
         rest('GET', '/entitlements?select=plan,source,starts_at,expires_at,created_at,payment_id&user_id=eq.' + enc + '&order=created_at.desc&limit=50'),
         rest('GET', '/payments?select=created_at,plan,period,amount_paise,status,razorpay_payment_id&user_id=eq.' + enc + '&order=created_at.desc&limit=50'),
-        rest('GET', '/login_events?select=at,ip,user_agent,device_hash,kicked_previous&user_id=eq.' + enc + '&order=at.desc&limit=20'),
+        rest('GET', '/login_events?select=at,user_agent,device_hash,kicked_previous&user_id=eq.' + enc + '&device_hash=not.like.admin-action:*&order=at.desc&limit=20'),
         rest('GET', '/devices?select=label,device_hash,first_seen,last_seen&user_id=eq.' + enc + '&order=last_seen.desc&limit=50'),
         rest('GET', '/profiles?select=email,name,is_admin,device_limit,active_session_id&id=eq.' + enc + '&limit=1')
       ]);
+      // This returns a customer's email, payments and login history — the
+      // most sensitive read in the system. It must leave a trace.
+      await audit('user_detail:' + uid);
       return res.status(200).json({
         profile: ((await jsonOf(p)) || [])[0] || {},
         entitlements: (await jsonOf(e)) || [],
@@ -319,7 +323,7 @@ module.exports = async (req, res) => {
       if (!uid || (plan !== 'starter' && plan !== 'pro') || !(days > 0 && days <= 400)) return res.status(400).json({ error: 'bad_input' });
       const dt = grantDates(days, now);
       const r = await rest('POST', '/entitlements', { user_id: uid, plan, source: 'admin', starts_at: dt.starts_at, expires_at: dt.expires_at });
-      await audit('grant:' + plan + ':' + days);
+      await audit('grant:' + plan + ':' + days + ':' + uid + (r.ok ? '' : ':FAILED'));
       if (!r.ok) return res.status(502).json({ error: 'db_error' });
       return res.status(200).json({ ok: true, expires_at: dt.expires_at });
     }
@@ -330,16 +334,20 @@ module.exports = async (req, res) => {
       const r = await rest('PATCH',
         '/entitlements?user_id=eq.' + encodeURIComponent(uid) + '&or=(expires_at.gt.' + encodeURIComponent(nowIso) + ',expires_at.is.null)',
         { expires_at: nowIso });
-      await audit('revoke');
+      await audit('revoke:' + uid + (r.ok ? '' : ':FAILED'));
       if (!r.ok) return res.status(502).json({ error: 'db_error' });
       return res.status(200).json({ ok: true });
     }
 
     if (action === 'reset_devices') {
       const uid = String(body.user_id || ''); if (!uid) return res.status(400).json({ error: 'user_id_required' });
-      await rest('DELETE', '/devices?user_id=eq.' + encodeURIComponent(uid));
-      await rest('PATCH', '/profiles?id=eq.' + encodeURIComponent(uid), { active_session_id: null });
-      await audit('reset_devices');
+      const dR = await rest('DELETE', '/devices?user_id=eq.' + encodeURIComponent(uid));
+      const pR = await rest('PATCH', '/profiles?id=eq.' + encodeURIComponent(uid), { active_session_id: null });
+      const okBoth = dR.ok && pR.ok;
+      await audit('reset_devices:' + uid + (okBoth ? '' : ':FAILED'));
+      // Reporting success on a failed write would tell the owner an
+      // unauthorised device was kicked when it wasn't.
+      if (!okBoth) return res.status(502).json({ error: 'db_error' });
       return res.status(200).json({ ok: true });
     }
 
@@ -347,7 +355,7 @@ module.exports = async (req, res) => {
       const uid = String(body.user_id || ''); const limit = parseInt(body.limit, 10);
       if (!uid || !(limit >= 1 && limit <= 50)) return res.status(400).json({ error: 'bad_input' });
       const r = await rest('PATCH', '/profiles?id=eq.' + encodeURIComponent(uid), { device_limit: limit });
-      await audit('set_device_limit:' + limit);
+      await audit('set_device_limit:' + limit + ':' + uid + (r.ok ? '' : ':FAILED'));
       if (!r.ok) return res.status(502).json({ error: 'db_error' });
       return res.status(200).json({ ok: true });
     }

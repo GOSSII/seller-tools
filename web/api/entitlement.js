@@ -43,7 +43,9 @@ module.exports = async (req, res) => {
     // user with many renewals must not have a live long grant fall off the end).
     const er = await rest('GET', '/entitlements?select=plan,starts_at,expires_at,created_at&user_id=eq.'
       + encodeURIComponent(user.id) + '&order=expires_at.desc.nullsfirst&limit=100');
-    if (!er.ok) return res.status(200).json(FREE);
+    // "We couldn't check" is NOT "you're on free" — saying free here shows a
+    // paying customer a paywall. 503 lets the client hold its last known plan.
+    if (!er.ok) return res.status(503).json({ error: 'unavailable' });
     const rows = await er.json();
 
     const now = Date.now();
@@ -67,6 +69,6 @@ module.exports = async (req, res) => {
     }
     return res.status(200).json(FREE);
   } catch (e) {
-    return res.status(200).json(FREE);
+    return res.status(503).json({ error: 'unavailable' });
   }
 };

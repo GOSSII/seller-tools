@@ -2230,23 +2230,55 @@ async function resetDevicesAndClaim(){
 
 let _entCache=null; // {key, promise}
 function resetEntitlement(){_entCache=null;}
+/* Last known PAID plan, so a Supabase/network blip doesn't show a paying
+   customer the paywall. Only a real answer from the server writes this; a
+   grace read is capped in time and never extends a plan past its expiry. */
+const ENT_GRACE_KEY="sa_plan_grace", ENT_GRACE_MS=30*60*1000;
+function rememberPlan(email,ent){
+  try{
+    if(!ent || ent.plan==="free") { sessionStorage.removeItem(ENT_GRACE_KEY); return; }
+    sessionStorage.setItem(ENT_GRACE_KEY,JSON.stringify({e:email||"",plan:ent.plan,expires_at:ent.expires_at||null,at:Date.now()}));
+  }catch(e){}
+}
+function gracePlan(email){
+  try{
+    const g=JSON.parse(sessionStorage.getItem(ENT_GRACE_KEY)||"null");
+    if(!g || g.e!==(email||"")) return null;
+    if(Date.now()-g.at>ENT_GRACE_MS) return null;                       // stale
+    if(g.expires_at && new Date(g.expires_at).getTime()<=Date.now()) return null; // expired anyway
+    return {plan:g.plan,expires_at:g.expires_at,grace:true};
+  }catch(e){return null;}
+}
 async function getEntitlement(){
   const s=storedSession();
   if(!s) return {plan:"free",expires_at:null};
+  const email=(s.user&&s.user.email)||"";
   const key=(s.access_token||"anon")+"|"+storedSessionId();
   if(_entCache && _entCache.key===key) return _entCache.promise;
+  let failed=false;
   const p=(async()=>{
+    /* An infrastructure failure must not read as "free" — fall back to the
+       last plan the server confirmed, for a bounded window. */
+    const onFail=()=>{ failed=true; return gracePlan(email) || {plan:"free",expires_at:null,unknown:true}; };
+    /* No usable token while a stored session exists means the refresh failed
+       (auth down / offline), not that the user is on the free plan — this is
+       the most common way an outage reaches us. */
     const token=await accessToken();
-    if(!token) return {plan:"free",expires_at:null};
+    if(!token) return onFail();
     try{
       const r=await fetch("/api/entitlement",{headers:{Authorization:"Bearer "+token,"X-Session-Id":storedSessionId()},cache:"no-store"});
       if(r.status===409){ handleSessionTaken(); return {plan:"free",expires_at:null,taken:true}; }
-      if(!r.ok) return {plan:"free",expires_at:null};
+      if(!r.ok) return onFail();
       const j=await r.json();
-      return {plan:(j&&j.plan)||"free",expires_at:(j&&j.expires_at)||null};
-    }catch(e){return {plan:"free",expires_at:null};}
+      const ent={plan:(j&&j.plan)||"free",expires_at:(j&&j.expires_at)||null};
+      rememberPlan(email,ent);
+      return ent;
+    }catch(e){ return onFail(); }
   })();
   _entCache={key,promise:p};
+  /* Never cache a failure: the next call should retry rather than keep a
+     paying user locked out until their token rotates. */
+  p.then(()=>{ if(failed && _entCache && _entCache.promise===p) _entCache=null; }).catch(()=>{});
   return p;
 }
 
@@ -2886,7 +2918,8 @@ function renderAccount(){
     try{
       const c=await sb();
       const [ev,dv]=await Promise.all([
-        c.from("login_events").select("at,device_hash,user_agent,kicked_previous").order("at",{ascending:false}).limit(10),
+        c.from("login_events").select("at,device_hash,user_agent,kicked_previous")
+          .not("device_hash","like","admin-action:%").order("at",{ascending:false}).limit(10),
         c.from("devices").select("label,first_seen,last_seen").order("last_seen",{ascending:false})
       ]);
       const events=(ev&&ev.data)||[], devices=(dv&&dv.data)||[];
@@ -3328,10 +3361,10 @@ function renderHome(){
         <div class="tk-job b">
           <div class="tag">Kaam #2</div><h3>Kharcha ghatao</h3>
           <p class="why">Fees, rent aur ads — jahan chupchaap paisa nikal jaata hai, wahan roshni.</p>
-          ${tkTool("#/storage","ware","Storage Fee Analyzer","Kaun sa stock kiraya de raha hai par bik nahi raha")}
           ${tkTool("#/fee-bands","steps","Fee Band Optimizer","Ek rupaya upar, ek band bhaari — utarne ki keemat gin ke")}
           ${tkTool("#/ads-optimizer","target","Ads Optimizer","Jo search terms paisa kha rahe hain, unki negate list")}
           ${tkTool("#/ad-profit","tdown","Ad Profitability by SKU","Ads ke baad bhi munafa bachta hai ya nahi — SKU-dar-SKU")}
+          ${tkTool("#/storage","ware","Storage Fee Analyzer","Kaun sa stock kiraya de raha hai par bik nahi raha")}
         </div>
         <div class="tk-job k">
           <div class="tag">Kaam #3</div><h3>Hisaab samjho</h3>
