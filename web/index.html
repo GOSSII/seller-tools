@@ -553,6 +553,34 @@
   .plan-badge{display:inline-block;font-size:12px;font-weight:800;padding:3px 11px;border-radius:999px;
     background:var(--blue-soft);color:var(--blue)}
   .plan-badge.free{background:var(--bg);color:var(--muted)}
+  .plan-badge.lg{font-size:17px;padding:6px 18px}
+  .acct-id{display:flex;gap:13px;align-items:center;min-width:0}
+  .acct-av{flex:none;width:50px;height:50px;border-radius:13px;background:var(--blue);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-weight:800;font-size:19px}
+  .stat .sk{font-size:12.5px;color:var(--muted);margin-top:6px;line-height:1.45;font-weight:400}
+  .meter{height:7px;border-radius:99px;background:var(--line);margin-top:9px;overflow:hidden}
+  .meter i{display:block;height:100%;border-radius:99px;background:var(--blue)}
+  .acct-banner{display:none;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;
+    background:linear-gradient(100deg,var(--blue-soft),var(--orange-soft));border:1px solid var(--blue-line);
+    border-radius:14px;padding:14px 18px;margin:0 0 16px;font-size:14px}
+  .acct-banner.show{display:flex}
+  .acct-feats{list-style:none;display:grid;grid-template-columns:1fr;gap:7px 14px;font-size:13.5px;margin:12px 0 4px;padding:0}
+  @media(min-width:560px){.acct-feats{grid-template-columns:1fr 1fr}}
+  .acct-feats .tick{color:var(--green);font-weight:800;margin-right:6px}
+  .acct-groups{display:grid;grid-template-columns:1fr;gap:14px;margin-top:12px}
+  @media(min-width:860px){.acct-groups{grid-template-columns:repeat(3,1fr)}}
+  .acct-g h4{font-size:13px;margin:0 0 6px;display:flex;align-items:center;gap:7px}
+  .acct-g h4 i{width:9px;height:9px;border-radius:99px;display:inline-block}
+  .pchip{display:inline-block;font-size:11.5px;font-weight:700;padding:2px 9px;border-radius:999px;white-space:nowrap}
+  .pchip.g{background:var(--green-soft);color:var(--green)}
+  .pchip.b{background:var(--blue-soft);color:var(--blue)}
+  .pchip.m{background:var(--bg);color:var(--muted);border:1px solid var(--line)}
+  details.acct-act summary{cursor:pointer;font-weight:700;font-size:15.5px;list-style:none;
+    display:flex;justify-content:space-between;align-items:center;gap:10px}
+  details.acct-act summary::-webkit-details-marker{display:none}
+  details.acct-act summary::after{content:"▾";color:var(--faint);flex:none}
+  details.acct-act[open] summary::after{content:"▴"}
+  details.acct-act summary .sum{font-weight:400;font-size:13px;color:var(--muted)}
 
   /* ============================================================
      PAYWALL — shown in place of a gated tool for users without a plan
@@ -2555,14 +2583,28 @@ function renderAccount(){
   backBtn.hidden=false;
   app.innerHTML=`<div class="wrap page">
     <div class="acct-head">
-      <div><h2>Your account</h2><p class="lede" style="margin:4px 0 0;font-size:14px">Welcome back, ${esc(userDisplayName(u0))}.</p></div>
-      <button type="button" class="lp-btn sec" id="ac-logout">Logout</button>
+      <div class="acct-id">
+        <div class="acct-av">${esc(initials(userDisplayName(u0)))}</div>
+        <div><h2>Your account</h2>
+          <p class="lede" style="margin:4px 0 0;font-size:13.5px">${esc(userDisplayName(u0))} · ${esc(u0.email||"")}${u0.created_at?` · member since ${esc(fmtDate(u0.created_at))}`:""}</p></div>
+      </div>
+      <div style="display:flex;gap:9px;flex-wrap:wrap">
+        <button type="button" class="lp-btn sec" id="ac-edit">✏️ Edit profile</button>
+        <button type="button" class="lp-btn sec" id="ac-logout">Logout</button>
+      </div>
     </div>
     <div class="stats" style="margin:18px 0">
-      <div class="stat blue"><div class="k">Current plan</div><div class="v" id="ac-plan"><span class="plan-badge free">Free</span></div></div>
-      <div class="stat"><div class="k">Plan expires</div><div class="v" id="ac-exp" style="font-size:16px">—</div></div>
-      <div class="stat"><div class="k">Auto-renewal</div><div class="v" id="ac-substat" style="font-size:16px">—</div></div>
+      <div class="stat blue"><div class="k">Current plan</div><div class="v" id="ac-plan"><span class="plan-badge lg free">Free</span></div>
+        <div class="sk" id="ac-plan-note"></div></div>
+      <div class="stat"><div class="k">Time left</div><div class="v" id="ac-exp" style="font-size:19px">—</div>
+        <div class="meter" id="ac-meter" hidden><i style="width:0%"></i></div>
+        <div class="sk" id="ac-exp-note"></div></div>
+      <div class="stat"><div class="k">Auto-renewal</div><div class="v" id="ac-substat" style="font-size:19px">—</div>
+        <div class="sk" id="ac-substat-note"></div></div>
+      <div class="stat"><div class="k">Devices</div><div class="v" id="ac-dev" style="font-size:19px">—</div>
+        <div class="sk" id="ac-dev-note"></div></div>
     </div>
+    <div class="acct-banner" id="ac-banner"></div>
     <div class="acct-cols">
       <div>
         <div class="card acct-card">
@@ -2572,42 +2614,65 @@ function renderAccount(){
             <span class="v" style="display:flex;gap:8px;align-items:center;flex:1;justify-content:flex-end">
               <input id="ac-name" type="text" style="max-width:200px" value="${esc(userDisplayName(u0))}">
             </span></div>
+          ${u0.created_at?`<div class="acct-row"><span class="k">Member since</span><span class="v">${esc(fmtDate(u0.created_at))}</span></div>`:""}
+          <div class="acct-row" id="ac-total-row" style="display:none"><span class="k">Total paid</span><span class="v" id="ac-total">—</span></div>
           <div id="ac-msg" class="auth-msg" hidden style="margin-top:10px"></div>
           <div style="margin-top:12px"><button type="button" class="lp-btn" id="ac-save">Save name</button></div>
         </div>
         <div class="card acct-card" style="margin-top:16px">
-          <h3>Quick open</h3>
-          <div class="acct-links">
-            <a href="#/settlement-analyzer">🧾 Settlement Analyzer</a>
-            <a href="#/gst-report">🧮 GST &amp; TCS Report</a>
-            <a href="#/sku-report">📊 SKU Profitability</a>
-            <a href="#/reconcile">🕵️ Reconciliation &amp; SAFE-T</a>
-            <a href="#/ad-profit">📉 Ad Profitability by SKU</a>
-            <a href="#/fee-bands">🪜 Fee Band Optimizer</a>
-            <a href="#/ads-optimizer">🎯 Ads Optimizer</a>
-            <a href="#/returns">↩️ Returns Analyzer</a>
-            <a href="#/storage">📦 Storage Fee Analyzer</a>
-            <a href="#/rto">🔁 RTO Radar</a>
-            <a href="#/stranded">🚧 Stranded Inventory</a>
-            <a href="#/traffic">🩺 Traffic Doctor</a>
-            <a href="#/trends">📈 Multi-Month Trends</a>
-          </div>
+          <h3>Need help?</h3>
+          <p class="sa-sub" style="margin:0 0 4px">Billing question, wrong charge, or a report that looks off — email us and we reply within a day.</p>
+          <div class="acct-row"><span class="k">Email</span><span class="v"><a href="mailto:gossiistudio@gmail.com">gossiistudio@gmail.com</a></span></div>
+          <div class="acct-row"><span class="k">Refunds</span><span class="v"><a href="/refunds.html" target="_blank" rel="noopener">7-day refund policy →</a></span></div>
         </div>
       </div>
       <div>
         <div class="card acct-card">
           <h3>Plan &amp; billing</h3>
-          <p class="sa-sub" style="margin:0 0 12px">Your plan, auto-renewal and payment history.</p>
+          <p class="sa-sub" style="margin:0 0 12px" id="ac-billsub">Your plan, auto-renewal and payment history.</p>
           <a class="lp-btn" id="ac-renew" href="#/pricing">Renew / change plan</a>
+          <div id="ac-feats"></div>
           <div id="ac-sub"></div>
           <div id="ac-pay"></div>
         </div>
+      </div>
+    </div>
+    <div class="card acct-card" style="margin-top:16px">
+      <h3 style="margin-bottom:2px">Quick open</h3>
+      <p class="sa-sub" style="margin:0">Your paid reports, grouped by the job they do.</p>
+      <div class="acct-groups">
+        <div class="acct-g"><h4><i style="background:var(--green)"></i>Paisa wapas lo</h4>
+          <div class="acct-links">
+            <a href="#/reconcile">🕵️ Reconciliation &amp; SAFE-T</a>
+            <a href="#/returns">↩️ Returns Analyzer</a>
+            <a href="#/rto">🔁 RTO Radar</a>
+            <a href="#/stranded">🚧 Stranded Inventory</a>
+          </div></div>
+        <div class="acct-g"><h4><i style="background:var(--blue)"></i>Kharcha ghatao</h4>
+          <div class="acct-links">
+            <a href="#/fee-bands">🪜 Fee Band Optimizer</a>
+            <a href="#/ads-optimizer">🎯 Ads Optimizer</a>
+            <a href="#/ad-profit">📉 Ad Profitability by SKU</a>
+            <a href="#/storage">📦 Storage Fee Analyzer</a>
+          </div></div>
+        <div class="acct-g"><h4><i style="background:var(--ink)"></i>Hisaab samjho</h4>
+          <div class="acct-links">
+            <a href="#/settlement-analyzer">🧾 Settlement Analyzer</a>
+            <a href="#/gst-report">🧮 GST &amp; TCS Report</a>
+            <a href="#/sku-report">📊 SKU Profitability</a>
+            <a href="#/trends">📈 Multi-Month Trends</a>
+            <a href="#/traffic">🩺 Traffic Doctor</a>
+          </div></div>
       </div>
     </div>
     <div class="card acct-card" id="ac-activity" style="margin-top:16px"></div>
   </div>`;
   const msg=document.getElementById("ac-msg");
   document.getElementById("ac-logout").addEventListener("click",doLogout);
+  document.getElementById("ac-edit").addEventListener("click",()=>{
+    const inp=document.getElementById("ac-name");
+    if(inp){ inp.scrollIntoView({behavior:"smooth",block:"center"}); setTimeout(()=>inp.focus(),350); }
+  });
   document.getElementById("ac-save").addEventListener("click",async()=>{
     const name=document.getElementById("ac-name").value.trim();
     if(!name){authMsg(msg,"err","Naam khaali nahi ho sakta.");return;}
@@ -2620,24 +2685,94 @@ function renderAccount(){
     }catch(err){authMsg(msg,"err",authFriendly(err.message));}
     finally{btn.disabled=false; btn.textContent="Save name";}
   });
-  /* Live plan from the server API, plus days-left and payment history. */
+  /* Shared state between the async blocks below — the banner, the time-left
+     meter and the billing subtitle each need more than one data source. */
+  const acS={ent:null,entDone:false,lastPay:null,payDone:false,liveSub:null,subDone:false};
+  const acSync=()=>{
+    /* Time-left meter: fraction of the paid period still remaining. */
+    if(acS.entDone && acS.payDone && acS.ent && acS.ent.expires_at && acS.lastPay){
+      const m=document.getElementById("ac-meter");
+      const total=new Date(acS.ent.expires_at)-new Date(acS.lastPay.created_at);
+      const left=new Date(acS.ent.expires_at)-Date.now();
+      if(m && total>0 && left>0){
+        m.hidden=false;
+        m.querySelector("i").style.width=Math.max(3,Math.min(100,Math.round(left/total*100)))+"%";
+      }
+    }
+    /* Billing subtitle: "Pro · monthly — paid 31 Jul, valid till 27 Sept". */
+    if(acS.entDone && acS.payDone && acS.ent && acS.ent.plan!=="free" && acS.lastPay){
+      const bs=document.getElementById("ac-billsub");
+      const nice=acS.ent.plan.charAt(0).toUpperCase()+acS.ent.plan.slice(1);
+      if(bs) bs.textContent=`${nice}${acS.lastPay.period?` · ${acS.lastPay.period}`:""} — paid ${fmtDate(acS.lastPay.created_at)}`+
+        (acS.ent.expires_at?`, valid till ${fmtDate(acS.ent.expires_at)}.`:".");
+    }
+    /* No auto-renewal → the expiry date is a deadline, not a rollover. */
+    if(acS.entDone && acS.subDone && acS.ent && acS.ent.plan!=="free" && !acS.liveSub && acS.ent.expires_at){
+      const en2=document.getElementById("ac-exp-note");
+      if(en2) en2.textContent="Renew by "+fmtDate(acS.ent.expires_at);
+    }
+    /* Renewal banner: paid plan, no active auto-renewal. */
+    if(acS.entDone && acS.subDone && acS.ent && acS.ent.plan!=="free" && !acS.liveSub && acS.ent.expires_at){
+      const b=document.getElementById("ac-banner");
+      const dl=daysLeft(acS.ent.expires_at);
+      if(b && dl!=null && dl>=0){
+        const nice=acS.ent.plan.charAt(0).toUpperCase()+acS.ent.plan.slice(1);
+        const yearly=acS.ent.plan==="pro"?"₹2,499":"₹999";
+        const onYearly=acS.lastPay && acS.lastPay.period==="yearly";
+        const pitch=onYearly?`Renew anytime — you keep access till ${esc(fmtDate(acS.ent.expires_at))}.`
+          :`Switch to yearly at ${yearly} and save ~58% vs monthly.`;
+        b.innerHTML=`<div><b>${esc(nice)} ends in ${dl} day${dl===1?"":"s"}.</b> <span style="color:var(--muted)">${pitch}</span></div>
+          <a class="lp-btn" href="#/pricing" style="flex:none">Renew / change plan</a>`;
+        b.classList.add("show");
+      }
+    }
+  };
+  /* Live plan from the server API, plus days-left and the what's-included list. */
   (async()=>{
     try{
       const ent=await getEntitlement();
       const pl=document.getElementById("ac-plan"), ex=document.getElementById("ac-exp"),
-            rn=document.getElementById("ac-renew");
+            rn=document.getElementById("ac-renew"), pn=document.getElementById("ac-plan-note"),
+            en=document.getElementById("ac-exp-note"), ft=document.getElementById("ac-feats");
       if(pl){
-        if(ent.plan==="free") pl.innerHTML='<span class="plan-badge free">Free</span>';
-        else pl.innerHTML='<span class="plan-badge">'+esc(ent.plan.charAt(0).toUpperCase()+ent.plan.slice(1))+'</span>';
+        if(ent.plan==="free") pl.innerHTML='<span class="plan-badge lg free">Free</span>';
+        else pl.innerHTML='<span class="plan-badge lg">'+esc(ent.plan.charAt(0).toUpperCase()+ent.plan.slice(1))+'</span>';
       }
+      if(pn) pn.textContent=ent.plan==="pro"?"All 13 paid reports unlocked"
+        :ent.plan==="starter"?"Starter reports unlocked"
+        :"Free tools only — upgrade for the paid reports";
       if(ex){
         if(ent.expires_at){
           const dl=daysLeft(ent.expires_at);
-          ex.textContent=fmtDate(ent.expires_at)+(dl!=null?` (${dl} day${dl===1?"":"s"} left)`:"");
-        } else ex.textContent="—";
+          ex.textContent=dl!=null?`${dl} day${dl===1?"":"s"}`:fmtDate(ent.expires_at);
+          if(en) en.textContent="Valid till "+fmtDate(ent.expires_at);
+        } else { ex.textContent="—"; if(en) en.textContent=ent.plan==="free"?"Free has no expiry":""; }
       }
       if(rn) rn.textContent=ent.plan==="free"?"Upgrade":"Renew / change plan";
-    }catch(e){}
+      if(ft){
+        const feats=ent.plan==="pro"
+          ?["Settlement Analyzer","Reconciliation &amp; SAFE-T","GST &amp; TCS Report","SKU P&amp;L with your costs",
+            "Ads Optimizer + Ad Profit","Returns, RTO, Storage, Stranded","Traffic Doctor","Multi-Month Trends"]
+          :ent.plan==="starter"
+          ?["Settlement Analyzer","GST &amp; TCS Report","SKU Profitability Report","Multi-Month Trends"]
+          :null;
+        if(feats) ft.innerHTML=`<h4 class="acct-h4">What's included</h4>
+          <ul class="acct-feats">${feats.map(f=>`<li><span class="tick">✓</span>${f}</li>`).join("")}</ul>`;
+        else ft.innerHTML=`<h4 class="acct-h4">What a plan unlocks</h4>
+          <ul class="acct-feats">
+            <li><span class="tick">✓</span>Settlement Analyzer <span class="pchip m">Starter</span></li>
+            <li><span class="tick">✓</span>GST &amp; TCS Report <span class="pchip m">Starter</span></li>
+            <li><span class="tick">✓</span>SKU Profitability Report <span class="pchip m">Starter</span></li>
+            <li><span class="tick">✓</span>Multi-Month Trends <span class="pchip m">Starter</span></li>
+            <li><span class="tick">✓</span>Reconciliation &amp; SAFE-T <span class="pchip b">Pro</span></li>
+            <li><span class="tick">✓</span>SKU P&amp;L with your costs <span class="pchip b">Pro</span></li>
+            <li><span class="tick">✓</span>Ads Optimizer + Ad Profit <span class="pchip b">Pro</span></li>
+            <li><span class="tick">✓</span>Returns, RTO, Storage &amp; Stranded <span class="pchip b">Pro</span></li>
+          </ul>
+          <p style="font-size:12.5px;color:var(--muted);margin-top:8px">Starter ₹199/mo · Pro ₹499/mo — yearly saves ~58%. <a href="#/pricing">See pricing →</a></p>`;
+      }
+      acS.ent=ent; acS.entDone=true; acSync();
+    }catch(e){ acS.entDone=true; acSync(); }
   })();
   /* Auto-renewal status + cancel (reads own subscriptions rows via RLS). */
   (async()=>{
@@ -2651,24 +2786,34 @@ function renderAccount(){
       // they are NOT an active auto-renewal and must not show as one.
       const live=["authenticated","active","pending","cancel_requested","halted","paused"];
       const s=(data||[]).find(x=>live.includes(x.status));
-      const substat=document.getElementById("ac-substat");
-      if(!s){ host.innerHTML=""; if(substat) substat.textContent="Off"; return; }
+      const substat=document.getElementById("ac-substat"), subnote=document.getElementById("ac-substat-note");
+      if(!s){
+        host.innerHTML=""; if(substat) substat.textContent="Off";
+        if(subnote) subnote.textContent="You won't be charged automatically";
+        acS.liveSub=null; acS.subDone=true; acSync(); return;
+      }
+      acS.liveSub=s; acS.subDone=true; acSync();
       const plan=(s.plan||"").charAt(0).toUpperCase()+(s.plan||"").slice(1);
       const nice=`${plan} · ${s.period||""}`;
       const nextDt=s.current_end?fmtDate(s.current_end):null;
       const render=(status)=>{
-        let body="", btn="", stat="On 🔁";
+        let body="", btn="", stat="On 🔁", note="";
         if(status==="cancel_requested"){
           stat="Ending";
+          note=nextDt?`No charge after ${nextDt}`:"No further charges";
           body=`Auto-renewal is <b>ending</b>${nextDt?` — no charge after ${esc(nextDt)}`:""}. You keep access until the end of the period you've paid for.`;
         }else if(status==="halted"||status==="paused"){
           stat="Paused";
+          note="The last charge didn't go through";
           body=`Auto-renewal is <b>paused</b> — the last charge didn't go through. Renew from the <a href="#/pricing">pricing page</a> to continue.`;
         }else{
+          note=nextDt?`Next charge around ${nextDt}`:"Cancel anytime";
           body=`Auto-renewal is <b>ON</b> for <b>${esc(nice)}</b>${nextDt?` — next charge around ${esc(nextDt)}`:""}. Cancel anytime; you keep access until the period ends.`;
           btn=`<button type="button" class="lp-btn sec" id="ac-sub-cancel" style="margin-top:10px">Cancel auto-renewal</button>`;
         }
         if(substat) substat.textContent=stat;
+        const subnote2=document.getElementById("ac-substat-note");
+        if(subnote2) subnote2.textContent=note;
         host.innerHTML=`<h4 class="acct-h4">Auto-renewal</h4>
           <div class="acct-inset"><p style="font-size:13.5px;margin:0;line-height:1.55">🔁 ${body}</p>${btn}
           <div id="ac-sub-msg" class="auth-msg" hidden style="margin-top:10px"></div></div>`;
@@ -2686,7 +2831,7 @@ function renderAccount(){
         });
       };
       render(s.status);
-    }catch(e){ host.innerHTML=""; }
+    }catch(e){ host.innerHTML=""; acS.subDone=true; acSync(); }
   })();
   /* Payment history (reads the user's own rows via RLS). */
   (async()=>{
@@ -2697,18 +2842,24 @@ function renderAccount(){
         .select("created_at,plan,period,amount_paise,razorpay_payment_id,status")
         .order("created_at",{ascending:false}).limit(20);
       const rows=(data||[]).filter(r=>r.status==="paid");
-      if(!rows.length){ host.innerHTML=""; return; }
+      if(!rows.length){ host.innerHTML=""; acS.payDone=true; acSync(); return; }
+      const total=rows.reduce((a,r)=>a+(r.amount_paise||0),0);
       host.innerHTML=`<h4 class="acct-h4">Payment history</h4>
         <div class="pay-wrap"><table class="pay-table">
-          <thead><tr><th>Date</th><th>Plan</th><th>Amount</th><th>Payment ID</th></tr></thead>
+          <thead><tr><th>Date</th><th>Plan</th><th>Amount</th><th>Status</th><th>Payment ID</th></tr></thead>
           <tbody>${rows.map(r=>`<tr>
             <td>${esc(fmtDate(r.created_at))}</td>
             <td>${esc((r.plan||"").charAt(0).toUpperCase()+(r.plan||"").slice(1))}${r.period?` · ${esc(r.period)}`:""}</td>
             <td>${esc(inrPaise(r.amount_paise))}</td>
+            <td><span class="pchip g">Paid</span></td>
             <td class="pid">${esc(r.razorpay_payment_id||"—")}</td>
           </tr>`).join("")}</tbody>
-        </table></div>`;
-    }catch(e){ host.innerHTML=""; }
+        </table></div>
+        <p style="font-size:12.5px;color:var(--faint);margin-top:10px">Keep the Payment ID handy for any billing query — it identifies the exact charge.</p>`;
+      const tr=document.getElementById("ac-total-row"), tv=document.getElementById("ac-total");
+      if(tr&&tv){ tv.textContent=`${inrPaise(total)} across ${rows.length} payment${rows.length===1?"":"s"}`; tr.style.display="flex"; }
+      acS.lastPay=rows[0]; acS.payDone=true; acSync();
+    }catch(e){ host.innerHTML=""; acS.payDone=true; acSync(); }
   })();
   /* Login activity + known devices, and "Log out everywhere". */
   (async()=>{
@@ -2716,27 +2867,46 @@ function renderAccount(){
     try{
       const c=await sb();
       const [ev,dv]=await Promise.all([
-        c.from("login_events").select("at,device_hash,ip,user_agent,kicked_previous").order("at",{ascending:false}).limit(10),
+        c.from("login_events").select("at,device_hash,user_agent,kicked_previous").order("at",{ascending:false}).limit(10),
         c.from("devices").select("label,first_seen,last_seen").order("last_seen",{ascending:false})
       ]);
       const events=(ev&&ev.data)||[], devices=(dv&&dv.data)||[];
-      const devHtml=devices.length?`<div class="pay-wrap" style="margin-bottom:14px"><table class="pay-table">
+      /* Devices stat tile: count vs the account's device limit (own profile row). */
+      let dlim=null;
+      try{
+        const {data:pr}=await c.from("profiles").select("device_limit").limit(1);
+        if(pr&&pr.length&&pr[0].device_limit!=null) dlim=pr[0].device_limit;
+      }catch(e2){}
+      const myLabel=deviceLabelFromUAClient(navigator.userAgent);
+      const dvv=document.getElementById("ac-dev"), dvn=document.getElementById("ac-dev-note");
+      if(dvv&&devices.length){
+        dvv.textContent=dlim?`${devices.length} of ${dlim}`:String(devices.length);
+        if(dvn) dvn.textContent=(devices[0].label||"Device")+(devices[0].label===myLabel?" · this device":"");
+      }
+      const thisChipUsed={done:false};
+      const devHtml=devices.length?`<div class="pay-wrap" style="margin:14px 0"><table class="pay-table">
         <thead><tr><th>Device</th><th>First seen</th><th>Last seen</th></tr></thead>
-        <tbody>${devices.map(d=>`<tr><td>${esc(d.label||"Device")}</td><td>${esc(fmtDate(d.first_seen))}</td><td>${esc(fmtDate(d.last_seen))}</td></tr>`).join("")}</tbody>
+        <tbody>${devices.map(d=>{
+          const mine=!thisChipUsed.done && d.label===myLabel; if(mine) thisChipUsed.done=true;
+          return `<tr><td>${esc(d.label||"Device")}${mine?' <span class="pchip b">This device</span>':""}</td><td>${esc(fmtDate(d.first_seen))}</td><td>${esc(fmtDate(d.last_seen))}</td></tr>`;
+        }).join("")}</tbody>
         </table></div>`:"";
-      const evHtml=events.length?`<div class="pay-wrap"><table class="pay-table">
-        <thead><tr><th>When</th><th>Device</th><th>IP</th></tr></thead>
+      const evHtml=events.length?`<p style="font-size:12.5px;color:var(--muted);margin:0 0 6px">Recent sign-ins</p>
+        <div class="pay-wrap"><table class="pay-table">
+        <thead><tr><th>When</th><th>Device</th></tr></thead>
         <tbody>${events.map(e=>`<tr>
           <td>${esc(fmtDateTime(e.at))}${e.kicked_previous?' <span class="soon" style="color:var(--muted);background:var(--bg);border-color:var(--line)">replaced a session</span>':""}</td>
           <td>${esc(deviceLabelFromUAClient(e.user_agent))}</td>
-          <td class="pid">${esc(maskIp(e.ip))}</td>
         </tr>`).join("")}</tbody>
         </table></div>`:"";
       if(!devHtml && !evHtml){ host.style.display="none"; host.innerHTML=""; return; }
-      host.innerHTML=`<h3>Login activity &amp; devices</h3>
+      host.innerHTML=`<details class="acct-act">
+        <summary>Login activity &amp; devices
+          <span class="sum">${events.length?`${events.length} sign-in${events.length===1?"":"s"} since ${esc(fmtDate(events[events.length-1].at))}`:`${devices.length} device${devices.length===1?"":"s"}`} — click to expand</span></summary>
         ${devHtml}${evHtml}
         <p style="font-size:12.5px;color:var(--faint);margin-top:10px">We record login time, IP, browser/OS and a device identifier to enforce one active login and the device limit — see our <a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</p>
-        <button type="button" class="lp-btn sec" id="ac-logout-all" style="margin-top:8px">Log out everywhere</button>`;
+        <button type="button" class="lp-btn sec" id="ac-logout-all" style="margin-top:8px">Log out everywhere</button>
+      </details>`;
       const lo=document.getElementById("ac-logout-all");
       if(lo) lo.addEventListener("click",()=>{ lo.disabled=true; lo.textContent="Signing out…"; logoutEverywhere(); });
     }catch(e){ host.style.display="none"; host.innerHTML=""; }
@@ -2957,7 +3127,7 @@ function renderHome(){
     "Free calculators and tools for Amazon India sellers: true profit per SKU, FBA fees, settlement analyzer, GST report and 4×6 label cropper. Files never leave your browser.");
   backBtn.hidden=true;
   const heroBars=[34,48,28,60,44,72,52,88,64,96,70,100].map(h=>`<i style="height:${h}%"></i>`).join("");
-  const minis=[{id:"keyword-combiner",icon:"🔤",name:"Keyword Combiner"},{id:"payout-forecast",icon:"💸",name:"Payout Forecaster"},{id:"listing-checker",icon:"📝",name:"Listing Quality Checker"}]
+  const minis=[{id:"gst-invoice",icon:"🧾",name:"GST Invoice Generator"},{id:"link-builder",icon:"🔗",name:"Amazon Link Builder"},{id:"keyword-combiner",icon:"🔤",name:"Keyword Combiner"},{id:"payout-forecast",icon:"💸",name:"Payout Forecaster"},{id:"listing-checker",icon:"📝",name:"Listing Quality Checker"}]
     .concat(CALCS.filter(c=>c.id!=="profit").map(c=>({id:c.id,icon:c.icon,name:c.name.replace(/^Amazon /,"")})));
   app.innerHTML=`
     <div class="wrap">
@@ -3092,8 +3262,6 @@ function renderHome(){
         <a class="tile" href="#/label-cropper"><div class="ico">🏷️</div><h3>Amazon Label Cropper</h3><p>Crop Easy Ship A4 label PDFs to clean 4×6 thermal pages, sorted by SKU.</p></a>
         <a class="tile" href="#/order-printer"><div class="ico">🖨️</div><h3>Amazon Order Printer</h3><p>Picklists and packing slips from your unshipped-orders report.</p></a>
         <a class="tile" href="#/fnsku-labels"><div class="ico">📦</div><h3>FNSKU Sticker Generator</h3><p>Code 128 barcode stickers for FBA units — A4 65/40/24-up sheets or 4×6 thermal.</p></a>
-        <a class="tile" href="#/gst-invoice"><div class="ico">🧾</div><h3>GST Invoice Generator</h3><p>GST-compliant invoices for self-ship orders — one merged A4 PDF from the unshipped-orders report.</p></a>
-        <a class="tile" href="#/link-builder"><div class="ico">🔗</div><h3>Amazon Link Builder</h3><p>2-step, canonical and add-to-cart URLs from an ASIN and keyword.</p></a>
       </div>
       <div class="minigrid">
         ${minis.map(m=>`<a class="tile-mini" href="#/${m.id}"><span class="ico">${m.icon}</span>${esc(m.name)}</a>`).join("")}
@@ -3125,7 +3293,7 @@ function renderHome(){
       </section>
       <div class="pr-grid" style="padding-top:16px">
         <div class="pr-card"><h3>Free</h3><div class="pr-price">₹0</div><div class="pr-alt">Forever. No login needed.</div>
-          <ul class="pr-feats"><li><span class="tick">✓</span> All 20+ calculators &amp; tools</li><li><span class="tick">✓</span> Label cropper &amp; order printer</li><li><span class="tick">✓</span> Files never leave your browser</li></ul>
+          <ul class="pr-feats"><li><span class="tick">✓</span> All 20+ calculators &amp; tools</li><li><span class="tick">✓</span> Label cropper &amp; order printer</li><li><span class="tick">✓</span> GST invoices &amp; Amazon link builder</li><li><span class="tick">✓</span> Files never leave your browser</li></ul>
           <button type="button" class="lp-btn sec" data-scroll="tools">Use free tools</button></div>
         <div class="pr-card pop"><span class="pr-badge">Most popular</span><h3>Starter</h3><div class="pr-price">₹199 <small>/ month</small></div><div class="pr-alt">or ₹999 / year (save ~58%)</div>
           <ul class="pr-feats"><li><span class="tick">✓</span> Everything in Free</li><li><span class="tick">✓</span> Settlement Analyzer</li><li><span class="tick">✓</span> GST &amp; TCS filing report</li><li><span class="tick">✓</span> SKU Profitability Report</li></ul>
@@ -3220,6 +3388,7 @@ function renderPricing(){
             <li><span class="tick">✓</span> All calculators (profit, fees, ACOS, price bands)</li>
             <li><span class="tick">✓</span> Label Cropper — 4×6 with SKU</li>
             <li><span class="tick">✓</span> Order Printer</li>
+            <li><span class="tick">✓</span> GST Invoice Generator — self-ship invoices as one A4 PDF</li>
             <li><span class="tick">✓</span> Link Builder &amp; Keyword Combiner</li>
             <li><span class="tick">✓</span> FBA label maker &amp; listing checker</li>
             <li><span class="tick">✓</span> Files never leave your browser</li>
