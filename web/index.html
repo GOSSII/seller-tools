@@ -648,6 +648,30 @@
   .adm-row-inline{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
   .adm-row-inline .lp-btn{min-height:40px;padding:0 14px;font-size:13.5px}
   .adm-confirm{display:inline-flex;gap:8px;align-items:center;font-size:13px;color:var(--ink);flex-wrap:wrap}
+  .adm-kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:16px 0}
+  @media(min-width:700px){.adm-kpis{grid-template-columns:repeat(3,1fr)}}
+  @media(min-width:1000px){.adm-kpis{grid-template-columns:repeat(6,1fr)}}
+  .adm-kpi{border:1px solid var(--line);border-radius:12px;padding:12px 13px;background:#fff;min-width:0}
+  .adm-kpi .k{font-size:10.5px;font-weight:700;letter-spacing:.06em;color:var(--faint);text-transform:uppercase;margin-bottom:4px}
+  .adm-kpi .v{font-size:19px;font-weight:800;letter-spacing:-.02em;overflow-wrap:anywhere}
+  .adm-kpi .d{font-size:11.5px;margin-top:3px;font-weight:600;color:var(--muted)}
+  .adm-kpi .d.up{color:var(--green)}
+  .adm-kpi.blue{background:var(--blue-soft);border-color:var(--blue-line)} .adm-kpi.blue .v{color:var(--blue)}
+  .adm-kpi.green{background:var(--green-soft);border-color:var(--green-line)} .adm-kpi.green .v{color:var(--green)}
+  .adm-charts2{display:grid;grid-template-columns:1fr;gap:12px;margin-bottom:16px}
+  @media(min-width:860px){.adm-charts2{grid-template-columns:1fr 1fr}}
+  .adm-cols2{display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:16px;align-items:start}
+  @media(min-width:900px){.adm-cols2{grid-template-columns:1.35fr 1fr}}
+  .adm-stack{display:flex;flex-direction:column;gap:14px}
+  .adm-item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px dashed var(--line);font-size:13px;flex-wrap:wrap}
+  .adm-item:last-child{border-bottom:0}
+  .adm-mix{display:flex;height:12px;border-radius:99px;overflow:hidden;margin:10px 0 8px;background:var(--line)}
+  .adm-legend{display:flex;gap:14px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+  .adm-legend i{width:9px;height:9px;border-radius:99px;display:inline-block;margin-right:5px}
+  .adm-fchips{display:flex;gap:8px;flex-wrap:wrap}
+  .adm-fchips button{font-family:inherit;font-size:12.5px;font-weight:700;padding:6px 14px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--muted);cursor:pointer;min-height:34px}
+  .adm-fchips button.on{background:var(--blue);border-color:var(--blue);color:#fff}
+  .adm-userbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:space-between;margin-bottom:10px}
   /* SKU Advanced P&L */
   .sku-costall{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:6px 0 12px;font-size:13px;color:var(--muted)}
   .sku-cost-in{width:88px;min-height:34px;padding:0 8px;font-size:14px;text-align:right;border:1px solid #d6dce6;border-radius:8px}
@@ -2987,41 +3011,99 @@ async function renderAdmin(){
   const stats=await r.json().catch(()=>null);
   if(!stats){ renderNotFound(); return; }
   const chart=saBarChart("Signups · last 30 days",(stats.signups||[]),"count","var(--blue)",n=>String(n));
+  const revChart=saBarChart("Revenue · last 30 days",(stats.revenue_days||[]),"paise","var(--green)",p=>money0(p));
+  const signups7=(stats.signups||[]).slice(-7).reduce((s,x)=>s+(x.count||0),0);
+  const conv=stats.users_total?Math.round((stats.paid_count||0)/stats.users_total*100):0;
+  const cur=stats.revenue_month_paise||0, prev=stats.revenue_prev_month_paise||0;
+  const prevName=(()=>{const d=new Date();d.setUTCDate(1);d.setUTCMonth(d.getUTCMonth()-1);return d.toLocaleDateString("en-IN",{month:"short",timeZone:"UTC"});})();
+  const revDelta=(cur||prev)?(cur>=prev?`<div class="d up">+${money0(cur-prev)} vs ${prevName}</div>`:`<div class="d">−${money0(prev-cur)} vs ${prevName}</div>`):'<div class="d">no payments yet</div>';
+  const pc=stats.plan_counts||{free:0,starter:0,pro:0};
+  const pcTotal=Math.max(1,(pc.free||0)+(pc.starter||0)+(pc.pro||0));
+  const subc=stats.sub_counts||{active:0,paused:0,ending:0};
+  const subNote=s=>s==="halted"||s==="paused"?"auto-renewal paused (charge failed)":s==="cancel_requested"?"auto-renewal ending":"no auto-renewal";
+  const expHtml=(stats.expiring_soon&&stats.expiring_soon.length)?stats.expiring_soon.map(e2=>`
+      <div class="adm-item"><span><b>${esc(e2.email||e2.user_id)}</b> <span class="sa-sub">· ${esc(planNice(e2.plan))} · ${esc(subNote(e2.sub_status))}</span></span>
+        <span><span class="pchip ${e2.days_left<=2?"r":"o"}">${e2.days_left} day${e2.days_left===1?"":"s"} left</span>
+        <button type="button" class="lp-btn sec adm-open" data-uid="${esc(e2.user_id)}" style="min-height:32px;padding:0 10px;font-size:12.5px">Open</button></span></div>`).join("")
+    :'<p class="lede" style="margin:4px 0 2px">✅ No paid plan runs out in the next 7 days.</p>';
+  const quietHtml=(stats.quiet_paid&&stats.quiet_paid.length)?stats.quiet_paid.map(e2=>`
+      <div class="adm-item"><span><b>${esc(e2.email||e2.user_id)}</b> <span class="sa-sub">· ${esc(planNice(e2.plan))}${e2.expires_at?` · till ${esc(fmtDate(e2.expires_at))}`:""}</span></span>
+        <span><span class="pchip m">${e2.days_quiet!=null?`no login in ${e2.days_quiet} days`:"never logged in"}</span>
+        <button type="button" class="lp-btn sec adm-open" data-uid="${esc(e2.user_id)}" style="min-height:32px;padding:0 10px;font-size:12.5px">Open</button></span></div>`).join("")
+    :'<p class="lede" style="margin:4px 0 2px">✅ Every paying user logged in within the last 14 days.</p>';
   app.innerHTML=`<div class="wrap page">
     <h2>Admin</h2>
-    <div class="stats">
-      <div class="stat blue"><div class="k">Users</div><div class="v">${num(stats.users_total)}</div></div>
-      <div class="stat green"><div class="k">Paid · active</div><div class="v">${num(stats.paid_count)}</div></div>
-      <div class="stat"><div class="k">Revenue · this month</div><div class="v">${money0(stats.revenue_month_paise)}</div></div>
-      <div class="stat"><div class="k">Revenue · total</div><div class="v">${money0(stats.revenue_total_paise)}</div></div>
-      <div class="stat green"><div class="k">Online now</div><div class="v">${num(stats.online_now||0)}</div></div>
-      <div class="stat"><div class="k">Avg session · 24h</div><div class="v">${stats.avg_session_min||0} min</div></div>
+    <div class="adm-kpis">
+      <div class="adm-kpi blue"><div class="k">Users</div><div class="v">${num(stats.users_total)}</div><div class="d ${signups7>0?"up":""}">${signups7>0?"+"+num(signups7)+" this week":"none this week"}</div></div>
+      <div class="adm-kpi green"><div class="k">Paid · active</div><div class="v">${num(stats.paid_count)}</div><div class="d">${conv}% of users</div></div>
+      <div class="adm-kpi"><div class="k">Revenue · this month</div><div class="v">${money0(cur)}</div>${revDelta}</div>
+      <div class="adm-kpi"><div class="k">Revenue · total</div><div class="v">${money0(stats.revenue_total_paise)}</div><div class="d">${num(stats.payments_total||0)} payment${(stats.payments_total||0)===1?"":"s"}</div></div>
+      <div class="adm-kpi green"><div class="k">Online now</div><div class="v">${num(stats.online_now||0)}</div><div class="d">${num(stats.sessions_24h||0)} sessions · 24h</div></div>
+      <div class="adm-kpi"><div class="k">Avg session · 24h</div><div class="v">${stats.avg_session_min||0} min</div></div>
     </div>
-    <div style="margin-bottom:16px">${chart||'<div class="viz"><div class="viz-title">Signups · last 30 days</div><p class="lede" style="margin-top:8px">No signups yet.</p></div>'}</div>
-    <div class="panel" style="margin-bottom:16px"><h4>Online right now <span class="sa-sub">— ${num(stats.online_now||0)} on the site · ${num(stats.sessions_24h||0)} sessions in 24h · avg ${stats.avg_session_min||0} min</span></h4>
-      ${(stats.online_list&&stats.online_list.length)?`<div class="pay-wrap"><table class="pay-table">
-        <thead><tr><th>Who</th><th>Where</th><th>On site for</th></tr></thead>
-        <tbody>${stats.online_list.map(o=>`<tr>
-          <td>${o.email?esc(o.email):'<span class="sa-sub">visitor</span>'}</td>
-          <td>${esc(o.route||"—")}</td>
-          <td>${o.mins<1?"&lt;1 min":Math.round(o.mins)+" min"}</td></tr>`).join("")}</tbody></table></div>`
-      :'<p class="lede" style="margin:4px 0 2px">No one is online right now.</p>'}</div>
-    <div class="panel" style="margin-bottom:16px"><h4>Production JS errors <span class="sa-sub">— ${stats.errors_available?num(stats.errors_24h||0)+" in the last 24h":"table missing"}</span></h4>
-      ${!stats.errors_available
-        ?'<p class="lede" style="margin:4px 0 2px">The <code>client_errors</code> table does not exist yet — re-run <code>web/db/schema.sql</code> in Supabase and errors thrown on visitors\' pages will show up here.</p>'
-        :(stats.recent_errors&&stats.recent_errors.length)?`<div class="pay-wrap"><table class="pay-table">
-        <thead><tr><th>When</th><th>Route</th><th>Message</th><th>Where</th></tr></thead>
-        <tbody>${stats.recent_errors.map(e2=>`<tr>
-          <td style="white-space:nowrap">${esc(fmtDate(e2.at))}</td>
-          <td>${esc(e2.route||"—")}</td>
-          <td>${esc((e2.message||"").slice(0,120))}</td>
-          <td class="sa-sub">${esc(((e2.source||"").split("/").pop()||"—")+(e2.line?":"+e2.line:""))}</td></tr>`).join("")}</tbody></table></div>`
-        :'<p class="lede" style="margin:4px 0 2px">✅ Nothing thrown in the last 30 days.</p>'}</div>
-    <div style="margin:6px 0 10px"><input id="adm-search" type="search" placeholder="Search users by email…" style="max-width:360px"></div>
-    <div id="adm-users"></div>
+    <div class="adm-charts2">
+      <div>${chart||'<div class="viz"><div class="viz-title">Signups · last 30 days</div><p class="lede" style="margin-top:8px">No signups yet.</p></div>'}</div>
+      <div>${revChart||'<div class="viz"><div class="viz-title">Revenue · last 30 days</div><p class="lede" style="margin-top:8px">No payments in the last 30 days.</p></div>'}</div>
+    </div>
+    <div class="adm-cols2">
+      <div class="adm-stack">
+        <div class="card acct-card"><h3>⏳ Expiring in 7 days ${stats.expiring_soon&&stats.expiring_soon.length?'<span class="pchip o">follow up</span>':""}</h3>
+          ${expHtml}
+          <p style="font-size:12.5px;color:var(--faint);margin-top:8px">Paid users whose access ends within a week and won't renew on their own.</p></div>
+        <div class="card acct-card"><h3>💤 Paid but quiet ${stats.quiet_paid&&stats.quiet_paid.length?'<span class="pchip m">churn risk</span>':""}</h3>
+          ${quietHtml}
+          <p style="font-size:12.5px;color:var(--faint);margin-top:8px">Paying users with no login in 14+ days — worth a nudge before renewal day.</p></div>
+        <div class="card acct-card"><h3>🔴 Live now — ${num(stats.online_now||0)} on the site <span class="sa-sub">· ${num(stats.sessions_24h||0)} sessions in 24h · avg ${stats.avg_session_min||0} min</span></h3>
+          ${(stats.online_list&&stats.online_list.length)?`<div class="pay-wrap"><table class="pay-table">
+            <thead><tr><th>Who</th><th>Where</th><th>On site for</th></tr></thead>
+            <tbody>${stats.online_list.map(o=>`<tr>
+              <td>${o.email?esc(o.email):'<span class="sa-sub">visitor</span>'}</td>
+              <td>${esc(o.route||"—")}</td>
+              <td>${o.mins<1?"&lt;1 min":Math.round(o.mins)+" min"}</td></tr>`).join("")}</tbody></table></div>`
+          :'<p class="lede" style="margin:4px 0 2px">No one is online right now.</p>'}
+          ${(stats.top_routes&&stats.top_routes.length)?`<p style="font-size:12.5px;color:var(--muted);margin-top:10px">Top routes · 24h: ${stats.top_routes.map(r=>`<span class="pchip m">${esc(r.route)} ×${num(r.count)}</span>`).join(" ")}</p>`:""}</div>
+      </div>
+      <div class="adm-stack">
+        <div class="card acct-card"><h3>Plan mix</h3>
+          <div class="adm-mix">${pc.free?`<span style="width:${(pc.free/pcTotal*100).toFixed(1)}%;background:#cdd6e4"></span>`:""}${pc.starter?`<span style="width:${(pc.starter/pcTotal*100).toFixed(1)}%;background:var(--orange)"></span>`:""}${pc.pro?`<span style="width:${(pc.pro/pcTotal*100).toFixed(1)}%;background:var(--blue)"></span>`:""}</div>
+          <div class="adm-legend"><span><i style="background:#cdd6e4"></i>Free ${num(pc.free)}</span><span><i style="background:var(--orange)"></i>Starter ${num(pc.starter)}</span><span><i style="background:var(--blue)"></i>Pro ${num(pc.pro)}</span></div>
+          <p style="font-size:12.5px;color:var(--muted);margin-top:8px">Conversion ${conv}% of all signups</p></div>
+        <div class="card acct-card"><h3>Recent payments</h3>
+          ${(stats.recent_payments&&stats.recent_payments.length)?stats.recent_payments.map(p=>`
+            <div class="adm-item"><span><b>${money0(p.amount_paise)}</b> <span class="sa-sub">${esc(planNice(p.plan))}${p.period?` · ${esc(p.period)}`:""}</span></span>
+              <span class="sa-sub">${esc(fmtDate(p.created_at))}${p.email?` · ${esc(p.email)}`:""}</span></div>`).join("")
+          :'<p class="lede" style="margin:4px 0 2px">No payments yet.</p>'}</div>
+        <div class="card acct-card"><h3>Auto-renewals</h3>
+          <div class="adm-item"><span>Active</span><span class="pchip g">${num(subc.active)}</span></div>
+          <div class="adm-item"><span>Paused — charge failed</span><span class="pchip ${subc.paused?"o":"m"}">${num(subc.paused)}</span></div>
+          <div class="adm-item"><span>Ending (cancelled)</span><span class="pchip m">${num(subc.ending)}</span></div></div>
+        <div class="card acct-card"><h3>Production JS errors</h3>
+          ${!stats.errors_available
+            ?'<p class="lede" style="margin:4px 0 2px">The <code>client_errors</code> table does not exist yet — re-run <code>web/db/schema.sql</code> in Supabase and errors thrown on visitors\' pages will show up here.</p>'
+            :(stats.recent_errors&&stats.recent_errors.length)?`<p style="font-size:13px;margin:2px 0 8px"><span class="pchip ${stats.errors_24h?"r":"g"}">${num(stats.errors_24h||0)} in 24h</span></p><div class="pay-wrap"><table class="pay-table">
+            <thead><tr><th>When</th><th>Route</th><th>Message</th></tr></thead>
+            <tbody>${stats.recent_errors.slice(0,8).map(e2=>`<tr>
+              <td style="white-space:nowrap">${esc(fmtDate(e2.at))}</td>
+              <td>${esc(e2.route||"—")}</td>
+              <td>${esc((e2.message||"").slice(0,80))}</td></tr>`).join("")}</tbody></table></div>`
+            :'<p style="font-size:13px;margin:2px 0"><span class="pchip g">0 in 24h</span> <span class="sa-sub">· nothing thrown in the last 30 days ✅</span></p>'}</div>
+      </div>
+    </div>
+    <div class="card acct-card">
+      <h3>Users</h3>
+      <div class="adm-userbar">
+        <input id="adm-search" type="search" placeholder="Search users by email…" style="max-width:340px">
+        <div class="adm-fchips" id="adm-filters"></div>
+      </div>
+      <div id="adm-users"></div>
+    </div>
     <div id="adm-detail" style="margin-top:18px"></div>
   </div>`;
   try{ saWireTips(app); }catch(e){}
+  app.querySelectorAll(".adm-open").forEach(b=>b.addEventListener("click",()=>{
+    adminShowUser(b.dataset.uid);
+    setTimeout(()=>{const d=document.getElementById("adm-detail"); if(d) d.scrollIntoView({behavior:"smooth",block:"start"});},150);
+  }));
   const search=document.getElementById("adm-search");
   let t=null;
   search.addEventListener("input",()=>{ clearTimeout(t); t=setTimeout(()=>adminLoadUsers(search.value.trim()),250); });
@@ -3031,23 +3113,61 @@ function adminPlanBadge(plan){
   return plan==="free" ? '<span class="plan-badge free">Free</span>'
     : '<span class="plan-badge">'+esc(plan.charAt(0).toUpperCase()+plan.slice(1))+'</span>';
 }
+function planNice(p){ p=String(p||""); return p?p.charAt(0).toUpperCase()+p.slice(1):"—"; }
+let admUsersCache=[], admUsersFilter="all";
+function admSubChip(s){
+  if(s==="halted"||s==="paused") return '<span class="pchip o">paused</span>';
+  if(s==="cancel_requested") return '<span class="pchip m">ending</span>';
+  if(s) return '<span class="pchip g">on</span>';
+  return '<span class="pchip m">off</span>';
+}
+function admExpiringSoonRow(u){
+  if(!u.expires_at||u.plan==="free") return false;
+  const left=new Date(u.expires_at).getTime()-Date.now();
+  return left>0 && left<7*86400000;
+}
+function admRenderUsers(){
+  const host=document.getElementById("adm-users"); if(!host) return;
+  const users=admUsersCache;
+  const f=admUsersFilter;
+  const shown=users.filter(u=>
+    f==="paid"?u.plan!=="free"
+    :f==="free"?u.plan==="free"
+    :f==="expiring"?admExpiringSoonRow(u)
+    :f==="admins"?!!u.is_admin
+    :true);
+  const chips=[["all",`All ${users.length}`],["paid",`Paid ${users.filter(u=>u.plan!=="free").length}`],
+    ["free",`Free ${users.filter(u=>u.plan==="free").length}`],
+    ["expiring",`Expiring ${users.filter(admExpiringSoonRow).length}`],
+    ["admins",`Admins ${users.filter(u=>u.is_admin).length}`]];
+  const fh=document.getElementById("adm-filters");
+  if(fh){
+    fh.innerHTML=chips.map(([k,l])=>`<button type="button" data-f="${k}" class="${f===k?"on":""}">${l}</button>`).join("");
+    fh.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{ admUsersFilter=b.dataset.f; admRenderUsers(); }));
+  }
+  if(!shown.length){ host.innerHTML='<p class="lede">No users match this filter.</p>'; return; }
+  host.innerHTML=`<div class="pay-wrap"><table class="pay-table">
+    <thead><tr><th>Email</th><th>Plan</th><th>Expires</th><th>Auto-renew</th><th>Devices</th><th>Last login</th><th>Paid so far</th></tr></thead>
+    <tbody>${shown.map(u=>`<tr class="adm-row" data-uid="${esc(u.id)}">
+      <td>${esc(u.email||"—")}${u.is_admin?' <span class="soon" style="color:var(--blue);background:var(--blue-soft);border-color:var(--blue-line)">admin</span>':""}</td>
+      <td>${adminPlanBadge(u.plan)}</td>
+      <td>${u.expires_at?(admExpiringSoonRow(u)?`<b style="color:var(--red)">${esc(fmtDate(u.expires_at))}</b>`:esc(fmtDate(u.expires_at))):"—"}</td>
+      <td>${u.plan==="free"?"—":admSubChip(u.sub_status)}</td>
+      <td>${u.devices}/${u.device_limit}</td>
+      <td>${u.last_login?esc(fmtDate(u.last_login)):"—"}</td>
+      <td>${u.paid_paise?esc(inrPaise(u.paid_paise)):"—"}</td>
+    </tr>`).join("")}</tbody></table></div>`;
+  host.querySelectorAll(".adm-row").forEach(row=>row.addEventListener("click",()=>adminShowUser(row.dataset.uid)));
+}
 async function adminLoadUsers(q){
   const host=document.getElementById("adm-users"); if(!host) return;
   host.innerHTML='<p class="lede">Loading…</p>';
   let r; try{ r=await adminCall({action:"list_users",q}); }catch(e){ host.innerHTML='<p class="lede">Could not load users.</p>'; return; }
   if(!r.ok){ host.innerHTML='<p class="lede">Could not load users.</p>'; return; }
   const {users}=await r.json();
-  if(!users||!users.length){ host.innerHTML='<p class="lede">No users found.</p>'; return; }
-  host.innerHTML=`<div class="pay-wrap"><table class="pay-table">
-    <thead><tr><th>Email</th><th>Plan</th><th>Expires</th><th>Devices</th><th>Last login</th></tr></thead>
-    <tbody>${users.map(u=>`<tr class="adm-row" data-uid="${esc(u.id)}">
-      <td>${esc(u.email||"—")}${u.is_admin?' <span class="soon" style="color:var(--blue);background:var(--blue-soft);border-color:var(--blue-line)">admin</span>':""}</td>
-      <td>${adminPlanBadge(u.plan)}</td>
-      <td>${u.expires_at?esc(fmtDate(u.expires_at)):"—"}</td>
-      <td>${u.devices}/${u.device_limit}</td>
-      <td>${u.last_login?esc(fmtDate(u.last_login)):"—"}</td>
-    </tr>`).join("")}</tbody></table></div>`;
-  host.querySelectorAll(".adm-row").forEach(row=>row.addEventListener("click",()=>adminShowUser(row.dataset.uid)));
+  if(!users||!users.length){ host.innerHTML='<p class="lede">No users found.</p>'; const fh=document.getElementById("adm-filters"); if(fh) fh.innerHTML=""; return; }
+  admUsersCache=users;
+  admRenderUsers();
 }
 async function adminShowUser(uid,flash){
   const host=document.getElementById("adm-detail"); if(!host) return;
