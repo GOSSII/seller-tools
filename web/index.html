@@ -614,15 +614,6 @@
   .pw-cta{display:flex;flex-wrap:wrap;gap:10px}
   .pw-cta-note{font-size:13px;color:var(--muted);margin-top:12px}
   .pw-cta-note a{font-weight:700}
-  .pw-code{margin-top:18px;border-top:1px solid var(--line);padding-top:12px}
-  .pw-code summary{cursor:pointer;font-size:12.5px;color:var(--faint);font-weight:600;
-    list-style:none;min-height:32px;display:inline-flex;align-items:center;
-    text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px}
-  .pw-code summary:hover{color:var(--muted)}
-  .pw-code summary::-webkit-details-marker{display:none}
-  .pw-code-row{display:flex;gap:8px;margin-top:10px;max-width:340px}
-  .pw-code-row input{flex:1}
-  .pw-code-msg{font-size:12.5px;color:var(--red);margin-top:8px}
 
   /* Pricing billing-period toggle + checkout states */
   .pr-period{display:flex;justify-content:center;margin:2px 0 6px}
@@ -2259,10 +2250,9 @@ async function getEntitlement(){
   return p;
 }
 
-/* Premium gating. saUnlocked() (the "2023" access code) is the owner bypass
+/* Premium gating. A paid plan from /api/entitlement is the only unlock
    and needs no network or Supabase at all. Otherwise ask the server. */
 async function gatePremium(info, body){
-  if(saUnlocked()){ body(); return; }
   app.innerHTML=`<div class="wrap page"><h2>${esc(info.title)}</h2><p class="lede">Checking your access…</p></div>`;
   // Make sure this browser holds the active session first (device-limit aware).
   const okDev=await ensureSessionForPremium();
@@ -2272,7 +2262,6 @@ async function gatePremium(info, body){
   try{ ent=await getEntitlement(); }catch(e){}
   if(ent.taken) return; // session-taken panel already shown
   if(location.hash.replace(/^#\/?/,"")!==info.route) return; // user navigated away
-  if(saUnlocked()){ body(); return; }
   if(ent.plan==="pro"){ body(); return; }
   if(ent.plan==="starter"){
     if(info.needPro){ renderProUpgrade(info); return; } // Pro-only tool, Starter user
@@ -2322,25 +2311,9 @@ function renderPaywall(info){
             <a class="lp-btn" href="#/pricing">See plans &amp; unlock</a>
           </div>
           ${loggedIn?"":'<div class="pw-cta-note">Already have an account? <a href="#/login">Log in</a> — your plan unlocks this page instantly.</div>'}
-          <details class="pw-code">
-            <summary>Have an access code?</summary>
-            <div class="pw-code-row">
-              <input id="pw-code" type="password" inputmode="numeric" autocomplete="off" placeholder="Access code">
-              <button type="button" class="lp-btn sec" id="pw-code-btn">Unlock</button>
-            </div>
-            <div id="pw-code-msg" class="pw-code-msg" hidden>Incorrect code.</div>
-          </details>
         </div>
       </div>
     </div>`;
-  const btn=document.getElementById("pw-code-btn"),inp=document.getElementById("pw-code"),
-        msg=document.getElementById("pw-code-msg");
-  const tryCode=()=>{
-    if(inp.value===SA_PASSWORD){try{sessionStorage.setItem("sa_unlocked","1");}catch(e){}route();}
-    else{msg.hidden=false;}
-  };
-  btn.addEventListener("click",tryCode);
-  inp.addEventListener("keydown",e=>{if(e.key==="Enter")tryCode();});
 }
 
 /* Small pure-CSS teaser mockups reused in the paywall panels. */
@@ -4052,18 +4025,7 @@ window.parseUnifiedTransaction=parseUnifiedTransaction;
 window.parseSettlement=parseSettlement; // exposed for verification/debugging
 
 /* ---- analyzer UI ---- */
-/* ======================================================================
-   LEGACY GATE (remove in Phase 8) — removeLegacyGate
-   The "2023" code + sessionStorage sa_unlocked is the owner bypass that
-   unlocks every premium tool without a paid plan. It is surfaced in the
-   paywall's "Have an access code?" field (see renderPaywall). Phase 8
-   deletes SA_PASSWORD, saUnlocked, the sa_unlocked handling in the paywall,
-   and the saUnlocked() short-circuit in gatePremium — leaving paid gating
-   as the only unlock. Search "sa_unlocked" and "removeLegacyGate".
-   ====================================================================== */
-const SA_PASSWORD="2023";
 let saParsed=null, saFilter="all", saLimit=100, saQuery="";
-const saUnlocked=()=>{try{return sessionStorage.getItem("sa_unlocked")==="1";}catch(e){return false;}};
 const saIsTax=l=>/(^|[^a-z])(cgst|sgst|igst|tcs|tds)([^a-z]|$)|(cgst|sgst|igst)$|tax|194/i.test(l||"");
 
 function renderSettlementAnalyzer(){
@@ -4096,10 +4058,8 @@ function saAnalyzerBody(){
   if(saParsed) saRenderResults();
 }
 
-/* The old "private preview" password screen (renderGate) is gone in Phase 3.
-   The "2023" code still works as an owner bypass via the paywall's
-   "Have an access code?" field (see renderPaywall); sessionStorage
-   sa_unlocked continues to unlock every gated tool. */
+/* The old "private preview" password screen and the "2023" owner bypass are
+   both gone — a paid plan from /api/entitlement is the only unlock. */
 
 function saRead(file){
   const rd=new FileReader();
@@ -4692,8 +4652,8 @@ function skuReportBody(){
   ["dragleave","drop"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove("over");}));
   drop.addEventListener("drop",ev=>{const f=ev.dataTransfer.files[0];if(f)skuRead(f);});
   file.addEventListener("change",()=>{const f=file.files[0];if(f)skuRead(f);});
-  // Advanced P&L is Pro-only. Owner bypass (sa_unlocked) counts as Pro.
-  skuAdvanced=false; skuShowUpgrade=false; skuIsPro=saUnlocked();
+  // Advanced P&L is Pro-only.
+  skuAdvanced=false; skuShowUpgrade=false; skuIsPro=false;
   getEntitlement().then(e=>{ if(e&&e.plan==="pro") skuIsPro=true; }).catch(()=>{});
   if(saParsed) skuRenderResults();
 }
@@ -10729,7 +10689,7 @@ window.addEventListener("hashchange",route);
 const PREMIUM_ROUTES=["settlement-analyzer","gst-report","sku-report","reconcile","trends","ad-profit","fee-bands","ads-optimizer","returns","storage","rto","stranded","traffic"];
 window.addEventListener("focus",()=>{
   const h=location.hash.replace(/^#\/?/,"");
-  if(!PREMIUM_ROUTES.includes(h) || saUnlocked() || !sessionUser()) return;
+  if(!PREMIUM_ROUTES.includes(h) || !sessionUser()) return;
   resetEntitlement();
   getEntitlement().then(ent=>{
     if(ent.taken) return;               // session-taken panel already shown
