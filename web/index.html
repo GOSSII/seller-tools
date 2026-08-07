@@ -2634,33 +2634,34 @@ function renderAccount(){
         </div>
       </div>
     </div>
-    <div class="card acct-card" style="margin-top:16px">
+    <div class="card acct-card" id="ac-quick" style="margin-top:16px;display:none">
       <h3 style="margin-bottom:2px">Quick open</h3>
-      <p class="sa-sub" style="margin:0">Your paid reports, grouped by the job they do.</p>
+      <p class="sa-sub" style="margin:0" id="ac-quick-sub">Your paid reports, grouped by the job they do.</p>
       <div class="acct-groups">
         <div class="acct-g"><h4><i style="background:var(--green)"></i>Paisa wapas lo</h4>
           <div class="acct-links">
-            <a href="#/reconcile">🕵️ Reconciliation &amp; SAFE-T</a>
-            <a href="#/returns">↩️ Returns Analyzer</a>
-            <a href="#/rto">🔁 RTO Radar</a>
-            <a href="#/stranded">🚧 Stranded Inventory</a>
+            <a href="#/reconcile" data-plan="pro">🕵️ Reconciliation &amp; SAFE-T</a>
+            <a href="#/returns" data-plan="pro">↩️ Returns Analyzer</a>
+            <a href="#/rto" data-plan="pro">🔁 RTO Radar</a>
+            <a href="#/stranded" data-plan="pro">🚧 Stranded Inventory</a>
           </div></div>
         <div class="acct-g"><h4><i style="background:var(--blue)"></i>Kharcha ghatao</h4>
           <div class="acct-links">
-            <a href="#/fee-bands">🪜 Fee Band Optimizer</a>
-            <a href="#/ads-optimizer">🎯 Ads Optimizer</a>
-            <a href="#/ad-profit">📉 Ad Profitability by SKU</a>
-            <a href="#/storage">📦 Storage Fee Analyzer</a>
+            <a href="#/fee-bands" data-plan="pro">🪜 Fee Band Optimizer</a>
+            <a href="#/ads-optimizer" data-plan="pro">🎯 Ads Optimizer</a>
+            <a href="#/ad-profit" data-plan="pro">📉 Ad Profitability by SKU</a>
+            <a href="#/storage" data-plan="pro">📦 Storage Fee Analyzer</a>
           </div></div>
         <div class="acct-g"><h4><i style="background:var(--ink)"></i>Hisaab samjho</h4>
           <div class="acct-links">
-            <a href="#/settlement-analyzer">🧾 Settlement Analyzer</a>
-            <a href="#/gst-report">🧮 GST &amp; TCS Report</a>
-            <a href="#/sku-report">📊 SKU Profitability</a>
-            <a href="#/trends">📈 Multi-Month Trends</a>
-            <a href="#/traffic">🩺 Traffic Doctor</a>
+            <a href="#/settlement-analyzer" data-plan="starter">🧾 Settlement Analyzer</a>
+            <a href="#/gst-report" data-plan="starter">🧮 GST &amp; TCS Report</a>
+            <a href="#/sku-report" data-plan="starter">📊 SKU Profitability</a>
+            <a href="#/trends" data-plan="starter">📈 Multi-Month Trends</a>
+            <a href="#/traffic" data-plan="pro">🩺 Traffic Doctor</a>
           </div></div>
       </div>
+      <p class="sa-sub" id="ac-quick-more" style="margin:10px 0 0" hidden>9 more reports come with Pro — <a href="#/pricing">see pricing →</a></p>
     </div>
     <div class="card acct-card" id="ac-activity" style="margin-top:16px"></div>
   </div>`;
@@ -2768,8 +2769,29 @@ function renderAccount(){
           </ul>
           <p style="font-size:12.5px;color:var(--muted);margin-top:8px">Starter ₹199/mo · Pro ₹499/mo — yearly saves ~58%. <a href="#/pricing">See pricing →</a></p>`;
       }
+      /* Quick open only lists what THIS plan can actually open. Free users
+         don't get the card at all (the plan card already sells the upgrade). */
+      const quick=document.getElementById("ac-quick");
+      if(quick){
+        if(ent.plan==="pro"){ quick.style.display=""; }
+        else if(ent.plan==="starter"){
+          quick.querySelectorAll('[data-plan="pro"]').forEach(a=>a.remove());
+          quick.querySelectorAll(".acct-g").forEach(g=>{ if(!g.querySelector("a")) g.remove(); });
+          const qs=document.getElementById("ac-quick-sub");
+          if(qs) qs.textContent="Your Starter reports.";
+          const qm=document.getElementById("ac-quick-more");
+          if(qm) qm.hidden=false;
+          quick.style.display="";
+        }
+        /* free: stays hidden */
+      }
       acS.ent=ent; acS.entDone=true; acSync();
-    }catch(e){ acS.entDone=true; acSync(); }
+    }catch(e){
+      /* Plan unknown (network) — show everything rather than an empty page. */
+      const quick=document.getElementById("ac-quick");
+      if(quick) quick.style.display="";
+      acS.entDone=true; acSync();
+    }
   })();
   /* Auto-renewal status + cancel (reads own subscriptions rows via RLS). */
   (async()=>{
