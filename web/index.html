@@ -1913,9 +1913,33 @@ document.addEventListener("click",()=>{
   if(btn) btn.setAttribute("aria-expanded","false");
 });
 
+/* Everything the tools persist on this device. Kept in one place so a new
+   tool cannot quietly add a key that logout then fails to clear. */
+/* Built at call time, not at load: SKU_COSTS_KEY and friends are declared
+   further down this file, so a top-level array referencing them would hit the
+   temporal dead zone and kill the whole script. */
+function toolDataKeys(){
+  return [
+    SKU_COSTS_KEY,      // product costs per SKU
+    REC_DONE_KEY,       // reconciliation tick-offs
+    FB_WEIGHTS_KEY,     // fee-band weights
+    "gstinv_seller",    // business name, address and GSTIN -- the sensitive one
+    "fnsku_rows","fnsku_fmt",
+    "payout_fc","lc_crop",
+  ];
+}
+function clearToolData(){
+  let n=0;
+  for(const k of toolDataKeys()){
+    try{ if(localStorage.getItem(k)!==null){ localStorage.removeItem(k); n++; } }catch(e){}
+  }
+  return n;
+}
 async function doLogout(){
   try{ const c=await sb(); await c.auth.signOut(); }catch(e){}
   try{ localStorage.removeItem(SUPABASE_AUTH_KEY); }catch(e){}
+  /* Logging out on a shared machine has to take the tool data with it. */
+  clearToolData();
   try{ sessionStorage.removeItem("auth_next"); }catch(e){}
   _sbClient=null; hdrMenuOpen=false; resetEntitlement(); setStoredSessionId("");
   renderAuthSlot();
@@ -2726,7 +2750,9 @@ function renderAccount(){
       <div style="display:flex;gap:9px;flex-wrap:wrap">
         <button type="button" class="lp-btn sec" id="ac-edit">✏️ Edit profile</button>
         <button type="button" class="lp-btn sec" id="ac-logout">Logout</button>
+        <button type="button" class="lp-btn sec" id="ac-cleardata">🧹 Clear saved data on this device</button>
       </div>
+      <p class="sa-sub" style="margin:8px 0 0" id="ac-cleardata-note">Product costs, GST invoice details (business name, address, GSTIN), reconciliation ticks and tool preferences are saved <b>in this browser only</b> — never on our servers. Logging out clears them from this device.</p>
     </div>
     <div class="stats" style="margin:18px 0">
       <div class="stat blue"><div class="k">Current plan</div><div class="v" id="ac-plan"><span class="plan-badge lg free">Free</span></div>
@@ -2805,6 +2831,14 @@ function renderAccount(){
   </div>`;
   const msg=document.getElementById("ac-msg");
   document.getElementById("ac-logout").addEventListener("click",doLogout);
+  const clr=document.getElementById("ac-cleardata");
+  if(clr) clr.addEventListener("click",()=>{
+    const n=clearToolData();
+    const note=document.getElementById("ac-cleardata-note");
+    if(note) note.innerHTML=n
+      ? `✅ Cleared ${n} saved item${n===1?"":"s"} from this browser — product costs, GST invoice details and tool preferences. Your account and any paid plan are unaffected.`
+      : "Nothing was saved in this browser to clear.";
+  });
   document.getElementById("ac-edit").addEventListener("click",()=>{
     const inp=document.getElementById("ac-name");
     if(inp){ inp.scrollIntoView({behavior:"smooth",block:"center"}); setTimeout(()=>inp.focus(),350); }
@@ -9049,8 +9083,19 @@ function renderGstInvoice(){
         <input type="file" id="gstinv-file" accept=".csv,.txt,text/plain,text/csv">
       </label>
       <div class="sa-priv">🔒 Private by design — the report (including customer names and addresses) and your GSTIN are processed entirely in your browser and never uploaded anywhere.</div>
+      <p class="sa-sub" style="margin:8px 0 0" id="gstinv-clear-note">Your business name, address and GSTIN above are remembered <b>in this browser</b> so you don't retype them. On a shared or public computer, clear them when you're done.
+        <button type="button" class="fbtn" id="gstinv-clear" style="margin-left:6px">🧹 Clear my saved details</button></p>
       <div id="gstinv-out"></div>
     </div>`;
+  const clrG=document.getElementById("gstinv-clear");
+  if(clrG) clrG.addEventListener("click",()=>{
+    try{ localStorage.removeItem("gstinv_seller"); }catch(e){}
+    ["gstinv-name","gstinv-gstin","gstinv-addr","gstinv-state","gstinv-scode"].forEach(id=>{
+      const el=document.getElementById(id); if(el) el.value="";
+    });
+    const n=document.getElementById("gstinv-clear-note");
+    if(n) n.textContent="✅ Cleared. Your business name, address and GSTIN are no longer stored in this browser.";
+  });
   const saveNow=()=>gstinvSaveSeller(gstinvReadSellerForm());
   ["gstinv-name","gstinv-gstin","gstinv-addr","gstinv-state","gstinv-scode","gstinv-prefix","gstinv-start"].forEach(id=>{
     const el=document.getElementById(id); if(el) el.addEventListener("change",saveNow);

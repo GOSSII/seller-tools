@@ -196,6 +196,17 @@ console.log('\n== calculator edge cases ==');
       restockZeroDaily: String(run('restock-planner', { stock: 100, daily: 0 }).stats[0].v),
       targetUnreachable: String(run('target-price', { goal: 'margin', target: 99, cost: 1000 }).stats[0].v),
       storageZeroSales: String(run('fba-storage', { units: 0, sales: 0 }).stats[1].v),
+      /* PRIV-1. clearToolData() is built at call time because the key
+         constants live further down the file; a top-level array hit the
+         temporal dead zone and killed the whole script on load. Assert it
+         both RUNS and actually removes the sensitive keys. */
+      privClear: (() => {
+        localStorage.setItem('gstinv_seller', JSON.stringify({ gstin: '27ABCDE1234F1Z5' }));
+        localStorage.setItem('sku_costs', JSON.stringify({ A: 1 }));
+        const removed = clearToolData();
+        const left = ['gstinv_seller', 'sku_costs'].filter(k => localStorage.getItem(k) !== null);
+        return removed >= 2 && left.length === 0 ? 'cleared' : 'LEFT:' + left.join(',');
+      })(),
     };
   });
   // BUG-009: undefined ACOS must not render as a green 0.00%
@@ -206,6 +217,7 @@ console.log('\n== calculator edge cases ==');
   /* Was '∞'. Zero recent sales does not prove infinite cover — it means the
      depletion rate cannot be established, so the tool must say unknown. */
   eq('restock: zero daily sales reports unknown, not infinite cover', c.restockZeroDaily, 'Not measurable');
+  eq('PRIV-1 clearToolData removes saved GSTIN and product costs', c.privClear, 'cleared');
   eq('target price: unreachable target says so', c.targetUnreachable, '—');
   eq('storage: zero sales gives no months-of-cover', c.storageZeroSales, '—');
 }
