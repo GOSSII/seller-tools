@@ -8,7 +8,7 @@ Everything produced by the full production audit, and how to re-run it.
 |---|---|
 | [SELLER_TOOLS_FULL_AUDIT.md](SELLER_TOOLS_FULL_AUDIT.md) | **Start here.** Executive summary, tool scoreboard, three-way validation tables, per-tool reports, performance, responsive, privacy |
 | [TOOL_MANIFEST.md](TOOL_MANIFEST.md) | All **33** tools across 43 routes, with the 18 required fields each, plus the Website Tool → Amazon Report → columns → calculation map |
-| [BUG_REGISTER.md](BUG_REGISTER.md) | 31 defects + 1 privacy finding, with expected vs actual, root cause, fix, regression test and status |
+| [BUG_REGISTER.md](BUG_REGISTER.md) | 35 defects + 1 privacy finding, with expected vs actual, root cause, fix, regression test and status |
 | [UX_REGISTER.md](UX_REGISTER.md) | 22 UX findings with seller impact and whether implemented; beginner-comprehension scores; information-architecture recommendation |
 | [UI_VISUAL_AUDIT.md](UI_VISUAL_AUDIT.md) | The screenshot round: per-tool desktop/mobile/error coverage, before/after UX scores, what the rendered UI exposed that the numbers could not, and every copy change made |
 
@@ -78,8 +78,14 @@ repository is public.
 
 ## Status at hand-off
 
-**0 P0 outstanding.** Two **P1** items are open in the free Profit Calculator (BUG-011, BUG-029) —
-found in the calculator round and not yet fixed. Three P2 items open (BUG-030, BUG-031, PRIV-1).
+**0 P0 · 0 P1 outstanding.** The calculator round found **four P1 defects** in the free tier —
+two in the Profit Calculator and two in Target Price — all now fixed. Two P2 items remain
+open: PRIV-1, and the FBA storage assumption in BUG-031.
+
+The four were all one family: **a correct-looking percentage on the wrong base.** ACOS was
+charged against residual contribution rather than the selling price, understating
+advertising by 58% in the Profit Calculator and returning a price ₹85 too low in Target
+Price — where the tool's own ledger visibly failed to add up.
 **All fixes are merged and deployed** — PR #110 plus sixteen follow-up commits are live.
 
 Visually reviewed, with an independent reviewer scoring each round:
