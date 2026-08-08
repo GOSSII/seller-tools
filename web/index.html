@@ -1452,8 +1452,8 @@ const CALCS = [
     {k:"fee",label:"Coupon Fee (₹)",t:"num",dec:1,d:6},
     {k:"uplift",label:"Sales Uplift (%)",t:"num",dec:1,d:40},
     {k:"base",label:"Baseline Orders",t:"num",d:100},
-    {k:"cost",label:"Unit Cost (₹)",t:"num",d:400},
-    {k:"fees",label:"Amazon Fees (₹)",t:"num",dec:1,d:169,full:1,
+    {k:"cost",label:"Product Cost (₹)",t:"num",d:400},
+    {k:"fees",label:"Amazon Fees (₹/unit)",t:"num",dec:1,d:169,full:1,
       hint:"Type your own, or get the exact figure for this SKU from the Amazon Profit Calculator — the default is only a placeholder."},
   ],
   compute(v){
@@ -1513,7 +1513,7 @@ const CALCS = [
     {k:"pack",label:"Packaging (₹)",t:"num",d:15},
     {k:"acos",label:"Expected ACOS (%)",t:"num",dec:1,d:10},
     {k:"retcost",label:"Expected return cost per sold unit (₹)",t:"num",dec:2,d:0,full:1,
-      hint:"Optional. Your average expected loss from returns per unit sold. A return rate alone cannot tell this calculator the financial loss."},
+      hint:"Optional. Your average expected loss from returns per unit sold — return logistics, unrecovered product value or non-refundable charges you want to account for. A return rate alone cannot tell this calculator the financial loss."},
   ],
   compute(v){
     /* One model across the Profit, Target Price and Price Band calculators:
@@ -1577,7 +1577,8 @@ const CALCS = [
   desc:"Estimate the lowest selling price that reaches your target profit or margin using the costs and assumptions you enter.",
   fields:[
     {k:"goal",label:"Target Type",t:"seg",o:[{v:"margin",l:"Margin %"},{v:"profit",l:"Profit ₹"}],d:"margin"},
-    {k:"target",label:"Target Value",t:"num",dec:1,d:20},
+    {k:"target",label:"Target Value",t:"num",dec:1,d:20,
+      hint:"Reads as a percentage when Target Type is “Margin %”, and as a rupee amount when it is “Profit ₹”."},
     {k:"cost",label:"Product Cost (₹)",t:"num",d:400},
     {k:"cat",label:"Category",t:"sel",o:catOptions,d:"electronics",full:1},
     {k:"kg",label:"Weight (kg)",t:"num",dec:1,d:0.5},
@@ -1587,7 +1588,7 @@ const CALCS = [
     {k:"pack",label:"Packaging (₹)",t:"num",d:15},
     {k:"acos",label:"Expected ACOS (%)",t:"num",dec:1,d:10},
     {k:"retcost",label:"Expected return cost per sold unit (₹)",t:"num",dec:2,d:0,full:1,
-      hint:"Optional. Your average expected loss from returns per unit sold. A return rate alone cannot tell this calculator the financial loss."},
+      hint:"Optional. Your average expected loss from returns per unit sold — return logistics, unrecovered product value or non-refundable charges you want to account for. A return rate alone cannot tell this calculator the financial loss."},
   ],
   compute(v){
     const feesAt=p=>{
@@ -11068,7 +11069,7 @@ function strAddFiles(list){
       const p=parseUnifiedTransaction(text)||parseSettlement(text);
       if(p&&(p.records.length||p.summary)){
         const dup=p.summary&&strFiles.some(x=>x.kind==="settlement"&&x.parsed.summary&&x.parsed.summary.settlementId===p.summary.settlementId);
-        if(dup) strFiles.push({name:f.name,kind:"error",msg:"same settlement ID as a file already loaded — skipped."});
+        if(dup) strFiles.push({name:f.name,kind:"error",msg:"same settlement ID as a file already loaded — skipped to avoid double counting."});
         else strFiles.push({name:f.name,kind:"settlement",parsed:p});
       }
       else strFiles.push({name:f.name,kind:"error",msg:"not recognised as a Stranded Inventory report or a settlement file."+saDescribeColumns(text)});
