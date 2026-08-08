@@ -20,7 +20,7 @@ transaction table shows real order ids and SKU names and this repository is publ
 | 24 · Multi-Month Trends | ✅ | ✅ | ✅ duplicate-file | ✅ ×2 rounds | 15.5/20 · 91 | **18/20 · 95** | 9 | 9 |
 | 25 · Reconciliation & SAFE-T | ✅ | ✅ | shares 21's | ✅ ×2 rounds | 13.5/20 · 84 | **17/20 · 93** | 10 | 10 |
 | 28 · Ad Profitability | ✅ | ✅ | ⚠ **partial** | ✅ ×1 round | 14/20 · 79 | *awaiting re-score* | 17 | 15 |
-| 31 · RTO Radar | — | — | — | pending | — | — | — | — |
+| 31 · RTO Radar | ✅ | ✅ | shares 21's | ✅ ×1 round | 15/20 · 82 | *awaiting re-score* | 11 | 11 |
 | 33 · Traffic Doctor | — | — | — | pending | — | — | — | — |
 | Landing page | — | — | — | pending | — | — | — | — |
 | 12 free calculators | — | — | — | pending | — | — | — | — |
@@ -99,7 +99,22 @@ Claim buttons had just been replaced by "Window likely closed" chips. Fixing a c
 without re-reading the prose that describes it leaves a screen pointing at something that
 no longer exists.
 
-**9 · Unknown must mean unknown everywhere.** The first fix left an unrecognised row badged
+**9 · Volume is not maturity.** RTO Radar guarded its per-state rates at 10+ shipped
+orders but showed **"RTO RATE 0.0%" in green** as its headline — on a five-day export where
+its own banner said 137 of 189 order items were still pending and *"an RTO can take 2–3
+weeks to be recorded"*. Zero of 17 shipped is not a low RTO rate; it is a cohort too young
+to have one. A rate now requires 10+ shipped order items **at least 21 days old**, measured
+against the newest order in the file — the only "as of" a file can prove — and the gate
+applies to every table, chip and recommendation so the page holds one view of its own
+confidence rather than two.
+
+**10 · The wrong noun on every label.** `rtoCompute` deduplicates by order-item, so every
+counter on the page is an **order item** — but the UI said "17 shipped **orders**" and "52
+**orders**". The audited file is 189 order items across **188** distinct orders: close
+enough to hide the defect, and materially wrong on any multi-item account. Found by the
+independent reviewer, who demanded the parser be checked rather than the label be trusted.
+
+**11 · Unknown must mean unknown everywhere.** The first fix left an unrecognised row badged
 "Fee" in the breakdown table while the banner above called it unrecognised. A row's category
 now comes from its *classification*, not Amazon's transaction-type, so it reads
 "⚠ Not recognised" in the table, the chips and the filters — and can never be badged a fee.
