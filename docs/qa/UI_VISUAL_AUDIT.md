@@ -28,7 +28,7 @@ transaction table shows real order ids and SKU names and this repository is publ
 | Advertising ROAS *(was "ROI")* | ✅ | ✅ | ✅ zero/edge | ✅ ×2 rounds | — | **88 → 95 on rename** | 3 | 3 |
 | Break-Even ACOS | ✅ | ✅ | ✅ zero/edge | ✅ ×2 rounds | — | **95** | 3 | 3 |
 | FBA Fee · FBA Storage · ACOS · Marketing Budget · Coupon ROI | ✅ | ✅ | ✅ zero/edge | in review | — | — | 6 | 6 |
-| Launch Budget · Price Band Optimizer · Restock Planner | — | — | — | pending | — | — | — | — |
+| Launch Budget · Price Band Optimizer · Restock Planner | ✅ | ✅ | ✅ zero/edge | in review | — | — | 3 | 3 |
 
 ### Tool 28 is reviewed PARTIAL, not passed
 
@@ -134,7 +134,16 @@ here."* It establishes what traffic proves, rules out the Featured Offer explana
 narrows the next step without naming a root cause — and it inverts when Featured Offer
 share is low instead.
 
-**12 · Unknown must mean unknown everywhere.** The first fix left an unrecognised row badged
+**12 · One model, or the tools disagree about the same SKU.** Three pricing calculators —
+Profit, Target Price and Price Band Optimizer — each charged advertising against *residual
+contribution* rather than the selling price. The Profit Calculator understated advertising
+by **58%**; Target Price returned a price **₹85 too low** while its own ledger visibly
+failed to sum to its total; and the Price Band Optimizer, whose whole purpose is comparing
+prices, **recommended a different price** — ₹1,100 showing a ₹70 profit where the corrected
+model finds a ₹281 loss at every price in range. They now share one model and return an
+identical ₹317.83 at the shared defaults.
+
+**13 · Unknown must mean unknown everywhere.** The first fix left an unrecognised row badged
 "Fee" in the breakdown table while the banner above called it unrecognised. A row's category
 now comes from its *classification*, not Amazon's transaction-type, so it reads
 "⚠ Not recognised" in the table, the chips and the filters — and can never be badged a fee.
