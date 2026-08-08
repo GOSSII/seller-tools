@@ -28,7 +28,9 @@ transaction table shows real order ids and SKU names and this repository is publ
 | Advertising ROAS *(was "ROI")* | ✅ | ✅ | ✅ zero/edge | ✅ ×2 rounds | — | **88 → 95 on rename** | 3 | 3 |
 | Break-Even ACOS | ✅ | ✅ | ✅ zero/edge | ✅ ×2 rounds | — | **95** | 3 | 3 |
 | FBA Fee · FBA Storage · ACOS · Marketing Budget · Coupon ROI | ✅ | ✅ | ✅ zero/edge | in review | — | — | 6 | 6 |
-| Launch Budget · Price Band Optimizer · Restock Planner | ✅ | ✅ | ✅ zero/edge | in review | — | — | 3 | 3 |
+| Price Band Optimizer | ✅ | ✅ | ✅ loss/zero | ✅ ×2 rounds | 88 | **97 after fixes** | 5 | 5 |
+| Product Launch Budget | ✅ | ✅ | ✅ | ✅ ×2 rounds | 84 | *re-score pending* | 4 | 4 |
+| Restock Planner | ✅ | ✅ | ✅ zero-sales | ✅ ×2 rounds | 91 | *re-score pending* | 3 | 3 |
 
 ### Tool 28 is reviewed PARTIAL, not passed
 

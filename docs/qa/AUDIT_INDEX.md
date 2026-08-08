@@ -8,7 +8,7 @@ Everything produced by the full production audit, and how to re-run it.
 |---|---|
 | [SELLER_TOOLS_FULL_AUDIT.md](SELLER_TOOLS_FULL_AUDIT.md) | **Start here.** Executive summary, tool scoreboard, three-way validation tables, per-tool reports, performance, responsive, privacy |
 | [TOOL_MANIFEST.md](TOOL_MANIFEST.md) | All **33** tools across 43 routes, with the 18 required fields each, plus the Website Tool → Amazon Report → columns → calculation map |
-| [BUG_REGISTER.md](BUG_REGISTER.md) | 45 defects + 1 privacy finding, with expected vs actual, root cause, fix, regression test and status |
+| [BUG_REGISTER.md](BUG_REGISTER.md) | 50 defects + 1 privacy finding, with expected vs actual, root cause, fix, regression test and status |
 | [UX_REGISTER.md](UX_REGISTER.md) | 22 UX findings with seller impact and whether implemented; beginner-comprehension scores; information-architecture recommendation |
 | [UI_VISUAL_AUDIT.md](UI_VISUAL_AUDIT.md) | The screenshot round: per-tool desktop/mobile/error coverage, before/after UX scores, what the rendered UI exposed that the numbers could not, and every copy change made |
 
@@ -82,7 +82,7 @@ repository is public.
 two in the Profit Calculator and two in Target Price — all now fixed. Two P2 items remain
 open: PRIV-1, and the FBA storage assumption in BUG-031.
 
-The calculator round found **seven P1 defects** in the free tier across four batches, in
+The calculator round found **nine P1 defects** in the free tier across four batches, in
 two families:
 
 **A correct-looking percentage on the wrong base.** ACOS charged against residual
