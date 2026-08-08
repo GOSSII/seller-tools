@@ -27,3 +27,12 @@ web-build/
 npm-debug.*
 yarn-error.*
 *.log
+
+# QA audit — RAW SELLER DATA. Real Amazon reports contain order ids, SKUs and
+# (in MTR/All-Orders) buyer address fields. Never commit them; only sanitized
+# fixtures under qa/fixtures/ are safe to track.
+qa-data/
+
+# Python bytecode + audit run output
+__pycache__/
+qa/out/
