@@ -8,6 +8,8 @@ audit had already fixed elsewhere and never propagated.
 **Status:** FIXED = fix landed in `web/index.html`, regression test added, **and** retested against the
 identical SHA-256 file the defect was found on. OPEN = needs a product decision.
 
+**Final tally: 52 defects — 2 P0 · 23 P1 · 26 P2 · 1 P3. All FIXED, none open.**
+
 Priority: **P0** wrong money number or privacy hole · **P1** wrong metric definition, silent data loss,
 wrong aggregation · **P2** confusing/unsupported recommendation or major UX · **P3** cosmetic.
 

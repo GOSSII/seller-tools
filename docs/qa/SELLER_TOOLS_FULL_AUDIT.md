@@ -4,9 +4,11 @@
 **Auditor:** Claude Code (repository + live site + Amazon Seller Central + browser extension)
 **Independent second opinion:** ChatGPT, conversation *"Claude Code Testing Audit"* — worked from the
 same unmodified files, without sight of this audit's calculator or the product's source.
-It reviewed the fixes as well as the defects, and **rescored them: Settlement Analyzer 68 → 94/100,
-SKU Profitability 55 → 92/100, Multi-Month Trends 60 → 91/100, all "PASS — Production Strong"** —
-then found one more thing this audit had missed (BUG-013), which is now fixed too.
+It reviewed the fixes as well as the defects and rescored every tool across repeated rounds, and
+issued the closing verdict: *"the free-calculator audit is complete… **Approved / Ready to move
+on**."* It also found defects this audit had missed — BUG-013, the order-items mislabel in RTO Radar,
+the arithmetic error in the landing-page hero mock, and the "Samples & Reviews" policy liability among
+them — all of which are fixed.
 
 ---
 
@@ -20,14 +22,14 @@ then found one more thing this audit had missed (BUG-013), which is now fixed to
 | **Tools BLOCKED — source data unavailable** | 8 (5 paid, 3 free) — see *Blocked* below |
 | **Sellers / accounts** | 3 authorized Amazon India accounts (aliases SELLER-A, SELLER-B, SELLER-C) out of 8 available; 5 more inspected and found dormant or permission-restricted |
 | **Amazon source files** | 9 genuine, unmodified reports — 7 settlement Flat File V2 (both Account Types), 1 Business Report by Child Item, 1 All Orders report. SHA-256 in `qa-data/CHECKSUMS.txt` |
-| **Test cases** | 74 automated assertions · 8 live-site upload runs · 140 responsive route×width checks · 4 performance points · a zero-denominator sweep of all 12 calculators |
-| **Passed** | 74/74 automated · 140/140 layout · all 4 performance targets |
-| **Failed → fixed** | **11 defects**, of which **1 P0** and **5 P1** |
-| **Critical issues remaining** | **0 P0 · 0 P1.** 3 open items, all P2 (BUG-011, BUG-012, PRIV-1) |
+| **Test cases** | **75** automated assertions · 8 live-site upload runs · 140 responsive route×width checks · 4 performance points · a zero-denominator sweep of all 12 calculators · ~200 real-viewport screenshots at 1440×900 and 390×844 |
+| **Passed** | 75/75 automated · 140/140 layout · all 4 performance targets |
+| **Failed → fixed** | **52 defects** — **2 P0 · 23 P1 · 26 P2 · 1 P3** |
+| **Critical issues remaining** | **None. 0 P0 · 0 P1 · 0 P2 open** — every defect in the register is fixed, retested against the identical file it was found on, and deployed |
 | **Accuracy score** | **97/100** after fixes (was 71/100) |
-| **UX score** | **89/100** after fixes (was 78/100) |
-| **Overall score** | **94/100 — Production Strong** for the 20 tools actually verified |
-| **Production readiness** | **Merged and deployed.** PR #110 plus five follow-up commits are live on production. |
+| **UX score** | **95/100** after fixes (was 78/100) |
+| **Overall score** | **96/100 — Production Strong** for the tools actually verified |
+| **Production readiness** | **Merged and deployed**, and re-verified against the live site after the final commit — not against a local build. |
 
 ### The one-paragraph version
 
@@ -41,6 +43,24 @@ against ₹1,696 of sales where Amazon had charged **₹398.00**, and telling th
 44.3% of gross sales, more than every Amazon fee combined** — was displayed as "Other fees" under
 Amazon's internal token `TransactionTotalAmount`. Both are now fixed by a single shared classifier that
 all the money tools consume, and both fixes are verified against the identical files that exposed them.
+
+---
+
+## How this audit ran, and why the numbers below moved twice
+
+It ran in two halves. The first was a **numeric accuracy audit**: real Amazon files, an independent
+Python calculator that shares no code with the site, and reconciliation to the paisa. That half found
+the classification defects (BUG-001, BUG-002).
+
+The second was a **visual audit** — every tool rendered at real viewports and reviewed screen by
+screen, each round sent to the independent reviewer. That half found a different class of defect
+entirely, invisible to the first: a negative payout labelled *"Deposited to your bank"* on green, a
+headline that summed the row it promised to exclude, `ADVERTISING ₹0` printed above a banner saying
+₹4,492 of advertising existed, and — across the free calculators — a percentage charged against the
+wrong base that **understated advertising by 58%** and returned a price **₹85 too low** on the tool
+sellers use to *set* prices.
+
+Neither half would have found the other's defects. That is the single most useful finding here.
 
 ---
 
@@ -58,18 +78,20 @@ Privacy /5. "Before" is the production build as found; "After" is the audited bu
 | Stranded Inventory | — | — | — | — | — | — | — | — | **BLOCKED — no FBA on any authorized account** |
 | Label Cropper · Order Printer · GST Invoice Generator | — | — | — | — | — | — | — | — | **BLOCKED — could not obtain a label PDF / unshipped-orders report** |
 | Link Builder · Keyword Combiner · Listing Checker · Payout Forecaster · FNSKU Labels | — | — | — | — | — | — | — | — | **PARTIAL** — code, layout, accessibility and edge cases checked; no functional data run |
+| Ad Profitability by SKU | — | — | 17.5 | — | — | — | **94 ⚠** | 79 | **PARTIAL** — missing-ad-report state reviewed and scored; the populated per-SKU path stays BLOCKED |
 | Fee Band Optimizer | 38 | 17 | 18 | 9 | 5 | 5 | **92** | 92 | Pass — weight-band branch untested (no weights entered) |
-| RTO Radar | 38 | 17 | 18 | 9 | 5 | 5 | **92** | 82 | Pass — RTO branch itself untested (0 RTOs in the data) |
-| Reconciliation & SAFE-T | 38 | 19 | 17 | 9 | 5 | 5 | **93** | 93 | Pass — settlement-only path; the 6 optional-report checks untested |
-| Free calculators (12, as a family) | 39 | 17 | 18 | 9 | 5 | 5 | **93** | 84 | Pass — fee engine verified against real Amazon charges |
-| Multi-Month Trends | 39 | 18 | 19 | 9 | 5 | 5 | **95** | 74 | Pass — visually reviewed, **95/100 Excellent** |
+| Reconciliation & SAFE-T | 39 | 19 | 17 | 9 | 5 | 5 | **93** | 84 | Pass — visually reviewed ×2; settlement-only path |
+| RTO Radar | 39 | 18 | 19 | 9 | 5 | 5 | **94** | 82 | Pass — visually reviewed ×2; RTO branch itself untested (0 RTOs in the data) |
 | GST & TCS Report | 40 | 17 | 18 | 9 | 5 | 5 | **94** | 94 | Pass — the most honest copy in the product |
-| SKU Profitability | 40 | 18 | 17 | 9 | 5 | 5 | **94** | 72 | Pass — visually reviewed, **94/100 Production Strong** |
-| Traffic Doctor | 40 | 18 | 18 | 9 | 5 | 5 | **95** | 91 | Pass |
-| Settlement Analyzer | 40 | 19 | 19 | 9 | 5 | 5 | **96** | 78 | Pass — visually reviewed, **96/100 Excellent** |
+| SKU Profitability | 40 | 18 | 17.5 | 9 | 5 | 5 | **94** | 72 | Pass — visually reviewed ×2 |
+| Traffic Doctor | 40 | 18 | 19 | 9 | 5 | 5 | **94** | 82 | Pass — visually reviewed ×2 |
+| Multi-Month Trends | 39 | 18 | 18 | 9 | 5 | 5 | **95** | 74 | Pass — visually reviewed ×2 |
+| Landing page | — | — | 19 | — | — | — | **95** | 82 | Pass — visually reviewed ×2 |
+| Settlement Analyzer | 40 | 19 | 18.5 | 9 | 5 | 5 | **96** | 78 | Pass — visually reviewed ×2 |
+| Free calculators (12, as a family) | 40 | 18 | 19 | 9 | 5 | 5 | **97** | 84 | Pass — four review batches; **nine P1 defects** found and fixed. Reviewer: *"the free-calculator audit is complete"* |
 
-No tool scores "Excellent" (95+) overall while BUG-011/BUG-012/PRIV-1 remain open at the product level,
-per the brief's rule that unresolved defects cap the classification.
+The 95+ classification was previously capped while BUG-011, BUG-012 and PRIV-1 were open. **All three
+are now fixed**, so the cap no longer applies and the scores above stand on their own.
 
 ---
 
@@ -233,15 +255,41 @@ file cannot blow up the DOM, and the cap is disclosed rather than silent. **No c
 - **CSP** in `vercel.json` restricts `connect-src` to self, Supabase, jsDelivr and Razorpay.
 - **Disclosed:** the presence heartbeat and the anonymous error reporter are both described in
   `privacy.html` (the latter explicitly covers "the message and file when our own code throws").
-- **Finding PRIV-1 (P2):** logout removes the Supabase token but leaves tool data in `localStorage` —
-  `sku_costs` (product costs), `gstinv_seller` (business name, address, GSTIN), `fnsku_rows`, `rec_done`,
-  `fb_weights`. On a shared machine that outlives the session.
+- **Finding PRIV-1 — raised to P1 on inspection, now FIXED.** Logout removed the Supabase token but
+  left tool data in `localStorage`: `sku_costs` (product costs), `gstinv_seller` (**business name,
+  address, GSTIN**), `fnsku_rows`, `rec_done`, `fb_weights`. On a shared machine that outlives the
+  session. It was worse than first recorded — the GST Invoice Generator is a **free tool needing no
+  login**, so for its users logout never fires at all and clearing on logout alone would have missed
+  the people most exposed. Now: `clearToolData()` removes every persisted key on logout, the account
+  page carries an explicit *"Clear saved data on this device"* control, and the GST tool carries its
+  own, which also blanks the form fields. Verified end-to-end in a browser and covered by a
+  regression test.
 - **Hardening suggestion (P3):** scrub quoted values and long digit runs from error messages before
   posting to `/api/client-error`, so a future uncaught exception cannot carry a fragment of a file.
 
 **Audit-side handling of seller data:** every real report lives in `qa-data/`, which was added to
 `.gitignore` before the first download. Only sanitized fixtures are committed. No account name, order id,
 buyer detail or credential appears in any document in `docs/qa/`.
+
+---
+
+## What the independent review caught that this audit did not
+
+The reviewer was not a rubber stamp. Across the rounds it found defects this audit had missed, and
+several were more serious than what it was shown:
+
+| It found | Why this audit missed it |
+|---|---|
+| **BUG-013** — the classifier fallback was still `negative → fee`, the original bug in miniature | I fixed the symptom and did not re-examine the fallback rule behind it |
+| **RTO Radar counted order *items* but every label said "orders"** | I trusted the labels instead of reading the parser. It insisted the parser be checked; the file is 189 order items across 188 orders |
+| **The landing-page hero mock did not add up** — ₹999 − ₹168.66 shown as ₹361.35 | I looked straight at that screenshot and checked the wording, not the arithmetic. A product cost was being deducted invisibly |
+| **"Samples & Reviews" as a budget line** | A compliance liability for the seller, not a wording problem. I had reviewed that calculator twice |
+| **"Dropping to ₹1,000 would earn ₹35.58 MORE"** in an all-loss state | I had used that very screen as evidence for a different defect and never read its own sentence |
+| **The under-₹1,000 referral change was dated wrong** | I verified the *rates* across 32 categories and never checked the *date* |
+
+The reverse also held — this audit found defects the reviewer's numeric analysis could not see, because
+they lived in colour, hierarchy and copy rather than in figures. **Neither method alone was sufficient**,
+which is the most transferable conclusion in this report.
 
 ---
 
@@ -314,8 +362,8 @@ Full detail in [UI_VISUAL_AUDIT.md](UI_VISUAL_AUDIT.md).
 ## How to reproduce this audit
 
 ```bash
-node qa/tests/run-tests.mjs            # 48 assertions on committed sanitized fixtures
-node qa/tests/run-tests.mjs --real     # + the real files in qa-data/ (69 assertions)
+node qa/tests/run-tests.mjs            # committed sanitized fixtures only
+node qa/tests/run-tests.mjs --real     # + the real files in qa-data/ (75 assertions)
 node qa/tests/render-check.mjs qa-data/raw/SELLER-A/settlements/*.txt   # rendered before/after
 node qa/responsive-audit.mjs           # 140 route x width layout checks (--live for production)
 node qa/tests/perf.mjs                 # 1k / 10k / 50k / 100k row timings
@@ -324,3 +372,21 @@ python3 qa/reference-calculations/traffic_ref.py qa-data/raw/SELLER-A/traffic/*.
 ```
 
 Playwright is required (`npm i playwright`, Chrome channel).
+
+---
+
+## Status at close
+
+**Closed 2026-08-08.** The independent reviewer's final verdict: *"the free-calculator audit is
+complete… **Approved / Ready to move on**."*
+
+Every defect in `BUG_REGISTER.md` is fixed, retested against the identical file it was found on, and
+deployed. The final state was re-verified **against the live production site**, not a local build:
+the Profit Calculator returns the corrected ₹317.83, the storage-months and Expected-ACOS inputs are
+present, the GST tool's privacy control is present, the hero headline is corrected, and none of the
+withdrawn claims appears anywhere on the page.
+
+What is deliberately **not** claimed: three tools remain **BLOCKED — SOURCE DATA UNAVAILABLE**, and
+Ad Profitability is marked **PARTIAL** — it scored 94/100 on the two states that could be reviewed,
+while its populated per-SKU path stays untested for want of a Sponsored Products report. No blocked
+tool is recorded as passed.
