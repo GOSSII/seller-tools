@@ -21,8 +21,8 @@ transaction table shows real order ids and SKU names and this repository is publ
 | 25 · Reconciliation & SAFE-T | ✅ | ✅ | shares 21's | ✅ ×2 rounds | 13.5/20 · 84 | **17/20 · 93** | 10 | 10 |
 | 28 · Ad Profitability | ✅ | ✅ | ⚠ **partial** | ✅ ×2 rounds | 14/20 · 79 | **17.5/20 · 94** | 17 | 15 |
 | 31 · RTO Radar | ✅ | ✅ | shares 21's | ✅ ×2 rounds | 15/20 · 82 | **19/20 · 94** | 11 | 11 |
-| 33 · Traffic Doctor | ✅ | ✅ | ✅ wrong-file | in review | — | — | — | — |
-| Landing page | — | — | — | pending | — | — | — | — |
+| 33 · Traffic Doctor | ✅ | ✅ | ✅ wrong-file | ✅ ×2 rounds | 17/20 · 82 | **19/20 · 94** | 10 | 10 |
+| Landing page | ✅ | ✅ | n/a | in review | — | — | — | — |
 | 12 free calculators | — | — | — | pending | — | — | — | — |
 
 ### Tool 28 is reviewed PARTIAL, not passed
@@ -114,7 +114,22 @@ counter on the page is an **order item** — but the UI said "17 shipped **order
 enough to hide the defect, and materially wrong on any multi-item account. Found by the
 independent reviewer, who demanded the parser be checked rather than the label be trusted.
 
-**11 · Unknown must mean unknown everywhere.** The first fix left an unrecognised row badged
+**11 · A metric is not a cause.** Traffic Doctor read one ratio — 0.88% conversion on
+227 sessions — and concluded *"the fix is the listing (images, price, reviews, first
+bullet), **not more ads**"*. That ratio identifies none of images, price, reviews,
+delivery promise, inventory, ad-traffic relevance or competitor promotions, and with no
+advertising report loaded the tool had no basis whatsoever to advise against advertising.
+The page now follows **signal → evidence → possible interpretation → investigation**.
+
+It also gained the one diagnostic the evidence *does* support — **elimination**. For the
+worst converter it now says: *"227 sessions, 0.88% conversion and 100% Featured Offer
+share. Traffic exists and Featured Offer share is high in this export, but conversion is
+well below the account's 2.63% benchmark. Featured Offer share is not the obvious issue
+here."* It establishes what traffic proves, rules out the Featured Offer explanation, and
+narrows the next step without naming a root cause — and it inverts when Featured Offer
+share is low instead.
+
+**12 · Unknown must mean unknown everywhere.** The first fix left an unrecognised row badged
 "Fee" in the breakdown table while the banner above called it unrecognised. A row's category
 now comes from its *classification*, not Amazon's transaction-type, so it reads
 "⚠ Not recognised" in the table, the chips and the filters — and can never be badged a fee.
