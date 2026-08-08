@@ -67,6 +67,15 @@
          letter-spacing:-.02em;min-width:0;min-height:44px;padding:0 2px 0 0}
   @media(min-width:600px){.brand{font-size:17px;gap:10px}}
   .brand span.txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* On a 390 px phone the full brand, the back link and the login button
+     competed for the bar and the brand lost — it rendered clipped. Below 560 px
+     the brand shortens and the back link becomes its arrow only. */
+  .brand-short{display:none}
+  @media(max-width:559px){
+    .brand-full{display:none} .brand-short{display:inline}
+    .back .backtxt{display:none}
+    .back{padding-left:0}
+  }
   .logo{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#3a66f5,#1e3a5f);
         display:grid;place-items:center;color:#fff;font-weight:800;font-size:15px;flex:none}
   /* A real link, not a click-handled span: reachable by Tab, works with
@@ -180,6 +189,20 @@
   .stat.blue{background:var(--blue-soft);border-color:var(--blue-line)} .stat.blue .v{color:var(--blue)}
   .stat.green{background:var(--green-soft);border-color:var(--green-line)} .stat.green .v{color:var(--green)}
   .stat.red{background:var(--red-soft);border-color:var(--red-line)} .stat.red .v{color:var(--red)}
+  /* A negative settlement is not an error and not a success — amber, not red,
+     not green. Green on a negative number read as "received". */
+  .stat.warn{background:#fffaf0;border-color:#f5c26b} .stat.warn .v{color:#a1620a}
+  .chip.warnchip{background:#fffaf0;border-color:#f5c26b;color:#a1620a;font-weight:700}
+  /* Next-step action cards: a heading, the evidence, and one link that goes
+     where the fix is. A bulleted paragraph was read as commentary, not action. */
+  .acts{display:grid;grid-template-columns:1fr;gap:10px;margin-top:10px}
+  @media(min-width:720px){.acts{grid-template-columns:1fr 1fr}}
+  .act{border:1px solid var(--line);border-radius:12px;padding:13px 14px;background:#fff}
+  .act.hot{border-color:var(--red-line);background:var(--red-soft)}
+  .act h5{margin:0 0 4px;font-size:14px;font-weight:700;color:var(--ink)}
+  .act p{margin:0 0 8px;font-size:13px;line-height:1.55;color:var(--muted)}
+  .act a{font-size:13px;font-weight:700;text-decoration:none;color:var(--blue)}
+  .act a:hover{text-decoration:underline}
 
   /* The breakdown "table". Rows stay label-left / amount-right, but the amount
      drops to its own line rather than being clipped when space runs out. */
@@ -743,9 +766,9 @@
 
 <header>
   <div class="wrap mast">
-    <a class="brand" href="#/"><span class="logo" aria-hidden="true">₹</span><span class="txt">Seller Tools India</span></a>
+    <a class="brand" href="#/"><span class="logo" aria-hidden="true">₹</span><span class="txt"><span class="brand-full">Seller Tools India</span><span class="brand-short">Seller Tools</span></span></a>
     <div class="mast-right">
-      <a class="back" id="back" href="#/" hidden>← All calculators</a>
+      <a class="back" id="back" href="#/" hidden title="All calculators" aria-label="All calculators">← <span class="backtxt">All calculators</span></a>
       <span id="authslot" class="authslot"></span>
     </div>
   </div>
@@ -4328,6 +4351,33 @@ window.saLineKind=saLineKind; // exposed for verification/debugging
    the token taught nobody anything. Only rename where the raw label is genuinely
    opaque — a seller cross-checking against Seller Central still needs to
    recognise the ordinary fee names. */
+/* Amazon's transaction-type column is internal vocabulary: "other-transaction"
+   and "Debt Adjustment" mean nothing to a seller. Translate for display and
+   keep the raw token visible in the expanded row, so anyone cross-checking
+   against Seller Central can still find it. */
+/* Seller-facing category for a whole transaction row. Classification wins over
+   Amazon's transaction-type: an unrecognised line must read "Not recognised"
+   in the table too, or the table quietly contradicts the banner above it and
+   the entire point of the unknown state — not guessing — is lost. */
+function saRecordCategory(rec){
+  const kinds=new Set((rec.amounts||[]).map(l=>saLineKind(l,rec.transactionType)));
+  if(kinds.has("unknown")&&kinds.size===1) return "Not recognised";
+  if(kinds.has("balance")&&!kinds.has("principal")) return "Account balance transfer";
+  if(kinds.has("ads")&&!kinds.has("principal")) return "Sponsored Ads";
+  if(/^refund/i.test(rec.transactionType||"")) return "Refund";
+  if(/^order$/i.test(rec.transactionType||"")) return "Order";
+  const d=((rec.amounts||[])[0]||{}).amountDescription||"";
+  if(/^payable to amazon$/i.test(d.trim())) return "Previous balance payable";
+  if(/easy ship/i.test(d)) return "Easy Ship charge";
+  return saNiceType(rec.transactionType);
+}
+function saNiceType(t){
+  t=(t||"").trim();
+  if(/^other-transaction$/i.test(t)) return "Other Amazon charges";
+  if(/^debt adjustment$/i.test(t)) return "Account balance transfer";
+  if(/^servicefee$/i.test(t)) return "Service fee";
+  return t;
+}
 function saNiceLabel(label,kind){
   const l=(label||"").trim();
   if(kind==="ads"&&/^transactiontotalamount$/i.test(l)) return "Sponsored Ads spend (billed as a service fee)";
@@ -4360,7 +4410,7 @@ const SA_BUCKET_NAMES={gross:"Gross product sales",refunded:"Refunded sales",pro
   unknown:"Not recognised — counted in your payout, left out of the fee figures"};
 function saFlow(records){
   const B={gross:0,refunded:0,promo:0,referral:0,fulfil:0,gstFees:0,prodTax:0,shipNet:0,tcs:0,tds:0,credits:0,otherFees:0,otherPrincipal:0,ads:0,balance:0,unknown:0};
-  let orders=0,units=0,refunds=0,orderIds=new Set();
+  let orders=0,units=0,refunds=0,refundComm=0,orderIds=new Set();
   for(const rec of records){
     const isOrder=rec.transactionType==="Order";
     const isRefund=/refund/i.test(rec.transactionType);
@@ -4372,13 +4422,16 @@ function saFlow(records){
         if(isOrder)B.gross+=a; else if(isRefund)B.refunded+=a; else B.otherPrincipal+=a;
         continue;
       }
-      B[saBucketOf(l.amountDescription||l.amountType,a,kind)]+=a;
+      const bk=saBucketOf(l.amountDescription||l.amountType,a,kind);
+      /* Kept alongside, never added to B — B must still sum to the deposit. */
+      if(bk==="referral"&&/refund commission/i.test(l.amountDescription||"")) refundComm+=a;
+      B[bk]+=a;
     }
   }
   /* `orders` counts order-ITEM groups, which is what the per-row table shows.
      `distinctOrders` is the number of real Amazon orders — on a multi-SKU
      order the two differ, and average order value must use the latter. */
-  return {B,orders,units,refunds,distinctOrders:orderIds.size||orders};
+  return {B,orders,units,refunds,refundComm,distinctOrders:orderIds.size||orders};
 }
 
 window.saFlow=saFlow; // exposed for verification/debugging
@@ -4569,22 +4622,65 @@ function saRenderResults(){
   const r=saParsed,out=document.getElementById("sa-out"); if(!out)return;
   const agg=saAggregate(r);
   const total=r.summary?r.summary.totalAmount:agg.allSum;
-  const byType={}; for(const rec of r.records) byType[rec.transactionType]=(byType[rec.transactionType]||0)+1;
+  /* Group by the seller-facing category, not Amazon's transaction-type, so the
+     chips, the filter buttons and the table all say the same thing. */
+  const byType={}; for(const rec of r.records){const c=saRecordCategory(rec); byType[c]=(byType[c]||0)+1;}
   const sv=n=>`<span class="${n<0?'amt-neg':(n>0?'amt-pos':'')}">${inr(n)}</span>`;
 
   const flowPre=saFlow(r.records);
   const feePct=flowPre.B.gross?Math.abs(agg.fees)/flowPre.B.gross*100:0;
+  /* A negative settlement is NOT a deposit. Calling it "Deposit total" and
+     printing it on a green "money in" card told the seller they had received
+     ₹1,418.73 when Amazon had in fact carried a debt forward and paid nothing.
+     Positive and negative settlements now get different words and different
+     colour, because they are different events. */
+  const paidOut=total>=0;
+  /* Only tax lines that are actually present get named in the card title —
+     "Taxes, GST & withholding" over a number that is purely GST on fees
+     invites the seller to think TCS/TDS were withheld when they were not. */
+  const taxKinds=[];
+  if(Math.abs(flowPre.B.gstFees)>=0.005) taxKinds.push("GST on Amazon fees");
+  if(Math.abs(flowPre.B.tcs)>=0.005) taxKinds.push("TCS");
+  if(Math.abs(flowPre.B.tds)>=0.005) taxKinds.push("TDS");
+  if(Math.abs(flowPre.B.prodTax+flowPre.B.shipNet)>=0.005) taxKinds.push("product tax");
+  const taxTitle=taxKinds.length===1?taxKinds[0].replace(/^./,c=>c.toUpperCase()):"Taxes, GST &amp; withholding";
   let h=`<div class="stats">
-    <div class="stat blue"><div class="k">Deposit total</div><div class="v">${inr(total)}</div></div>
-    <div class="stat green"><div class="k">Net product sales</div><div class="v">${inr(agg.sales)}</div></div>
+    <div class="stat ${paidOut?"blue":"warn"}"><div class="k">${paidOut?"Deposited to your bank":"Net settlement balance"}</div><div class="v">${inr(total)}</div>
+      <div class="sa-sub" style="margin-top:3px">${paidOut?"paid out for this statement":"⚠ no payout this statement — carried forward against your balance"}</div></div>
+    <div class="stat green"><div class="k">Gross product sales</div><div class="v">${inr(flowPre.B.gross)}</div>
+      <div class="sa-sub" style="margin-top:3px">${inr(agg.sales)} net after refunds</div></div>
     <div class="stat red"><div class="k">Amazon fees</div><div class="v">${inr(agg.fees)}</div>
-      <div class="sa-sub" style="margin-top:3px">${flowPre.B.gross?pc(feePct)+" of gross sales — selling &amp; fulfilment only":"selling &amp; fulfilment only"}</div></div>
-    ${agg.ads?`<div class="stat red"><div class="k">Advertising</div><div class="v">${inr(agg.ads)}</div>
-      <div class="sa-sub" style="margin-top:3px">Sponsored Ads billed in this statement</div></div>`
-      :`<div class="stat"><div class="k">Taxes, GST &amp; withholding</div><div class="v">${inr(agg.tax)}</div></div>`}
-  </div>
-  ${agg.balance?`<div class="banner info" style="text-align:left;margin-top:12px"><b>${inr(agg.balance)}</b> of this statement is your own balance moving, not a charge — Amazon carrying a previous balance forward (“Payable to Amazon”) or squaring the Electronic and COD account series against each other. It changes what lands in your bank, so it is in the ledger below, but it is <b>not</b> an Amazon fee and is excluded from the fee figures above. Load the same period's other Account Type and the two halves cancel out.</div>`:""}`;
+      <div class="sa-sub" style="margin-top:3px">${flowPre.B.gross?pc(feePct)+" of "+inr(flowPre.B.gross)+" gross — selling &amp; fulfilment only":"selling &amp; fulfilment only"}</div></div>
+    ${agg.ads?`<div class="stat red"><div class="k">Sponsored Ads</div><div class="v">${inr(agg.ads)}</div>
+      <div class="sa-sub" style="margin-top:3px">${flowPre.B.gross?pc(Math.abs(agg.ads)/flowPre.B.gross*100)+" of gross — Sponsored Ads":"Sponsored Ads billed in this statement"}</div></div>`
+      :`<div class="stat"><div class="k">${taxTitle}</div><div class="v">${inr(agg.tax)}</div></div>`}
+  </div>`;
 
+  /* Account-level adjustments as a small ledger of their own, not a paragraph.
+     "Payable to Amazon" (a balance carried forward) and a cross-account
+     transfer are two different mechanisms and are listed separately — merged
+     into one sentence a beginner could not tell which was which. */
+  const acctAdjHtml=(function(){
+    if(Math.abs(agg.balance)<0.005) return "";
+    const carried=[],xfer=[];
+    for(const rec of r.records) for(const l of rec.amounts){
+      if(saLineKind(l,rec.transactionType)!=="balance") continue;
+      const d=(l.amountDescription||"").trim();
+      (/^debt adjustment/i.test(d)?xfer:carried).push([d,l.amount]);
+    }
+    const sum=a=>a.reduce((s,x)=>s+x[1],0);
+    const line=(nm,v)=>`<div class="r mut"><span class="rl">${esc(nm)}</span><span class="rv ${v<0?"neg":""}">${v<0?"−":"+"}${inr(Math.abs(v))}</span></div>`;
+    return `<div class="panel" style="border-color:#f5c26b;background:#fffaf0">
+      <h4>Account balance adjustments <span class="sa-sub">— net effect ${inr(agg.balance)}</span></h4>
+      <p class="sa-sub" style="margin:4px 0 10px;font-size:13.5px;line-height:1.6">These change what reaches your bank, but they are <b>not Amazon selling fees</b> — they are balances being carried forward or settled between your own Amazon payment accounts. They are excluded from the fee rate and from every per-SKU profit figure.</p>
+      <div class="rows">
+        ${carried.length?line("Previous balance payable to Amazon",sum(carried)):""}
+        ${xfer.length?line("Transfer between your Amazon payment accounts",sum(xfer)):""}
+        <div class="r fin"><span class="rl">Net account adjustment</span><span class="rv ${agg.balance<0?"neg":""}">${inr(agg.balance)}</span></div>
+      </div>
+      ${xfer.length?`<div class="banner info" style="margin-top:10px">Upload the matching <b>${/electronic/i.test(xfer[0][0])?"Electronic Transactions":"Cash On Delivery / Non-Transactional Fees"}</b> statement for the same week and this transfer cancels to ₹0 — it is one movement shown from two sides.</div>`:""}
+    </div>`;
+    })();
   /* Reconciliation is an invariant, not decoration: the sum of every parsed
      line must equal Amazon's own settlement total. It is reported together
      with anything the classifier did not recognise, so a new Amazon row type
@@ -4616,21 +4712,26 @@ function saRenderResults(){
     ["Gross product sales",FB.gross],
     ["Refunded sales",FB.refunded],
     ["Promotions funded by you",FB.promo],
-    ["Referral & closing fees",FB.referral],
+    /* Naming a bucket "Referral & closing fees" when the statement contains no
+       referral fee at all (sub-Rs 1,000 items pay 0%) taught the seller a fee
+       existed that did not. Split the two so the refund's own charge is visible. */
+    ["Closing fees",FB.referral-flow.refundComm],
+    ["Refund commission — Amazon's charge for processing the refund",flow.refundComm],
     ["Fulfilment & shipping fees",FB.fulfil],
     ["Advertising (Sponsored Ads)",FB.ads],
-    ["GST charged on Amazon fees (usually claimable as ITC in GSTR-3B)",FB.gstFees],
+    ["GST charged on Amazon fees — may be claimable as ITC, check with your CA",FB.gstFees],
     ["Product & shipping tax collected (net)",FB.prodTax+FB.shipNet],
     ["TCS withheld (claim in GSTR-2A/8A)",FB.tcs],
     ["TDS u/s 194-O (visible in Form 26AS)",FB.tds],
     ["Reimbursements & credits",FB.credits+FB.otherPrincipal],
     ["Other fees",FB.otherFees],
-    ["Your own balance moved (carried forward / between account types) — not a fee",FB.balance],
+    ["Account balance adjustments — itemised below; not an Amazon fee",FB.balance],
     ["Not recognised — in your payout, but left out of the fee figures below",FB.unknown],
   ].filter(x=>Math.abs(x[1])>=0.005);
   h+=`<div class="panel"><h4>Where the money went <span class="sa-sub">— every line of the settlement in one bucket; adds up to your deposit</span></h4>
     <div class="rows">${rowsFlow.map(([l,v])=>`<div class="r mut"><span class="rl">${esc(l)}</span><span class="rv ${v<0?"neg":""}">${v<0?"−":"+"}${inr(Math.abs(v))}</span></div>`).join("")}
-    <div class="r fin"><span class="rl">Deposited to your bank</span><span class="rv">${inr(flowSum)}</span></div></div>
+    <div class="r fin"><span class="rl">${paidOut?"Deposited to your bank":"Net settlement balance — no payout, carried forward"}</span><span class="rv ${flowSum<0?"neg":""}">${inr(flowSum)}</span></div></div>
+    ${acctAdjHtml}
     ${Math.abs(flowSum-total)>0.01?`<div class="banner warn" style="margin-top:12px">Bucket sum differs from the deposit by ${inr(Math.abs(flowSum-total))} — please report this file so we can improve the mapping.</div>`:""}
   </div>`;
   if(r.missingColumns.length)
@@ -4638,15 +4739,21 @@ function saRenderResults(){
 
   const trend=saTrend(r.records);
   if(trend&&trend.length>1){
-    h+=`<div class="panel"><h4>Daily trend <span class="sa-sub">— hover a bar for the exact figure; the full data is in the transactions table below</span></h4><div class="vizgrid">${
+    /* Two bar charts over eight days and four orders occupy a screen and teach
+       nothing. Below a usable sample the panel collapses to a summary line the
+       seller can open if they want it. */
+    const thinTrend=flow.distinctOrders<10||trend.length<10;
+    h+=`<${thinTrend?"details":"div"} class="panel">${thinTrend
+      ?`<summary style="cursor:pointer;font-weight:700;font-size:15px">Daily trend <span class="sa-sub" style="font-weight:400">— ${flow.distinctOrders} order${flow.distinctOrders===1?"":"s"} across ${trend.length} days; too few to read a pattern, open if you want the bars</span></summary>`
+      :`<h4>Daily trend <span class="sa-sub">— hover a bar for the exact figure; the full data is in the transactions table below</span></h4>`}<div class="vizgrid">${
       saBarChart("Orders per day",trend,"orders","#2f5af0",v=>v+(v===1?" order":" orders"))
     }${
       saBarChart("Product sales per day",trend,"sales","#16a34a",v=>inr(v))
-    }</div></div>`;
+    }</div></${thinTrend?"details":"div"}>`;
   }
 
   h+=`<div class="panel"><h4>Transactions by type</h4><div class="chips">${
-    Object.entries(byType).sort((a,b)=>b[1]-a[1]).map(([t,n])=>`<span class="chip">${esc(t)} · ${n}</span>`).join("")||'<span class="sa-sub">none</span>'
+    Object.entries(byType).sort((a,b)=>b[1]-a[1]).map(([t,n])=>`<span class="chip${t==="Not recognised"?" warnchip":""}">${esc(t)} · ${n}</span>`).join("")||'<span class="sa-sub">none</span>'
   }</div></div>`;
 
   const feeRows=Object.entries(agg.feeAgg).sort((a,b)=>Math.abs(b[1].total)-Math.abs(a[1].total));
@@ -4659,6 +4766,9 @@ function saRenderResults(){
           :a.kind==="ads"?'<span class="chip">Advertising</span>'
           :a.kind==="balance"?'<span class="chip">Balance moved — not a fee</span>'
           :a.kind==="credit"?'<span class="chip">Credit</span>'
+          /* An unrecognised line must NEVER be badged "Fee" — that is the one
+             assertion the unknown state exists to avoid making. */
+          :a.kind==="unknown"?'<span class="chip warnchip">⚠ Not recognised</span>'
           :'<span class="chip">Fee</span>'}</td>
         <td class="num">${a.count}</td><td class="num">${sv(a.total)}</td></tr>`).join("")}</tbody>
     </table></div></div>`;
@@ -4669,7 +4779,7 @@ function saRenderResults(){
       <input id="sa-q" type="search" value="${esc(saQuery)}" placeholder="Filter by order ID or SKU" style="min-width:200px;flex:1;max-width:320px;padding:7px 11px;font-size:13px">
       <button class="fbtn" id="sa-csv" title="Every amount line of this settlement, one row each — ready for Excel">⬇ Export CSV</button></div>`;
   const q=saQuery.trim().toLowerCase();
-  const filtered=r.records.filter(rec=>(saFilter==='all'||rec.transactionType===saFilter)
+  const filtered=r.records.filter(rec=>(saFilter==='all'||saRecordCategory(rec)===saFilter)
     &&(!q||(rec.orderId||"").toLowerCase().includes(q)||(rec.sku||"").toLowerCase().includes(q)));
   const shown=filtered.slice(0,saLimit);
   h+=`<div class="tblwrap"><table class="sa">
@@ -4679,7 +4789,7 @@ function saRenderResults(){
     const hasDetail=Object.keys(rec.feeMap).length>0;
     h+=`<tr class="exp ${hasDetail?'':'nodetail'}" data-i="${i}">
       <td>${hasDetail?'<span class="caret">▶</span>':''}</td>
-      <td>${esc(rec.transactionType)}</td><td>${esc(rec.orderId||'—')}</td>
+      <td title="Amazon transaction-type: ${esc(rec.transactionType)}">${esc(saRecordCategory(rec))}</td><td>${esc(rec.orderId||'—')}</td>
       <td>${esc(rec.sku||'—')}</td><td class="num">${rec.quantity||''}</td>
       <td>${esc(rec.fulfillmentId||'—')}</td>
       <td class="num">${sv(rec.principal)}</td><td class="num">${sv(feeTotal)}</td></tr>`;
@@ -4713,12 +4823,29 @@ function saRenderResults(){
       <li><b>Where the money went</b> files every line into exactly one bucket, so the buckets always add up to the deposit. Nothing is estimated; if a label is unrecognised it lands in "Other" rather than being guessed at.</li>
     </ol>
   </div></details>`;
-  h+=`<div class="panel"><h4>What should I do next?</h4><ul style="margin:8px 0 0 18px;line-height:1.9;font-size:13.5px">
-    ${FB.gross&&Math.abs(FB.refunded)/FB.gross>0.1?`<li>Your refund rate is <b>${(Math.abs(FB.refunded)/FB.gross*100).toFixed(1)}%</b> by value — open the <a href="#/sku-report">SKU Profitability Report</a> and sort by Refund % to find which products drive it.</li>`:""}
-    ${Math.abs(Math.min(0,FB.gstFees))>0?`<li>Give your CA the <b>${inr(Math.abs(Math.min(0,FB.gstFees)))}</b> of GST on fees — it is claimable as input tax credit in GSTR-3B, and the <a href="#/gst-report">GST &amp; TCS Report</a> breaks it down label by label.</li>`:""}
-    <li>Drop this same file (plus its sibling statements — both Account Types) into <a href="#/reconcile">Reconciliation</a> to audit every fee against Amazon's published rate card and find money worth claiming.</li>
-    <li>To see profit per product rather than per settlement, use the <a href="#/sku-report">SKU Profitability Report</a>; several months of files at once go in <a href="#/trends">Trends</a>.</li>
-  </ul></div>`;
+  {
+    const refPct=FB.gross?Math.abs(FB.refunded)/FB.gross*100:0;
+    const itc=Math.abs(Math.min(0,FB.gstFees));
+    const acts=[];
+    if(refPct>10) acts.push(["hot","High refund value",
+      `<b>${refPct.toFixed(1)}%</b> of gross sales came back as refunds this statement (${inr(Math.abs(FB.refunded))} of ${inr(FB.gross)}). One or two SKUs usually drive most of it.`,
+      "#/sku-report","Find the SKUs →"]);
+    if(agg.ads&&FB.gross&&Math.abs(agg.ads)>Math.abs(agg.fees)) acts.push(["hot","Sponsored Ads exceed selling \u0026 fulfilment fees",
+      `You paid <b>${inr(Math.abs(agg.ads))}</b> in Sponsored Ads against <b>${inr(Math.abs(agg.fees))}</b> in Amazon selling fees. Whether that is worth it depends on what the ads sold.`,
+      "#/ad-profit","Check ACOS per SKU →"]);
+    if(!paidOut) acts.push(["hot","No payout this statement",
+      `Amazon settled <b>${inr(total)}</b>, so nothing reached your bank — the balance is carried forward. Load the other Account Type for the same week to see the full picture.`,
+      "#/trends","See it month by month →"]);
+    if(itc>0) acts.push(["","GST on Amazon fees",
+      `<b>${inr(itc)}</b> of GST was charged on Amazon's fees. Your CA can tell you how much of it you can claim as input tax credit.`,
+      "#/gst-report","Open the GST report →"]);
+    acts.push(["","Check Amazon charged you correctly",
+      "Every fee in this statement can be audited against Amazon's published rate card — and refunds sometimes owe you a fee credit that never arrived.",
+      "#/reconcile","Run the fee audit →"]);
+    h+=`<div class="panel"><h4>What should I do next?</h4>
+      <div class="acts">${acts.slice(0,4).map(([k,t,b,href,cta])=>
+        `<div class="act ${k}"><h5>${t}</h5><p>${b}</p><a href="${href}">${cta}</a></div>`).join("")}</div></div>`;
+  }
 
   out.innerHTML=h;
   saWireTips(out);

@@ -120,13 +120,23 @@ for (const tool of TOOLS) {
           }
         }
       }
+      // the daily-trend panel may now be a collapsed <details> on sparse data —
+      // capture it closed (that IS the default state) and then opened
+      const collapsed = await page.$('details.panel');
+      if (collapsed) {
+        await page.$eval('details.panel', (d) => d.scrollIntoView({ block: 'center' }));
+        await page.waitForTimeout(200);
+        await shot(page, idir, 'chart-collapsed-sparse-data');
+        await page.$eval('details.panel', (d) => { d.open = true; });
+        await page.waitForTimeout(300);
+      }
       const bar = await page.$('.viz-bar');
-      if (bar) {
+      if (bar && await bar.isVisible()) {
         await page.$eval('.viz', (e) => e.scrollIntoView({ block: 'center' }));
         await page.waitForTimeout(200);
         await shot(page, idir, 'chart-normal');
         const bars = await page.$$('.viz-bar');
-        await bars[Math.min(2, bars.length - 1)].hover();
+        try { await bars[Math.min(2, bars.length - 1)].hover({ timeout: 4000 }); } catch (e) {}
         await page.waitForTimeout(400);
         await shot(page, idir, 'chart-hover-tooltip');
       }

@@ -26,21 +26,24 @@ fs.mkdirSync(OUT, { recursive: true });
 
 const build = () => {
   const src = fs.readFileSync(path.join(WEB, 'index.html'), 'utf8');
-  const patched = src
-    .replace(/gatePremium\([^\n]*?,\s*([A-Za-z0-9_]+)\s*\);/g, '$1();')
-    .replace('<body>', `<body>
+  let patched = src.replace(/gatePremium\([^\n]*?,\s*([A-Za-z0-9_]+)\s*\);/g, '$1();');
+  // NOBANNER=1 renders exactly what production renders — used for UI screenshots
+  if (process.env.NOBANNER) return fs.writeFileSync(path.join(OUT, 'index.html'), patched), copyStatics();
+  patched = patched.replace('<body>', `<body>
 <div style="background:#fef3c7;border-bottom:1px solid #f59e0b;padding:8px 16px;
   font:600 13px/1.4 system-ui,sans-serif;color:#78350f;text-align:center">
   LOCAL PREVIEW of the audited build — paid tools unlocked for testing only.
   Not production. Production still serves the old build until you deploy.
 </div>`);
   fs.writeFileSync(path.join(OUT, 'index.html'), patched);
-  // copy the static siblings so footer links and the OG image resolve
+  copyStatics();
+};
+function copyStatics() {
   for (const f of fs.readdirSync(WEB)) {
     const s = path.join(WEB, f);
     if (fs.statSync(s).isFile() && f !== 'index.html') fs.copyFileSync(s, path.join(OUT, f));
   }
-};
+}
 build();
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript',
