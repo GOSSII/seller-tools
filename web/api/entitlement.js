@@ -25,18 +25,27 @@ module.exports = async (req, res) => {
     const user = await userFromToken(token);
     if (!user) return res.status(200).json(FREE);
 
-    // One-active-session check. This runs whether or not the caller supplies
-    // the header: omitting X-Session-Id used to skip the comparison entirely,
-    // which handed the paid plan to any number of parallel sessions on one
-    // account. Once a session is claimed, only that session id is served.
-    // (A browser that lost its stored id gets 409 and re-claims with one
-    // click via the "Signed out here → Use here instead" panel.)
+    // One-active-session check, only when the caller supplies a session id.
+    //
+    // We briefly made this unconditional to stop one account serving unlimited
+    // parallel sessions. That locks out real customers: a browser that cannot
+    // persist localStorage (Safari "block all cookies", private mode, some
+    // extensions) sends an empty header forever, so it would 409, show
+    // "Signed out here", re-claim, fail to store again, and loop with no way
+    // into any paid tool. Losing a paying customer is worse than a shared
+    // login, and the tools are client-side anyway, so the enforcement point
+    // is session-claim (device limit) rather than a lockout here.
     const sid = (req.headers['x-session-id'] || req.headers['X-Session-Id'] || '').toString();
-    const pr = await rest('GET', '/profiles?select=active_session_id&id=eq.' + encodeURIComponent(user.id) + '&limit=1');
-    if (pr.ok) {
-      const rows = await pr.json();
-      const active = rows && rows[0] && rows[0].active_session_id;
-      if (active && active !== sid) return res.status(409).json({ error: 'session_taken' });
+    if (sid) {
+      const pr = await rest('GET', '/profiles?select=active_session_id&id=eq.' + encodeURIComponent(user.id) + '&limit=1');
+      // Deliberately fails OPEN: if we cannot read the profile we cannot tell
+      // a kicked session from a healthy one, and a Supabase blip must not
+      // paywall everyone at once.
+      if (pr.ok) {
+        const rows = await pr.json();
+        const active = rows && rows[0] && rows[0].active_session_id;
+        if (active && active !== sid) return res.status(409).json({ error: 'session_taken' });
+      }
     }
 
     // Ordered by expiry so the longest-dated rows are inside the window (a

@@ -273,7 +273,7 @@ module.exports = async (req, res) => {
       if (ids.length) {
         const inList = '(' + ids.map(encodeURIComponent).join(',') + ')';
         const [e, d, l, s, pay] = await Promise.all([
-          rest('GET', '/entitlements?select=user_id,plan,expires_at,created_at&user_id=in.' + inList + '&order=created_at.desc&limit=1000'),
+          rest('GET', '/entitlements?select=user_id,plan,source,expires_at,created_at&user_id=in.' + inList + '&order=created_at.desc&limit=1000'),
           rest('GET', '/devices?select=user_id&user_id=in.' + inList + '&limit=2000'),
           rest('GET', '/login_events?select=user_id,at&user_id=in.' + inList + '&device_hash=not.like.admin-action:*&order=at.desc&limit=2000'),
           rest('GET', '/subscriptions?select=user_id,status&user_id=in.' + inList + '&limit=1000').catch(() => null),
@@ -294,7 +294,9 @@ module.exports = async (req, res) => {
           devices: devs.filter(x => x.user_id === p.id).length,
           last_login: lastLogin ? lastLogin.at : null,
           sub_status: subStatusOf(subs, p.id),
-          paid_paise: pays.filter(x => x.user_id === p.id).reduce((sum, x) => sum + (x.amount_paise || 0), 0)
+          paid_paise: pays.filter(x => x.user_id === p.id).reduce((sum, x) => sum + (x.amount_paise || 0), 0),
+          // Comped: the live plan came from an admin grant/invite, not a payment.
+          comped: !!(live && live.source === 'admin')
         };
       });
       return res.status(200).json({ users: rows });

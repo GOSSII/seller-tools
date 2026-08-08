@@ -3194,12 +3194,14 @@ function admRenderUsers(){
   const users=admUsersCache;
   const f=admUsersFilter;
   const shown=users.filter(u=>
-    f==="paid"?u.plan!=="free"
+    f==="paid"?(u.plan!=="free"&&!u.comped)
+    :f==="invited"?!!u.comped
     :f==="free"?u.plan==="free"
     :f==="expiring"?admExpiringSoonRow(u)
     :f==="admins"?!!u.is_admin
     :true);
-  const chips=[["all",`All ${users.length}`],["paid",`Paid ${users.filter(u=>u.plan!=="free").length}`],
+  const chips=[["all",`All ${users.length}`],["paid",`Paid ${users.filter(u=>u.plan!=="free"&&!u.comped).length}`],
+    ["invited",`Invited ${users.filter(u=>u.comped).length}`],
     ["free",`Free ${users.filter(u=>u.plan==="free").length}`],
     ["expiring",`Expiring ${users.filter(admExpiringSoonRow).length}`],
     ["admins",`Admins ${users.filter(u=>u.is_admin).length}`]];
@@ -3212,7 +3214,7 @@ function admRenderUsers(){
   host.innerHTML=`<div class="pay-wrap"><table class="pay-table">
     <thead><tr><th>Email</th><th>Plan</th><th>Expires</th><th>Auto-renew</th><th>Devices</th><th>Last login</th><th>Paid so far</th></tr></thead>
     <tbody>${shown.map(u=>`<tr class="adm-row" data-uid="${esc(u.id)}">
-      <td>${esc(u.email||"—")}${u.is_admin?' <span class="soon" style="color:var(--blue);background:var(--blue-soft);border-color:var(--blue-line)">admin</span>':""}</td>
+      <td>${esc(u.email||"—")}${u.is_admin?' <span class="soon" style="color:var(--blue);background:var(--blue-soft);border-color:var(--blue-line)">admin</span>':""}${u.comped?` <span class="pchip o">${u.last_login?"invited":"invited · not signed in"}</span>`:""}</td>
       <td>${adminPlanBadge(u.plan)}</td>
       <td>${u.expires_at?(admExpiringSoonRow(u)?`<b style="color:var(--red)">${esc(fmtDate(u.expires_at))}</b>`:esc(fmtDate(u.expires_at))):"—"}</td>
       <td>${u.plan==="free"?"—":admSubChip(u.sub_status)}</td>

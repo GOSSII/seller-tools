@@ -27,10 +27,15 @@ function priceFor(plan, period) {
   const key = Object.keys(PRICES).find(k => PRICES[k].plan === plan && PRICES[k].period === period);
   return key ? PRICES[key] : null;
 }
-// The captured payment must be exactly the plan's price, in INR.
+function currencyOk(pay) {
+  return !!pay && (!pay.currency || String(pay.currency).toUpperCase() === 'INR');
+}
+// The captured payment must be exactly the plan's price, in INR. Used for
+// subscription charges only; one-time payments are checked against the amount
+// recorded on their own order, so a price change can't strand them.
 function amountOk(price, pay) {
   if (!price || !pay) return false;
-  if (pay.currency && String(pay.currency).toUpperCase() !== 'INR') return false;
+  if (!currencyOk(pay)) return false;
   return Number(pay.amount) === Number(price.amount_paise);
 }
 
@@ -89,18 +94,56 @@ async function maybeSendEmail(price, expiresIso, pay) {
 // record the payment row, and grant/extend the entitlement. `source` marks
 // where the money came from ('razorpay' one-time, 'razorpay_sub' auto-renew).
 async function recordPaidAndEntitle({ paymentId, orderId, userId, price, amountPaise, evt, pay, source }) {
-  // Idempotency: if we already recorded this payment as paid, stop. Both the
-  // payment.captured and subscription.charged events fire for one sub charge —
-  // whichever lands second is dropped here.
-  const dupRes = await rest('GET', '/payments?select=id,status&razorpay_payment_id=eq.'
+  // Idempotency is decided by the thing that matters — the entitlement — not
+  // by the payments flag. Keying off payments.status='paid' meant a grant that
+  // failed after the row was flipped could never be retried: every redelivery
+  // saw "paid" and reported duplicate.
+  const dupRes = await rest('GET', '/entitlements?select=id&payment_id=eq.'
     + encodeURIComponent(paymentId) + '&limit=1');
-  // Fail CLOSED: if we can't tell whether this payment was already handled,
+  // Fail CLOSED: if we can't tell whether this payment was already granted,
   // ask Razorpay to retry rather than risk granting the period twice.
   if (!dupRes.ok) return { retry: true };
   const dupRows = await dupRes.json();
-  if (dupRows && dupRows[0] && dupRows[0].status === 'paid') return { duplicate: true };
+  if (dupRows && dupRows[0]) return { duplicate: true };
 
-  // Mark the pending order row paid (or insert one if it's missing).
+  // Money already refunded must never become access, whichever event order
+  // Razorpay delivers in.
+  if (orderId) {
+    const stRes = await rest('GET', '/payments?select=status&razorpay_order_id=eq.'
+      + encodeURIComponent(orderId) + '&limit=1');
+    if (!stRes.ok) return { retry: true };
+    const st = ((await stRes.json()) || [])[0];
+    if (st && st.status === 'refunded') return { refunded: true };
+  }
+
+  // Entitlement dates: extend the FURTHEST-dated live same-or-lower plan.
+  // Taking the newest-created row instead would compute a renewal from a
+  // short admin top-up and silently delete months of paid time.
+  const entRes = await rest('GET', '/entitlements?select=plan,expires_at&user_id=eq.'
+    + encodeURIComponent(userId) + '&order=expires_at.desc.nullsfirst&limit=100');
+  if (!entRes.ok) return { retry: true };
+  let existing = null;
+  {
+    const rows = await entRes.json();
+    const now = Date.now();
+    const live = (rows || []).filter(r => !r.expires_at || new Date(r.expires_at).getTime() > now);
+    existing = live.find(r => !r.expires_at) || live[0] || null;   // null expiry = perpetual
+  }
+  const dates = computeDates(existing, price.plan, price.days, Date.now());
+
+  // GRANT FIRST, then record the money. entitlements.payment_id is UNIQUE, and
+  // on_conflict names it so PostgREST targets that constraint rather than the
+  // primary key — a concurrent duplicate delivery becomes a no-op instead of a
+  // second paid period. Anything else is a real failure: return retry so
+  // Razorpay redelivers, because access is the part the customer paid for.
+  const ins = await rest('POST', '/entitlements?on_conflict=payment_id', {
+    user_id: userId, plan: price.plan, source: source || 'razorpay',
+    starts_at: dates.starts_at, expires_at: dates.expires_at, payment_id: paymentId
+  }, { Prefer: 'resolution=ignore-duplicates' });
+  if (!ins.ok) return { retry: true };
+
+  // Now mark the pending order row paid (or insert one if it's missing). If
+  // this fails the customer still has access; the retry reconciles it.
   let updated = false;
   if (orderId) {
     const up = await rest('PATCH', '/payments?razorpay_order_id=eq.' + encodeURIComponent(orderId),
@@ -114,33 +157,41 @@ async function recordPaidAndEntitle({ paymentId, orderId, userId, price, amountP
     });
   }
 
-  // Entitlement dates: extend the newest active same-or-lower plan, else now.
-  const entRes = await rest('GET', '/entitlements?select=plan,expires_at&user_id=eq.'
-    + encodeURIComponent(userId) + '&order=created_at.desc&limit=10');
-  let existing = null;
-  if (entRes.ok) {
-    const rows = await entRes.json();
-    const now = Date.now();
-    existing = (rows || []).find(r => !r.expires_at || new Date(r.expires_at).getTime() > now) || null;
-  }
-  const dates = computeDates(existing, price.plan, price.days, Date.now());
-  // entitlements.payment_id is UNIQUE, so a concurrent duplicate delivery
-  // (payment.captured + subscription.charged land together) collides here
-  // instead of granting the period twice; ignore-duplicates makes that a no-op.
-  await rest('POST', '/entitlements', {
-    user_id: userId, plan: price.plan, source: source || 'razorpay',
-    starts_at: dates.starts_at, expires_at: dates.expires_at, payment_id: paymentId
-  }, { Prefer: 'resolution=ignore-duplicates' });
-
   // Confirmation email is best-effort — never fail the webhook on it.
   try { await maybeSendEmail(price, dates.expires_at, pay); } catch (e) { /* ignore */ }
   return { duplicate: false };
 }
 
+// Fallback when our pending payments row is missing (it should never be, but a
+// captured payment must not be stranded by our own bookkeeping). The ORDER's
+// notes and amount were set by create-order.js server-side, so Razorpay's copy
+// of them is as trustworthy as our row. Returns {retry} if Razorpay itself is
+// unreachable, so the event is redelivered rather than silently dropped.
+async function orderFromRazorpay(orderId) {
+  const KEY = process.env.RAZORPAY_KEY_ID, SEC = process.env.RAZORPAY_KEY_SECRET;
+  if (!KEY || !SEC) return { retry: true };
+  let r;
+  try {
+    r = await fetch('https://api.razorpay.com/v1/orders/' + encodeURIComponent(orderId), {
+      headers: { Authorization: 'Basic ' + Buffer.from(KEY + ':' + SEC).toString('base64') }
+    });
+  } catch (e) { return { retry: true }; }
+  if (r.status === 400 || r.status === 404) return { missing: true };  // not an order of ours
+  if (!r.ok) return { retry: true };
+  let o; try { o = await r.json(); } catch (e) { return { retry: true }; }
+  const notes = (o && o.notes) || {};
+  const price = PRICES[notes.plan_key];
+  if (!price || !notes.user_id) return { missing: true };
+  return { user_id: notes.user_id, plan: price.plan, period: price.period, amount_paise: o.amount };
+}
+
 // Money going back to the buyer → the access it bought ends now.
+//
+// Deliberately NOT here: payment.dispute.created (a chargeback that has only
+// been opened, not decided — revoking then would punish the customer for a
+// dispute the seller may win) and refund.failed. Only settled outcomes revoke.
 const REFUND_EVENTS = {
-  'refund.created': 1, 'refund.processed': 1,
-  'payment.dispute.created': 1, 'payment.dispute.lost': 1
+  'refund.created': 1, 'refund.processed': 1, 'payment.dispute.lost': 1
 };
 function refundedPaymentId(evt) {
   const p = evt && evt.payload;
@@ -149,6 +200,25 @@ function refundedPaymentId(evt) {
   if (p.dispute && p.dispute.entity && p.dispute.entity.payment_id) return p.dispute.entity.payment_id;
   if (p.payment && p.payment.entity && p.payment.entity.id) return p.payment.entity.id;
   return null;
+}
+// A partial refund (goodwill ₹100 off a ₹2,499 year) must not delete the year.
+// Only a refund covering the whole captured amount revokes.
+//
+// `paidFallback` is the amount from OUR payments row, used when the event
+// carries the refund but not the original payment entity — without it we
+// could not tell partial from full and would under-revoke, which is a leak.
+// Returns null when neither source knows the amounts (caller decides).
+function isFullRefund(evt, paidFallback) {
+  if (evt && evt.event === 'payment.dispute.lost') return true;   // the whole payment is gone
+  const p = (evt && evt.payload) || {};
+  const pay = p.payment && p.payment.entity;
+  const ref = p.refund && p.refund.entity;
+  const paid = (pay && Number(pay.amount)) || (paidFallback != null ? Number(paidFallback) : null);
+  const back = (pay && pay.amount_refunded != null) ? Number(pay.amount_refunded)
+             : (ref && ref.amount != null ? Number(ref.amount) : null);
+  if (!paid || !isFinite(paid)) return null;                      // amount unknown
+  if (back == null || !isFinite(back)) return null;
+  return back >= paid;
 }
 
 // Subscription lifecycle events → our subscriptions-row status.
@@ -198,7 +268,14 @@ async function handler(req, res) {
 
       const price = PRICES[ourSub.plan_key] || priceFor(ourSub.plan, ourSub.period);
       if (!price) return res.status(200).json({ ok: true, ignored: 'unknown_plan' });
-      if (!amountOk(price, pay)) return res.status(200).json({ ok: true, ignored: 'amount_mismatch' });
+      // No equality check against today's price here, on purpose. The charge
+      // comes from a Razorpay Plan we created, so the amount is not something
+      // a caller can choose; demanding it match the CURRENT price list would
+      // cut off every existing subscriber the day we change a price. A zero or
+      // negative charge is still nonsense and grants nothing.
+      if (!currencyOk(pay) || !(Number(pay.amount) > 0)) {
+        return res.status(200).json({ ok: true, ignored: 'amount_invalid' });
+      }
 
       const r = await recordPaidAndEntitle({
         paymentId: pay.id, orderId: pay.order_id || null, userId: ourSub.user_id, price,
@@ -212,12 +289,38 @@ async function handler(req, res) {
     if (REFUND_EVENTS[evt.event]) {
       const pid = refundedPaymentId(evt);
       if (!pid) return res.status(200).json({ ok: true, ignored: true });
-      const nowIso = new Date().toISOString();
       const enc = encodeURIComponent(pid);
+
+      // What did we actually capture for this payment? Needed to tell a
+      // partial refund from a full one when the event omits the payment entity.
+      let paidFallback = null;
+      const ourPayRes = await rest('GET', '/payments?select=amount_paise&razorpay_payment_id=eq.' + enc + '&limit=1');
+      if (!ourPayRes.ok) return res.status(503).json({ error: 'lookup_failed' });
+      const ourPay = ((await ourPayRes.json()) || [])[0];
+      if (ourPay && ourPay.amount_paise != null) paidFallback = ourPay.amount_paise;
+
+      const full = isFullRefund(evt, paidFallback);
+      // Unknown amounts: revoke. Leaving paid-for-then-refunded access live is
+      // the worse error, and the owner can re-grant from the admin panel.
+      if (full === false) return res.status(200).json({ ok: true, ignored: 'partial_refund' });
+      const nowIso = new Date().toISOString();
       // Expire the entitlement this payment bought (only if still live).
-      await rest('PATCH', '/entitlements?payment_id=eq.' + enc
+      const e1 = await rest('PATCH', '/entitlements?payment_id=eq.' + enc
         + '&or=(expires_at.gt.' + encodeURIComponent(nowIso) + ',expires_at.is.null)', { expires_at: nowIso });
-      await rest('PATCH', '/payments?razorpay_payment_id=eq.' + enc, { status: 'refunded' });
+      const e2 = await rest('PATCH', '/payments?razorpay_payment_id=eq.' + enc, { status: 'refunded' });
+      // The refund can arrive before the capture was recorded, in which case
+      // razorpay_payment_id is still null on our row. Stamp the ORDER too, so
+      // a later capture retry sees 'refunded' and grants nothing.
+      const oid = (evt.payload && evt.payload.payment && evt.payload.payment.entity
+        && evt.payload.payment.entity.order_id) || null;
+      let e3 = { ok: true };
+      if (oid) {
+        e3 = await rest('PATCH', '/payments?razorpay_order_id=eq.' + encodeURIComponent(oid),
+          { razorpay_payment_id: pid, status: 'refunded' });
+      }
+      // Reporting a revocation we did not perform would leave paid-for-then-
+      // refunded access live with nothing to notice it by; 503 gets a retry.
+      if (!e1.ok || !e2.ok || !e3.ok) return res.status(503).json({ error: 'revoke_failed' });
       return res.status(200).json({ ok: true, revoked: true });
     }
 
@@ -236,14 +339,23 @@ async function handler(req, res) {
     const ordRes = await rest('GET', '/payments?select=user_id,plan,period,amount_paise&razorpay_order_id=eq.'
       + encodeURIComponent(orderId) + '&limit=1');
     if (!ordRes.ok) return res.status(503).json({ error: 'lookup_failed' });
-    const ord = ((await ordRes.json()) || [])[0];
-    if (!ord || !ord.user_id) return res.status(200).json({ ok: true, ignored: 'unknown_order' });
+    let ord = ((await ordRes.json()) || [])[0];
+
+    // No row of ours? Ask Razorpay for the order itself before giving up —
+    // its notes and amount are the ones create-order.js set server-side, so a
+    // lost pending row can't turn a real payment into no access.
+    if (!ord || !ord.user_id) {
+      const fb = await orderFromRazorpay(orderId);
+      if (fb.retry) return res.status(503).json({ error: 'lookup_failed' });
+      if (fb.missing) return res.status(200).json({ ok: true, ignored: 'unknown_order' });
+      ord = fb;
+    }
 
     const price = priceFor(ord.plan, ord.period);
     if (!price) return res.status(200).json({ ok: true, ignored: 'unknown_plan' });
-    // Must equal both the plan's price and what we recorded when the order
-    // was created — a short payment grants nothing.
-    if (!amountOk(price, pay) || Number(pay.amount) !== Number(ord.amount_paise)) {
+    // Authority is the amount WE asked for on this order, not today's price
+    // list — otherwise a price change strands every in-flight checkout.
+    if (Number(pay.amount) !== Number(ord.amount_paise) || !currencyOk(pay)) {
       return res.status(200).json({ ok: true, ignored: 'amount_mismatch' });
     }
 
@@ -252,6 +364,7 @@ async function handler(req, res) {
       source: pay.invoice_id ? 'razorpay_sub' : 'razorpay'
     });
     if (r.retry) return res.status(503).json({ error: 'retry' });
+    if (r.refunded) return res.status(200).json({ ok: true, ignored: 'already_refunded' });
     return res.status(200).json({ ok: true, duplicate: !!r.duplicate });
   } catch (e) {
     return res.status(500).json({ error: 'server_error' });

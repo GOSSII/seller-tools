@@ -46,13 +46,19 @@ module.exports = async (req, res) => {
     }
     const order = await orderRes.json();
 
-    // Record a pending payment row (best-effort; don't block checkout on it).
+    // Record the pending payment row. This is NOT best-effort any more: the
+    // webhook resolves the plan, amount and buyer from this row, so a checkout
+    // that proceeds without it can take money we then cannot attribute.
+    // Failing here costs a retry; failing silently costs a paid customer.
+    let recorded = false;
     try {
-      await rest('POST', '/payments', {
+      const pr = await rest('POST', '/payments', {
         user_id: user.id, razorpay_order_id: order.id,
         amount_paise: price.amount_paise, plan: price.plan, period: price.period, status: 'pending'
       });
-    } catch (e) { /* ignore */ }
+      recorded = pr.ok;
+    } catch (e) { recorded = false; }
+    if (!recorded) return res.status(503).json({ error: 'try_again' });
 
     return res.status(200).json({
       order_id: order.id, key_id: KEY, amount: price.amount_paise, currency: 'INR',
