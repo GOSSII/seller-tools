@@ -110,8 +110,18 @@ Visually reviewed, with an independent reviewer scoring each round:
 | Traffic Doctor | 82 | **94** |
 | Landing page | 82 | **95** |
 
-**All 12 free calculators reviewed.** Remaining open: PRIV-1, and the FBA storage
-assumption in BUG-031. Three tools stay **BLOCKED — SOURCE DATA UNAVAILABLE**.
+**All 12 free calculators reviewed and closed at 97/100** by the independent reviewer
+("the free-calculator audit is complete… Approved / Ready to move on").
+
+**PRIV-1 is fixed** — and was raised to P1 on inspection: the GST Invoice Generator stores
+a business name, address and GSTIN with *no login*, so clearing on logout alone would have
+missed the users most exposed. It now clears on logout **and** offers an explicit control
+inside the tool itself.
+
+Three tools remain **BLOCKED — SOURCE DATA UNAVAILABLE** and are not claimed as tested:
+Ads Optimizer and Ad Profitability (no Sponsored Products report obtainable), and the
+FBA-only Returns/Storage/Stranded reports (every authorised account is MFN, so Amazon
+returns "No Data Available").
 
 **Ad Profitability is PARTIAL, not passed.** The Sponsored Products Advertised Product
 report could not be obtained, so the populated per-SKU path is

@@ -1000,6 +1000,8 @@ const CALCS = [
     {k:"acos",label:"Expected ACOS (%)",t:"num",dec:1,d:10},
     {k:"retcost",label:"Expected return cost per sold unit (₹)",t:"num",dec:2,d:0,full:1,
       hint:"Optional. Your average expected loss from returns per unit sold — return logistics, unrecovered product value or non-refundable charges you want to account for. A return rate alone cannot tell this calculator the financial loss."},
+    {k:"stmon",label:"Months held in FBA storage",t:"num",dec:1,d:1,full:1,
+      hint:"Only applies in FBA mode. Storage is billed monthly against the account, not against this order — this apportions it per unit so you can see the holding cost. Amazon's rate also rises in the Oct–Dec peak; the Storage Fee Calculator models that."},
     {k:"gstreg",label:"GST Registered (claim ITC)",t:"seg",o:[{v:"yes",l:"Yes"},{v:"no",l:"No"}],d:"yes",full:1},
   ],
   compute(v){
@@ -1020,7 +1022,8 @@ const CALCS = [
     // ACOS % and Returns % apply to what's left after Amazon's
     // settlement and product+packaging cost (owner's convention).
     const landed=v.cost+v.pack;
-    const st=(v.ful==="fba"&&sp>0)?unitStorage(v.L,v.W,v.H):0;   // one month at Rs 45/cu ft
+    const stMonths=Math.max(0,Number(v.stmon)===0?0:(Number(v.stmon)||1));
+    const st=(v.ful==="fba"&&sp>0)?unitStorage(v.L,v.W,v.H)*stMonths:0;
     /* ACOS is ad spend divided by ad SALES. Charging it against whatever
        contribution happened to be left understated advertising by 58% on the
        default inputs -- a correct-looking percentage on the wrong base. */
@@ -1046,7 +1049,7 @@ const CALCS = [
       ["cl","Closing fee","#f59e0b",closing],
       ["sh","Shipping","#eab308",shipping],
       ["fba","FBA pick & pack","#0ea5e9",pp],
-      ["st","FBA storage (1 month)","#38bdf8",st],
+      ["st",`FBA storage (${stMonths} month${stMonths===1?"":"s"})`,"#38bdf8",st],
       ["gst","GST on Amazon fees","#8b5cf6",gst],
       ["mkt","Advertising (ACOS of price)","#6366f1",mkt],
       ["rt","Expected return cost","#a855f7",ret],
@@ -1071,7 +1074,7 @@ const CALCS = [
         {l:`Amazon Fees (${sp>0?(fees/sp*100).toFixed(2):"0.00"}% of SP)`,v:"-"+inr(fees),neg:1,mut:1},
         {l:"Settlement from Amazon",v:inr(settle),hl:1},
         {l:"Product + Packaging",v:"-"+inr0(landed),neg:1,mut:1},
-        ...(st>0?[{l:"FBA storage while it sits (1 month)",v:"-"+inr(st),neg:1,mut:1}]:[]),
+        ...(st>0?[{l:`FBA storage while it sits (${stMonths} month${stMonths===1?"":"s"} at Amazon's standard rate)`,v:"-"+inr(st),neg:1,mut:1}]:[]),
         {l:`Advertising at ${v.acos}% ACOS of the selling price`,v:"-"+inr(mkt),neg:1,mut:1},
         ...(ret>0?[{l:"Expected return cost you entered",v:"-"+inr(ret),neg:1,mut:1}]:[]),
         {l:`Estimated ${loss?"loss":"profit"} per unit`,v:inr(net),fin:1,loss:loss},
