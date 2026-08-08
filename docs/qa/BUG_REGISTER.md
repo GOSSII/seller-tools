@@ -1,6 +1,10 @@
 # Bug Register — Seller Tools India audit
 
 **Audit date:** 2026-08-08 · **Auditor:** Claude Code · **Independent check:** ChatGPT ("Claude Code Testing Audit")
+**Cross-tool rule (added after BUG-014…018):** a fix to a shared model is not complete until every
+tool consuming that model is re-checked. Five of the six Ad Profitability defects were defects this
+audit had already fixed elsewhere and never propagated.
+
 **Status:** FIXED = fix landed in `web/index.html`, regression test added, **and** retested against the
 identical SHA-256 file the defect was found on. OPEN = needs a product decision.
 
@@ -23,8 +27,14 @@ independently recomputed by `qa/reference-calculations/*.py`.
 | BUG-009 | P1 | ACOS Calculator | ACOS with zero ad sales displayed as **0.00% in green** | undefined — "No ad sales", warning state | `ACOS 0.00%` green after spending ₹5,000 for nothing | **FIXED** |
 | BUG-010 | P2 | Payout Forecaster (all pages using `.cols`) | Page scrolled sideways at 390 px — grid track grew to 522 px off `<input type="date">`'s intrinsic minimum | no horizontal scroll | `scrollWidth 522` vs `390` viewport | **FIXED** |
 | BUG-011 | P2 | Profit Calculator | Returns modelled as a flat haircut on contribution, so 100% returns computes to exactly ₹0.00 profit rather than a loss | a loss (refund commission + return shipping + product) | `Net Profit ₹0.00` at 100% returns | **OPEN** |
-| BUG-012 | P2 | Reconciliation & SAFE-T | "Issues flagged 4 / Still to action 4" counts claims whose 60-day SAFE-T window has already closed (each row says so) | separate actionable from expired | 4 expired claims presented as 4 to action | **OPEN** |
+| BUG-012 | **P1** | Reconciliation & SAFE-T | "Issues flagged 4 / Still to action 4" counts claims whose 60-day SAFE-T window has already closed (each row says so) | separate actionable from expired | 4 expired claims presented as 4 red issues, 4 actions and 4 Claim buttons | **FIXED** (raised to P1 by ChatGPT: the screen sends sellers to Amazon) |
 | BUG-013 | P1 | Settlement classifier (all money tools) | The classifier's fallback was `negative → fee, positive → credit` — the same inference that turned a debt adjustment into a fee. A future/renamed Amazon row type would silently repeat the bug | an `unknown` class: counted in the payout reconciliation, excluded from every fee and profit ratio, and shown to the seller | any unrecognised negative row became a fee | **FIXED** (raised by ChatGPT on review of the fix) |
+| BUG-014 | **P1** | Ad Profitability | `ADVERTISING ₹0` rendered directly above the tool's own banner saying the settlement contains ₹4,492 of advertising. ₹0 *attributed* is not ₹0 *spent* | "Sponsored Ads billed −₹4,491.98 · 44.3% of sales" and, separately, "SKU-attributed ad spend: Not available" | `ADVERTISING ₹0`, and `Left after ads` = payout − 0, restating the payout | **FIXED** |
+| BUG-015 | **P1** | Ad Profitability | Every SKU verdicted **"Profitable"** in green with no ad report loaded and product cost blank — BUG-003's and the SKU report's COGS defect, never propagated to this tool | "Profit cannot be determined — needs ad report / needs product cost"; missing COGS is `null`, never `0` | 6 of 6 SKUs green "Profitable" | **FIXED** |
+| BUG-016 | P2 | Ad Profitability | `SKUs ads turn to a loss: 0` in **green** with no ad data — the same shape as BUG-009 | not computable without attribution | reassuring green zero | **FIXED** |
+| BUG-017 | P2 | Ad Profitability | `(no SKU)` ranked first among products at −₹10,793 and dominated "worst after ads" — BUG-003 in a second tool | own panel, excluded from rankings and verdicts | top row of the SKU table | **FIXED** |
+| BUG-018 | P2 | Ad Profitability | "Worst after ads", "Ad spend" and "ACOS" sorts active with no ad report, silently sorting by something else | disabled with a reason | active and misleading | **FIXED** |
+| BUG-019 | P2 | Reconciliation | "How to claim" instructed the seller to "paste the text from the row's 📋 Claim button" under a table whose Claim buttons had been replaced by "Window likely closed" chips | replace the filing path when every row is out of window | instructions pointing at a control that no longer existed | **FIXED** |
 | PRIV-1 | P2 | Account / all tools | Logout clears the auth token but **not** tool data — `sku_costs` (product costs), `gstinv_seller` (business name, address, GSTIN), `fnsku_rows`, `rec_done`, `fb_weights` survive in `localStorage` on a shared machine | clear tool data on logout, or offer "clear my saved data" | data persists | **OPEN** |
 
 ---

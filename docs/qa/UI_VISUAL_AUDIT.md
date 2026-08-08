@@ -18,12 +18,22 @@ transaction table shows real order ids and SKU names and this repository is publ
 | 21 · Settlement Analyzer | ✅ 1440×900 | ✅ 390×844 | ✅ 6 | ✅ ×2 rounds | 16/20 · 92 | **18.5/20 · 96** | 13 | 13 |
 | 23 · SKU Profitability | ✅ | ✅ | shares 21's | ✅ ×2 rounds | 14.5/20 · 86 | **17.5/20 · 94** | 8 | 8 |
 | 24 · Multi-Month Trends | ✅ | ✅ | ✅ duplicate-file | ✅ ×2 rounds | 15.5/20 · 91 | **18/20 · 95** | 9 | 9 |
-| 25 · Reconciliation & SAFE-T | — | — | — | pending | — | — | — | — |
-| 28 · Ad Profitability | — | — | — | pending | — | — | — | — |
+| 25 · Reconciliation & SAFE-T | ✅ | ✅ | shares 21's | ✅ ×2 rounds | 13.5/20 · 84 | **17/20 · 93** | 10 | 10 |
+| 28 · Ad Profitability | ✅ | ✅ | ⚠ **partial** | ✅ ×1 round | 14/20 · 79 | *awaiting re-score* | 17 | 15 |
 | 31 · RTO Radar | — | — | — | pending | — | — | — | — |
 | 33 · Traffic Doctor | — | — | — | pending | — | — | — | — |
 | Landing page | — | — | — | pending | — | — | — | — |
 | 12 free calculators | — | — | — | pending | — | — | — | — |
+
+### Tool 28 is reviewed PARTIAL, not passed
+
+The Sponsored Products **Advertised Product** report could not be obtained for any
+authorised account, so only two of the tool's three states were reviewed: the initial
+screen and the **missing-ad-report** state. The populated path — real per-SKU ad spend,
+ACOS against ad-attributed sales, the ads-turn-this-SKU-negative verdict — is
+**BLOCKED — SOURCE DATA UNAVAILABLE** and is not claimed as tested. Two accepted
+recommendations are deferred for the same reason: mobile card layout for the wide table,
+and the settlement-billed-vs-ad-report reconciliation check.
 
 ## Error and edge states captured
 
@@ -65,7 +75,31 @@ gross sales cost **2.15×** every Amazon fee combined, and it was one KPI among 
 chart among four. It is now a callout under the KPI row, KPI cards lead with rupees rather
 than percentages, and the charts run product sales → ads % → fees % → refunds %.
 
-**6 · Unknown must mean unknown everywhere.** The first fix left an unrecognised row badged
+**6 · A screen that contradicted itself in adjacent elements.** Ad Profitability showed
+**"ADVERTISING ₹0"** immediately above a banner reading *"this settlement does show
+₹4,492 of advertising"*. Both were rendered from the same computation. ₹0 attributed is
+not ₹0 spent, and the real figure was **44.3% of gross sales** — the largest single cost
+on the account. The card now reports the spend the settlement proves (**Sponsored Ads
+billed −₹4,492**) and reports the attribution gap as a gap (**SKU-attributed ad spend:
+Not available**). "Left after ads" is not computed at all until attribution exists,
+because payout − 0 merely restated the payout while ignoring money the tool already knew
+about.
+
+**7 · The same defect class, unfixed in a second tool.** Three defects fixed in the SKU
+Profitability Report were still live in Ad Profitability: `(no SKU)` ranked first among
+products, "Profitable" claimed with no COGS, and a reassuring green zero. A per-tool
+review found them; a per-defect review would not have. Every fix in this audit is now
+checked against **all** tools that consume the same model, and missing COGS is `null`
+rather than `0` in the compute layer so it cannot flow through a profit formula as a
+real cost of zero.
+
+**8 · Instructions that outlived their controls.** Reconciliation's "How to claim" block
+told the seller to *"paste the text from the row's 📋 Claim button"* — under a table whose
+Claim buttons had just been replaced by "Window likely closed" chips. Fixing a control
+without re-reading the prose that describes it leaves a screen pointing at something that
+no longer exists.
+
+**9 · Unknown must mean unknown everywhere.** The first fix left an unrecognised row badged
 "Fee" in the breakdown table while the banner above called it unrecognised. A row's category
 now comes from its *classification*, not Amazon's transaction-type, so it reads
 "⚠ Not recognised" in the table, the chips and the filters — and can never be badged a fee.
@@ -86,6 +120,14 @@ now comes from its *classification*, not Amazon's transaction-type, so it reads
 | `other-transaction` / `Debt Adjustment` | Other Amazon charges / Account balance transfer *(raw token kept in the tooltip)* |
 | `TransactionTotalAmount` | Sponsored Ads spend (billed as a service fee) |
 | "…the net that actually reached your bank — per SKU" | "…each SKU's settlement contribution — before product cost" |
+| ₹ at stake *(every reconciliation check)* | Refund value · Excess charged · Overcharged · Duplicated fee · Fee not credited · Invoice value · Unit value · Net loss |
+| SAFE-T-eligible refunds | Potential SAFE-T cases (seller-fulfilled refunds) |
+| Claim *(on a row past the filing window)* | Window likely closed *(a chip, not a button)* |
+| "a checklist of money worth chasing" | "check for fee discrepancies… confirmed discrepancies are kept separate from cases that need more evidence" |
+| Advertising ₹0 | Sponsored Ads billed −₹4,492 · SKU-attributed ad spend: Not available |
+| Left after ads *(= payout − 0)* | Net settlement cash flow · SKU ad profitability: Cannot calculate yet |
+| Profitable *(no ad data, no COGS)* | Profit cannot be determined — needs ad report / needs product cost |
+| Payout after fees | Settlement contribution |
 
 ## Method note
 

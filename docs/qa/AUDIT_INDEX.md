@@ -8,7 +8,7 @@ Everything produced by the full production audit, and how to re-run it.
 |---|---|
 | [SELLER_TOOLS_FULL_AUDIT.md](SELLER_TOOLS_FULL_AUDIT.md) | **Start here.** Executive summary, tool scoreboard, three-way validation tables, per-tool reports, performance, responsive, privacy |
 | [TOOL_MANIFEST.md](TOOL_MANIFEST.md) | All **33** tools across 43 routes, with the 18 required fields each, plus the Website Tool → Amazon Report → columns → calculation map |
-| [BUG_REGISTER.md](BUG_REGISTER.md) | 12 defects + 1 privacy finding, with expected vs actual, root cause, fix, regression test and status |
+| [BUG_REGISTER.md](BUG_REGISTER.md) | 19 defects + 1 privacy finding, with expected vs actual, root cause, fix, regression test and status |
 | [UX_REGISTER.md](UX_REGISTER.md) | 22 UX findings with seller impact and whether implemented; beginner-comprehension scores; information-architecture recommendation |
 | [UI_VISUAL_AUDIT.md](UI_VISUAL_AUDIT.md) | The screenshot round: per-tool desktop/mobile/error coverage, before/after UX scores, what the rendered UI exposed that the numbers could not, and every copy change made |
 
@@ -78,10 +78,23 @@ repository is public.
 
 ## Status at hand-off
 
-**0 P0 · 0 P1 outstanding.** Three P2 items remain open (BUG-011, BUG-012, PRIV-1).
-**All fixes are merged and deployed** — PR #110 plus five follow-up commits are live.
+**0 P0 · 0 P1 outstanding.** Two P2 items remain open (BUG-011, PRIV-1).
+**All fixes are merged and deployed** — PR #110 plus nine follow-up commits are live.
 
-Visually reviewed: Settlement Analyzer **96/100**, Multi-Month Trends **95/100**,
-SKU Profitability **94/100**. Remaining tools await visual review in this order:
-Reconciliation → Ad Profitability → SAFE-T → a true-profit tool → RTO Radar →
-Traffic Doctor → the landing page → the shared-layout calculators in batches.
+Visually reviewed, with an independent reviewer scoring each round:
+
+| Tool | Before | After |
+|---|---:|---:|
+| Settlement Analyzer | 92 | **96** |
+| Multi-Month Trends | 91 | **95** |
+| SKU Profitability | 86 | **94** |
+| Reconciliation & SAFE-T | 84 | **93** |
+| Ad Profitability *(missing-ad-report state only)* | 79 | *re-score pending* |
+
+Still to review: RTO Radar → Traffic Doctor → the landing page → the shared-layout
+calculators in batches.
+
+**Ad Profitability is PARTIAL, not passed.** The Sponsored Products Advertised Product
+report could not be obtained, so the populated per-SKU path is
+**BLOCKED — SOURCE DATA UNAVAILABLE**. Two accepted recommendations are deferred with it:
+mobile card layout, and the settlement-billed-vs-ad-report reconciliation check.
