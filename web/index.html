@@ -1410,7 +1410,8 @@ const CALCS = [
     {k:"ppc",label:"Daily PPC (₹)",t:"num",d:1000},
     {k:"coupon",label:"Coupon Budget (₹)",t:"num",d:15000},
     {k:"creative",label:"Creative (₹)",t:"num",d:8000},
-    {k:"samples",label:"Samples & Reviews (₹)",t:"num",d:5000,full:1},
+    {k:"samples",label:"Product samples (₹)",t:"num",d:5000,full:1,
+      hint:"Samples and launch seeding only. Do not offer free products, discounts, payments or other benefits in exchange for an Amazon review — Amazon prohibits it and it puts the account at risk."},
   ],
   compute(v){
     const ppcTotal=v.days*v.ppc;
@@ -1418,12 +1419,12 @@ const CALCS = [
       {key:"ppc",nm:"PPC / ads",color:"#6366f1",val:ppcTotal},
       {key:"cp",nm:"Coupons & promos",color:"#f59e0b",val:v.coupon},
       {key:"cr",nm:"Creative & photography",color:"#0ea5e9",val:v.creative},
-      {key:"sm",nm:"Samples & reviews",color:"#22c55e",val:v.samples},
+      {key:"sm",nm:"Product samples",color:"#22c55e",val:v.samples},
     ];
     const total=items.reduce((s,x)=>s+x.val,0);
     return {
       stats:[
-        {k:"Total Launch Budget",v:inr(total),t:"blue"},
+        {k:"Planned launch spend",v:inr(total),t:"blue"},
         {k:"Avg Spend / Day",v:inr(v.days>0?total/v.days:0)},
         {k:"PPC Total",v:inr(ppcTotal)},
         {k:"Launch Window",v:num(v.days)+" days"},
@@ -1431,8 +1432,8 @@ const CALCS = [
       banner:{t:"info",
         x:`Ads are ${total>0?(ppcTotal/total*100).toFixed(0):0}% of this launch budget, which totals ${inr(total)} over ${num(v.days)} days — about ${inr(v.days>0?total/v.days:0)} a day. This is a sum of the figures you entered, not a forecast of what the launch will return.`},
       rows:[
-        ...items.map(i=>({l:i.nm,v:inr(i.val)+"   "+(total>0?(i.val/total*100).toFixed(0):0)+"%",mut:1})),
-        {l:"Total launch investment",v:inr(total),fin:1},
+        ...items.map(i=>({l:i.nm,v:inr(i.val)+"   "+(total>0?(i.val/total*100).toFixed(1):"0.0")+"%",mut:1})),
+        {l:"Planned launch spend",v:inr(total),fin:1},
       ],
       split:{title:"Budget allocation",total:total||1,items},
     };
@@ -1497,7 +1498,7 @@ const CALCS = [
 {
   id:"price-bands", icon:"🪜", badge:"New",
   name:"Amazon Price Band Optimizer",
-  desc:"Amazon India fees jump at fixed price points — and since 10 June 2026 the referral fee is 0% below ₹1,000 in most categories, so crossing that line is expensive. Find the price near yours that nets the most per unit.",
+  desc:"Amazon India fees can change sharply at specific selling-price bands. Many categories currently have lower or zero referral fees up to ₹1,000, while the exact threshold and rate depend on category. Compare nearby prices to see which gives the highest estimated contribution per unit.",
   fields:[
     {k:"sp",label:"Planned Price (₹)",t:"num",d:999},
     {k:"cost",label:"Product Cost (₹)",t:"num",d:400},
@@ -1546,17 +1547,22 @@ const CALCS = [
         rows.push({l:`₹${e+1} — just over (band jump costs ${inr(Math.abs(d))})`,v:inr(above),neg:d>0,mut:1});
       }
     }
-    if(best!==sp) rows.push({l:`Best price in range — ₹${best.toLocaleString("en-IN")}`,v:inr(bestNet),fin:1,loss:bestNet<0});
+    const allLoss=bestNet<0;
+    if(best!==sp) rows.push({l:`${allLoss?"Least-loss":"Best"} price in range — ₹${best.toLocaleString("en-IN")}`,v:inr(bestNet),fin:1,loss:allLoss});
     return {
       stats:[
-        {k:"Best Price (≤ planned)",v:"₹"+best.toLocaleString("en-IN"),t:"blue"},
-        {k:"Net at Best",v:inr(bestNet),t:bestNet<0?"red":"green"},
-        {k:"Net at Planned",v:inr(plannedNet)},
-        {k:"Uplift vs Planned",v:inr(uplift)},
+        {k:allLoss?"Least-loss price in range (≤ planned)":"Best price (≤ planned)",v:"₹"+best.toLocaleString("en-IN"),t:"blue"},
+        {k:allLoss?"Loss at that price":"Net at best",v:inr(bestNet),t:bestNet<0?"red":"green"},
+        {k:"Net at planned price",v:inr(plannedNet),t:plannedNet<0?"red":""},
+        {k:allLoss?"Loss reduced by":"Uplift vs planned",v:inr(uplift)},
       ],
       banner: uplift>1
-        ? {t:"warn",x:`Dropping to ₹${best.toLocaleString("en-IN")} would earn ${inr(uplift)} MORE per unit than ₹${sp.toLocaleString("en-IN")} — your planned price sits just above a fee band. ${bandNote(v.cat)} Crossing one can cost more than the extra price collects.`}
-        : {t:"good",x:`Your planned price is efficient — no lower price beats it. The rows below show what each nearby fee-band jump would cost or save.`},
+        ? {t:"warn",x:allLoss
+            ? `Dropping to ₹${best.toLocaleString("en-IN")} would reduce the estimated loss by ${inr(uplift)} per unit. Both tested prices remain loss-making at these inputs, so this identifies the least-bad price rather than a profitable one. ${bandNote(v.cat)}`
+            : `Dropping to ₹${best.toLocaleString("en-IN")} would give ${inr(uplift)} MORE contribution per unit than ₹${sp.toLocaleString("en-IN")} — your planned price sits just above a fee band. ${bandNote(v.cat)} Crossing one can cost more than the extra price collects.`}
+        : {t:allLoss?"warn":"good",x:allLoss
+            ? `Every price tested at or below ₹${sp.toLocaleString("en-IN")} loses money at these inputs — ₹${sp.toLocaleString("en-IN")} is simply the least-bad of them. Product cost, fees or ad spend would have to change before any price in this range makes money.`
+            : `Your planned price gives the highest estimated contribution among the tested prices at or below it. Only prices at or below your planned price are searched — whether the market bears a higher one is your call, not this tool's. The rows below show what each nearby fee-band jump would cost or save.`},
       rows,
       note:"Closing fee steps at ₹300 / ₹500 / ₹1,000; referral steps come from your category's own schedule. Same fee maths as the profit calculator, on Amazon's 10 June 2026 rate card.",
     };
@@ -1638,7 +1644,7 @@ const CALCS = [
 {
   id:"restock-planner", icon:"📦", badge:"New",
   name:"Amazon Restock Planner",
-  desc:"When to reorder and how much, so you never stock out — from your sales rate, lead time and safety buffer.",
+  desc:"Estimate when to reorder and how much, from your current stock, sales rate, supplier lead time and safety buffer.",
   fields:[
     {k:"stock",label:"Current Stock (units)",t:"num",d:90},
     {k:"daily",label:"Avg Daily Sales (units)",t:"num",dec:1,d:3,
@@ -1652,8 +1658,8 @@ const CALCS = [
     const fmt=d=>d.toLocaleString("en-IN",{day:"numeric",month:"short",year:"numeric"});
     const addDays=n=>{const d=new Date();d.setDate(d.getDate()+Math.floor(n));return d;};
     if(!daily){
-      return {stats:[{k:"Days of Cover",v:"∞"},{k:"Stockout Date",v:"—"},{k:"Order By",v:"—"},{k:"Suggested Qty",v:"0"}],
-        banner:{t:"info",x:"Enter your average daily sales to plan the reorder. You can read it off the SKU Profitability Report: units sold ÷ days in the settlement period."},rows:[]};
+      return {stats:[{k:"Days of cover",v:"Not measurable"},{k:"Stockout date",v:"—"},{k:"Order by",v:"—"},{k:"Suggested qty",v:"—"}],
+        banner:{t:"info",x:"No recent sales rate entered, so the depletion rate cannot be established — that is not the same as infinite cover. Enter your average daily sales to plan the reorder; you can read it off the SKU Profitability Report as units sold ÷ days in the settlement period."},rows:[]};
     }
     const coverDays=v.stock/daily;
     const stockout=addDays(coverDays);
@@ -1664,9 +1670,9 @@ const CALCS = [
     const late=orderByDays<0, soon=!late&&orderByDays<=7;
     return {
       stats:[
-        {k:"Days of Cover",v:Math.floor(coverDays)+" days",t:late?"red":(soon?"blue":"green")},
-        {k:"Stockout Date",v:fmt(stockout)},
-        {k:"Order By",v:late?"OVERDUE":fmt(orderBy),t:late?"red":(soon?"blue":undefined)},
+        {k:"Days of cover",v:Math.floor(coverDays)+" days",t:late?"red":(soon?"blue":"green")},
+        {k:"Projected stockout",v:fmt(stockout)},
+        {k:"Order by",v:late?"OVERDUE":fmt(orderBy),t:late?"red":(soon?"blue":undefined)},
         {k:"Reorder at",v:reorderPoint.toLocaleString("en-IN")+" units left",t:"blue"},
         {k:"Suggested order qty",v:qty.toLocaleString("en-IN")+" units"},
       ],

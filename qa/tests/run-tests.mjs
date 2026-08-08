@@ -203,7 +203,9 @@ console.log('\n== calculator edge cases ==');
   eq('BUG-009 ACOS with no ad sales is not coloured green', c.acosZeroTone, 'red');
   eq('BUG-009 a warning banner explains it', c.acosZeroBanner, 'warn');
   eq('ACOS still computes normally', c.acosOkText, '25.00%');
-  eq('restock: zero daily sales does not divide by zero', c.restockZeroDaily, '∞');
+  /* Was '∞'. Zero recent sales does not prove infinite cover — it means the
+     depletion rate cannot be established, so the tool must say unknown. */
+  eq('restock: zero daily sales reports unknown, not infinite cover', c.restockZeroDaily, 'Not measurable');
   eq('target price: unreachable target says so', c.targetUnreachable, '—');
   eq('storage: zero sales gives no months-of-cover', c.storageZeroSales, '—');
 }
