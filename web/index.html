@@ -5099,7 +5099,7 @@ function skuReportBody(){
   app.innerHTML=`
     <div class="wrap page">
       <h2>SKU Profitability Report</h2>
-      <p class="lede">Drop a settlement report and see your business per product: units sold, gross sales, what Amazon took, what refunds cost, and the net that actually reached your bank — per SKU and per unit.</p>
+      <p class="lede">Drop a settlement report and see your business per product: each SKU's sales, refunds, the Amazon fees attributable to it, and its settlement contribution — before product cost.</p>
       ${helpHtml("sku-report")}
       <label class="sa-drop" id="sku-drop">
         <div class="ico">📊</div>
@@ -5212,14 +5212,25 @@ function skuRenderResults(){
      a seller who sees only a lump sum cannot act on it. */
   if(acct&&Math.abs(acct.net)>=0.005){
     const b=acct.b||{};
-    const parts=[["ads","Advertising (Sponsored Ads)"],["balance","Your own balance moved between statements — not a fee"],
+    /* "Balance" is two different mechanisms: a balance carried forward, and a
+       transfer paired with the other Account Type. Shown as one line the
+       seller cannot tell which of their money is which. */
+    let carried=0,xfer=0,sawXfer=false;
+    for(const rec of r.records) for(const l of rec.amounts){
+      if(saLineKind(l,rec.transactionType)!=="balance") continue;
+      if(/^debt adjustment/i.test((l.amountDescription||"").trim())){ xfer+=l.amount; sawXfer=true; }
+      else carried+=l.amount;
+    }
+    const parts=[["ads","Advertising (Sponsored Ads)"],
+      ["_carried","Previous balance payable to Amazon",carried],
+      ["_xfer","Transfer between your Amazon payment accounts",xfer],
       ["fulfil","Fulfilment & shipping charged to the account"],["otherFees","Other account-level fees"],
       ["credits","Credits & reimbursements"],["gstFees","GST charged on those fees"]]
-      .map(([k,nm])=>[nm,b[k]||0]).filter(x=>Math.abs(x[1])>=0.005);
+      .map(x=>[x[1],x.length>2?x[2]:(b[x[0]]||0)]).filter(x=>Math.abs(x[1])>=0.005);
     h+=`<div class="panel"><h4>Costs and adjustments not tied to a product <span class="sa-sub">— real money, but Amazon never attaches these to a SKU</span></h4>
       <div class="rows">${parts.map(([nm,v])=>`<div class="r mut"><span class="rl">${esc(nm)}</span><span class="rv ${v<0?"neg":""}">${v<0?"−":"+"}${inr(Math.abs(v))}</span></div>`).join("")}
       <div class="r fin"><span class="rl">Total not attributable to any SKU</span><span class="rv ${acct.net<0?"neg":""}">${inr(acct.net)}</span></div></div>
-      <div class="banner info" style="margin-top:10px">These are <b>not</b> a product's problem and are excluded from every per-SKU figure above. ${b.ads?`The advertising here is per-account; for spend broken down by SKU use the <a href="#/ad-profit">Ad Profitability</a> report with your Sponsored Products advertised-product export. `:""}${b.balance?`The balance movement is Amazon carrying your own money forward or squaring your two account series — load the same period's other Account Type and it cancels out. `:""}</div></div>`;
+      <div class="banner info" style="margin-top:10px">These are <b>not</b> a product's problem and are excluded from every per-SKU figure above. ${b.ads?`The advertising here is per-account; for spend broken down by SKU use the <a href="#/ad-profit">Ad Profitability</a> report with your Sponsored Products advertised-product export. `:""}${sawXfer?`The transfer is one movement shown from two sides — load the same week's other Account Type and it nets to ₹0. `:""}${carried?`The carried balance is what you already owed Amazon at the start of this statement; it is not a charge from this period's sales. `:""}</div></div>`;
   }
 
   if(skuShowUpgrade && !skuIsPro)
