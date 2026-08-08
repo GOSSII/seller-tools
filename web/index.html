@@ -1676,7 +1676,7 @@ const HELP={
   "gst-report":{input:`Same file as the Settlement Analyzer: <b>Payments → All Statements → Download Flat File V2</b>.`,
     steps:["Drop the settlement file.","Read TCS (match against GSTR-2A), TDS under section 194-O, and the GST on Amazon fees claimable as input tax credit.","Hand the numbers to your accountant at filing time."]},
   "sku-report":{input:`Same file: <b>Payments → All Statements → Download Flat File V2</b>.`,
-    steps:["Drop the settlement file.","Sort by Net to see which products actually make money after fees, taxes and refunds.","Sort by Refund % to spot problem products. Units ÷ days gives the daily sales rate for the Restock Planner."]},
+    steps:["Drop the settlement file.","Sort by Net to rank SKUs by settlement contribution after fees, taxes and refunds — add a product cost to turn it into profit.","Sort by Refund % to spot problem products. Units ÷ days gives the daily sales rate for the Restock Planner."]},
   "ad-profit":{input:`Two files. <b>Payments → All Statements → Flat File V2</b> (or a Monthly Unified Transaction report) for what each SKU actually earned — and, from the <b>Advertising console → Sponsored Ads → Reports</b>, a <b>Sponsored Products “Advertised product”</b> report for the same period, which is the only place ad spend is broken down per SKU.`,
     steps:["Drop the settlement (or unified transaction) file, and the advertised-product report for the same dates.","Fill in product costs for your main SKUs — without them the table shows payout, not profit.","Read the “ads turn profit into loss” list first: those SKUs earn money until the advertising is counted.","Compare each SKU's ACOS against its break-even ACOS — anything above it is being advertised at a loss."]},
   "reconcile":{input:`Settlement file(s): <b>Payments → All Statements → Download Flat File V2</b> — drop every statement for the period you're checking, <b>from both Account Types</b>: All Statements keeps a separate weekly series for <i>Electronic Transactions</i> and for <i>Cash On Delivery Transactions and Non-Transactional Fees</i>, and orders paid through the series you skip will look unpaid. Optional for Easy Ship / self-ship sellers: the <b>seller-fulfilled Return Report</b> (Orders → Manage Returns → View reports → All Returns, 60-day ranges) sorts the SAFE-T list by strength — refunds whose item never came back rise to the top, items delivered back drop down, and claims already filed disappear. Optional: the <b>Inventory Ledger</b> (detailed view) finds stock Amazon misplaced and never reimbursed, and the <b>Replacements</b> report stops replacement flows being misread as unreturned refunds. Optional: the <b>FBA customer returns</b> and <b>Reimbursements</b> reports (<b>Reports → Fulfilment</b>, Download tab, exact dates matching your statements — both together) unlock the refunded-never-returned and damaged-at-Amazon checks. Optional but recommended: the matching MTR — <b>Reports → Tax Document Library → Merchant Tax Reports → B2C</b> (.csv) — so shipped-but-unpaid orders can be caught too.`,
@@ -2411,7 +2411,7 @@ const PW_MOCKS={
     <div class="row"><span>Ad spend eating profit</span><b class="amt neg">−₹18,420</b></div>
     <div class="row"><span>SKUs ads turn to a loss</span><b class="big">7</b></div>`,
   reconcile:`<div class="row"><span>Referral fee not returned</span><b class="amt pos">+₹1,242</b></div>
-    <div class="row"><span>SAFE-T-eligible refunds</span><b class="amt pos">+₹3,940</b></div>
+    <div class="row"><span>Potential SAFE-T cases</span><b class="amt pos">₹3,940</b></div>
     <div class="row"><span>Shipped, not yet paid</span><b class="amt">₹2,118</b></div>
     <div class="row"><span>Claimable</span><b class="big">₹5,182</b></div>`,
   trends:`<div class="row"><span>Apr net payout</span><b class="amt pos">₹41,210</b></div>
@@ -2459,18 +2459,18 @@ const GST_INFO={route:"gst-report",title:"GST & TCS Report",plan:"Starter",
   mock:PW_MOCKS.gst};
 const SKU_INFO={route:"sku-report",title:"SKU Profitability Report",plan:"Starter",
   price:"₹199/month — unlock with Starter",priceAlt:"or ₹999/year (save ~58%)",
-  desc:"See which products actually make money after fees, taxes and refunds.",
+  desc:"Each SKU's settlement contribution after fees, taxes and refunds — profit once you add product costs.",
   feats:["Net profit per SKU and per unit","Refund % per product — spot problem items","Best and worst earners flagged automatically"],
   mock:PW_MOCKS.sku};
 const REC_INFO={route:"reconcile",title:"Reconciliation & SAFE-T Finder",plan:"Pro",needPro:true,
   price:"₹499/month — unlock with Pro",priceAlt:"or ₹2,499/year (save ~58%)",
   desc:"Find money Amazon may owe you — and exactly how to claim it.",
-  feats:["Refunds where your referral fee wasn't returned","SAFE-T-eligible refunds within the 60-day window","Shipments with no payment line, loss-making orders","Step-by-step claim paths + CSV checklist export"],
+  feats:["Refunds where your referral fee wasn't returned","Potential SAFE-T cases, with the filing window flagged","Shipments with no payment line, loss-making orders","Step-by-step claim paths + CSV checklist export"],
   mock:PW_MOCKS.reconcile};
 const ADP_INFO={route:"ad-profit",title:"Ad Profitability by SKU",plan:"Pro",needPro:true,
   price:"₹499/month — unlock with Pro",priceAlt:"or ₹2,499/year (save ~58%)",
   desc:"Advertising is usually the biggest line in an Amazon P&L, and the one report Amazon never gives you is whether it pays.",
-  feats:["True ACOS per SKU — ad spend against that SKU's real payout","Which SKUs are only profitable until the ads are counted","Break-even ACOS per SKU, from your own margins","Product costs included, so it's profit and not just payout"],
+  feats:["ACOS per SKU — ad spend against that SKU's settlement contribution","Which SKUs stop making money once ads are counted","Break-even ACOS per SKU, once you add a product cost","Says what it cannot know until both files and your costs are loaded"],
   mock:PW_MOCKS.adprofit};
 const TREND_INFO={route:"trends",title:"Multi-Month Trends",plan:"Starter",
   price:"₹199/month — unlock with Starter",priceAlt:"or ₹999/year (save ~58%)",
@@ -3364,7 +3364,7 @@ function renderHome(){
       <section class="lp2-hero">
         <div>
           <span class="lp2-eyebrow">🇮🇳 Built for Amazon.in sellers</span>
-          <h1>Know your <em>real munafa</em> on every single order</h1>
+          <h1>Know your <em>real munafa</em> — after Amazon fees, ads and product cost</h1>
           <p class="sub">Fees, settlements, GST, labels — 20+ tools that turn Seller Central's messy files into clear answers. Everything runs in your browser; your files are never uploaded.</p>
           <div class="lp-cta">
             <button type="button" class="lp-btn" data-scroll="tools">Try the free tools →</button>
@@ -3394,6 +3394,7 @@ function renderHome(){
             <div class="lp-mock" style="border:0;box-shadow:none;padding:0;border-radius:0">
               <div class="row"><span>Selling price</span><b>₹999</b></div>
               <div class="row"><span>All-in fees</span><b class="amt neg">−₹168.66</b></div>
+              <div class="row"><span>Product cost</span><b class="amt neg">−₹468.99</b></div>
               <div class="row"><span style="font-weight:700;color:var(--ink)">Net profit</span><b class="amt pos" style="font-size:16px">₹361.35</b></div>
             </div>
           </div>
@@ -3429,14 +3430,14 @@ function renderHome(){
         };
         const tkTool=(href,ic,name,line)=>`<a href="${href}">${TKI[ic]}<span class="t"><b>${name}</b><span>${line}</span></span><span class="ar">${TKI.arrow}</span></a>`;
         return `
-      <div class="tk-h"><h2>Teen kaam. Barah tools.</h2>
-        <p>Har tool ek hi sawaal ka jawab deta hai — <b>mera paisa kahan hai?</b> Reports aap Seller Central se download karte ho, jawab yahan milta hai.</p></div>
+      <div class="tk-h"><h2>Teen kaam. Barah tools. <span class="chip warnchip" style="vertical-align:middle;font-size:12px">Paid plans</span></h2>
+        <p>Har tool ek hi sawaal ka jawab deta hai — <b>mera paisa kahan hai?</b> Reports aap Seller Central se download karte ho, jawab yahan milta hai. <b>Ye baarah tools paid plan mein hain</b> (₹199/mahina se); <a href="#tools">20 free tools</a> alag hain aur unke liye login bhi nahi chahiye.</p></div>
       <section class="tk-jobs">
         <div class="tk-job g">
           <div class="tag">Kaam #1</div><h3>Paisa wapas lo</h3>
           <p class="why">Jo Amazon ko dena tha par diya nahi — refunds, kho gaya stock, kabhi na laute parcels.</p>
-          ${tkTool("#/reconcile","rupee","Reconciliation &amp; SAFE-T Finder","Woh refunds jinka paisa Amazon par baaki hai — claim-ready list")}
-          ${tkTool("#/returns","undo","Returns Analyzer","Kyun lautta hai maal — courier, product ya listing?")}
+          ${tkTool("#/reconcile","rupee","Reconciliation &amp; SAFE-T Finder","Refunds aur fee mismatches — kya review karna hai, kya actually claimable hai")}
+          ${tkTool("#/returns","undo","Returns Analyzer","Return patterns samjho — reason, SKU aur fulfilment ke hisaab se")}
           ${tkTool("#/rto","pin","RTO Radar","Kaun se state, kaun se pincode parcels wapas bhejte hain")}
           ${tkTool("#/stranded","boxx","Stranded Inventory","Warehouse mein phansa stock — kitna, kab se, aur fix kya hai")}
         </div>
@@ -3444,7 +3445,7 @@ function renderHome(){
           <div class="tag">Kaam #2</div><h3>Kharcha ghatao</h3>
           <p class="why">Fees, rent aur ads — jahan chupchaap paisa nikal jaata hai, wahan roshni.</p>
           ${tkTool("#/fee-bands","steps","Fee Band Optimizer","Ek rupaya upar, ek band bhaari — utarne ki keemat gin ke")}
-          ${tkTool("#/ads-optimizer","target","Ads Optimizer","Jo search terms paisa kha rahe hain, unki negate list")}
+          ${tkTool("#/ads-optimizer","target","Ads Optimizer","High-spend, weak-result search terms identify karo — decide karo kya negate karna hai")}
           ${tkTool("#/ad-profit","tdown","Ad Profitability by SKU","Ads ke baad bhi munafa bachta hai ya nahi — SKU-dar-SKU")}
           ${tkTool("#/storage","ware","Storage Fee Analyzer","Kaun sa stock kiraya de raha hai par bik nahi raha")}
         </div>
@@ -3465,19 +3466,19 @@ function renderHome(){
       <div class="lp2-how">
         <div class="lp2-step"><div class="n">1</div><div class="ico">📥</div><b>Download from Seller Central</b><p>Payments → All Statements → Flat File V2. The same files you already know.</p></div>
         <div class="lp2-step"><div class="n">2</div><div class="ico">🖱️</div><b>Drop it on the tool</b><p>Parsed instantly in your browser. Your file never touches our servers.</p></div>
-        <div class="lp2-step"><div class="n">3</div><div class="ico">📊</div><b>Read your real numbers</b><p>Every fee itemised, profit per SKU, GST figures ready for your CA.</p></div>
+        <div class="lp2-step"><div class="n">3</div><div class="ico">📊</div><b>Read your real numbers</b><p>Every fee itemised, settlement contribution per SKU — and true profit once you add your product cost.</p></div>
       </div>
 
       <section class="lp2-sec">
         <h2>What does label time cost you?</h2>
-        <p>Cropping, sorting and matching invoices by hand takes about 90 seconds per order. See what that adds up to.</p>
+        <p>At an assumed <b>90 seconds per order</b> and <b>₹150/hour</b>, here is what manual cropping, sorting and invoice-matching adds up to. Both figures are assumptions — change your own numbers mentally if they differ.</p>
       </section>
       <div class="card" style="max-width:620px;margin:16px auto 0">
         <label for="sv-orders">Orders you ship per day</label>
         <input id="sv-orders" inputmode="numeric" value="30">
         <div class="lp-mock" style="margin-top:12px">
           <div class="row"><span>Time saved every month</span><b id="sv-hours">—</b></div>
-          <div class="row"><span>Worth per year (at ₹150/hour)</span><b class="amt pos" id="sv-value">—</b></div>
+          <div class="row"><span>Worth per year (at an assumed ₹150/hour)</span><b class="amt pos" id="sv-value">—</b></div>
         </div>
         <div class="note" style="margin-top:10px">The <a href="#/label-cropper">Label Cropper</a> and <a href="#/order-printer">Order Printer</a> do all of it in one click — free, with your files never leaving your browser.</div>
       </div>
@@ -3499,14 +3500,14 @@ function renderHome(){
       <div class="lp2-plan"><span class="tag starter">Starter · ₹199/mo</span><span>The reports that find money</span></div>
       <div class="grid" style="padding:14px 0 0">
         <a class="tile" href="#/settlement-analyzer"><div class="ico">🧾</div><h3>Amazon Settlement Analyzer</h3><p>Every rupee of your payout itemised — reconciles to your deposit to the paisa.</p></a>
-        <a class="tile" href="#/gst-report"><div class="ico">🧾</div><h3>GST &amp; TCS Report</h3><p>TCS, TDS 194-O and the GST on fees you can claim as ITC — ready for filing.</p></a>
-        <a class="tile" href="#/sku-report"><div class="ico">📊</div><h3>SKU Profitability Report</h3><p>Which products actually make money after fees, taxes and refunds.</p></a>
+        <a class="tile" href="#/gst-report"><div class="ico">🧾</div><h3>GST &amp; TCS Report</h3><p>TCS, TDS 194-O and the GST charged on Amazon fees — a CA-ready breakdown for your ITC eligibility review.</p></a>
+        <a class="tile" href="#/sku-report"><div class="ico">📊</div><h3>SKU Profitability Report</h3><p>Each SKU's settlement contribution after fees, taxes and refunds — and true profit once you add product costs.</p></a>
       </div>
       <div class="lp2-plan"><span class="tag pro">Pro · ₹499/mo</span><span>For serious sellers</span></div>
       <div class="grid" style="padding:14px 0 8px">
         <a class="tile" href="#/sku-report/advanced"><span class="pill">Pro</span><div class="ico">⚡</div><h3>SKU P&amp;L with your costs</h3><p>Add product costs, see true P&amp;L per SKU and loss-makers flagged.</p></a>
-        <a class="tile" href="#/reconcile"><span class="pill">Pro</span><div class="ico">🕵️</div><h3>Reconciliation &amp; SAFE-T Finder</h3><p>Cross-check settlements and your MTR to find missing referral-fee credits, SAFE-T-eligible refunds and unpaid shipments — with claim steps.</p></a>
-        <a class="tile" href="#/ad-profit"><span class="pill">Pro</span><div class="ico">📉</div><h3>Ad Profitability by SKU</h3><p>True ACOS per SKU — and which products only make money until the ads are paid for.</p></a>
+        <a class="tile" href="#/reconcile"><span class="pill">Pro</span><div class="ico">🕵️</div><h3>Reconciliation &amp; SAFE-T Finder</h3><p>Cross-check settlements and your MTR for missing referral-fee credits, potential SAFE-T cases and unpaid shipments — separating what is confirmed from what needs more evidence.</p></a>
+        <a class="tile" href="#/ad-profit"><span class="pill">Pro</span><div class="ico">📉</div><h3>Ad Profitability by SKU</h3><p>ACOS and break-even ACOS per SKU — and which products stop making money once ads and product cost are counted.</p></a>
         <a class="tile" href="#/trends"><span class="pill">Starter</span><div class="ico">📈</div><h3>Multi-Month Trends</h3><p>Sales, fees %, refund rate and net payout month by month — overall and per SKU.</p></a>
         <a class="tile" href="#/fee-bands"><span class="pill">Pro</span><div class="ico">🪜</div><h3>Fee Band Optimizer</h3><p>The SKUs sitting a rupee over a referral step or a gram over a weight band — and what moving under is worth.</p></a>
         <a class="tile" href="#/ads-optimizer"><span class="pill">Pro</span><div class="ico">🎯</div><h3>Ads Optimizer</h3><p>Search terms to negate, winners that earned an exact match, and a campaign scoreboard — from the Search Term report.</p></a>
@@ -3514,7 +3515,7 @@ function renderHome(){
         <a class="tile" href="#/storage"><span class="pill">Pro</span><div class="ico">📦</div><h3>Storage Fee Analyzer</h3><p>Which ASINs pay the warehouse rent, which pay rent while selling nothing, and months of cover per ASIN — from Amazon's own billing report.</p></a>
         <a class="tile" href="#/rto"><span class="pill">Pro</span><div class="ico">🔁</div><h3>RTO Radar</h3><p>RTO rate by state and pincode, per-SKU return-to-origin economics, and the order value stuck in transit back to you.</p></a>
         <a class="tile" href="#/stranded"><span class="pill">Pro</span><div class="ico">🚧</div><h3>Stranded Inventory</h3><p>Stock in the warehouse that cannot sell — its value, how long it has been stuck, and Amazon's own fix for every row.</p></a>
-        <a class="tile" href="#/traffic"><span class="pill">Pro</span><div class="ico">🩺</div><h3>Traffic Doctor</h3><p>Why an ASIN doesn't sell — no traffic, traffic that doesn't convert, or a lost Buy Box — from the Business Report.</p></a>
+        <a class="tile" href="#/traffic"><span class="pill">Pro</span><div class="ico">🩺</div><h3>Traffic Doctor</h3><p>Where to investigate an underperforming ASIN first — low traffic, weak conversion or low Featured Offer share — from the Business Report.</p></a>
       </div>
 
       <section class="lp2-sec">
@@ -3535,7 +3536,7 @@ function renderHome(){
 
       <section class="lp-faq" aria-label="Frequently asked questions">
         <h2>Questions sellers ask</h2>
-        <details><summary>Is it really free?</summary><p>Yes — every calculator, the label cropper, order printer, link builder and keyword combiner are free with no login. Some advanced reports (Settlement Analyzer, GST report, SKU report) are moving to a low-cost paid plan; the free tools stay free.</p></details>
+        <details><summary>Is it really free?</summary><p>Yes — all 20 free tools are free with no login: every calculator, the label cropper, order printer, link builder and keyword combiner. The advanced reports (Settlement Analyzer, GST report, SKU report, Trends and the Pro reports) are on a paid plan from ₹199/month. The free tools stay free.</p></details>
         <details><summary>Do you upload or store my files?</summary><p>No. Settlement reports and label PDFs are processed entirely in your browser — they are never uploaded to any server. That is our core promise and it will always be true. Most other label-cropping sites upload your PDFs — including your customers' names and addresses — to their servers and promise to delete them later; we never receive them in the first place.</p></details>
         <details><summary>Which marketplaces do you support?</summary><p>Amazon India (Amazon.in) only. Fees, GST and settlement formats are all specific to the India marketplace.</p></details>
         <details><summary>How do I get my settlement report?</summary><p>In Seller Central go to Payments → Reports Repository (or Date Range Reports) and download the transaction/settlement report, then paste or upload it into the Settlement Analyzer.</p></details>
@@ -4962,7 +4963,7 @@ function gstRenderResults(){
   let h=`<div class="stats">
     <div class="stat"><div class="k">TCS withheld</div><div class="v">${abs(g.heads.tcs.total)}</div></div>
     <div class="stat"><div class="k">TDS (194-O)</div><div class="v">${abs(g.heads.tds.total)}</div></div>
-    <div class="stat green"><div class="k">GST on fees — claim as ITC</div><div class="v">${abs(g.heads.itc.total)}</div></div>
+    <div class="stat"><div class="k">GST charged on Amazon fees</div><div class="v">${abs(g.heads.itc.total)}</div></div>
     <div class="stat blue"><div class="k">Output GST collected</div><div class="v">${abs(g.heads.output.total)}</div></div>
   </div>`;
 
@@ -5090,7 +5091,7 @@ const stChip=st=>`<span class="st st-${st.k}">${esc(st.l)}</span>`;
 function renderSkuReport(){
   document.title="SKU Profitability Report — Seller Tools India";
   const md=document.querySelector('meta[name="description"]');
-  if(md) md.setAttribute("content","Upload your Amazon settlement report and see which SKUs actually make money after fees, taxes and refunds — computed locally in your browser.");
+  if(md) md.setAttribute("content","Upload your Amazon settlement report to see each SKU's settlement contribution after fees, taxes and refunds — and true profit once you add product costs. Computed locally in your browser.");
   backBtn.hidden=false;
   /* "#/sku-report/advanced" (the Pro tile on home) lands with Advanced-P&L
      intent: Pro users get the mode pre-armed, everyone else sees the Pro
@@ -6111,7 +6112,7 @@ const REC_ORDER=["notReturned","fcDamaged","lostWh","feeOver","feeDup","weightJu
 
 function renderReconcile(){
   setMeta("Reconciliation & SAFE-T Finder — Seller Tools India",
-    "Cross-check your Amazon settlement and MTR files to find missing referral-fee credits, SAFE-T-eligible refunds, unpaid shipments and loss-making orders — locally in your browser.");
+    "Cross-check your Amazon settlement and MTR files for missing referral-fee credits, potential SAFE-T cases, unpaid shipments and loss-making orders — locally in your browser.");
   backBtn.hidden=false;
   gatePremium(REC_INFO, recBody);
 }
@@ -9546,7 +9547,7 @@ function adpSpendFromSettlement(records){
 }
 function renderAdProfit(){
   setMeta("Ad Profitability by SKU — Seller Tools India",
-    "Join your Amazon settlement with the Sponsored Products advertised-product report to see true ACOS, break-even ACOS and which SKUs only make money until the ads are counted.");
+    "Join your Amazon settlement with the Sponsored Products advertised-product report to see ACOS, break-even ACOS and which SKUs stop making money once ads are counted.");
   backBtn.hidden=false;
   gatePremium(ADP_INFO, adpBody);
 }
@@ -11123,7 +11124,7 @@ window.tdStatus=tdStatus; // exposed for verification/debugging
 
 function renderTraffic(){
   setMeta("Traffic Doctor — Seller Tools India",
-    "Drop the Business Report (Detail Page Sales & Traffic by Child Item) and see why each ASIN doesn't sell: no traffic, traffic that doesn't convert, or a lost Buy Box — each with its own fix.");
+    "Drop the Business Report (Detail Page Sales & Traffic by Child Item) to see where to investigate each underperforming ASIN first: low traffic, weak conversion or low Featured Offer share.");
   backBtn.hidden=false;
   gatePremium(TD_INFO, tdBody);
 }
