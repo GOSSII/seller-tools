@@ -1694,7 +1694,7 @@ const HELP={
   "ads-optimizer":{input:`<b>Advertising console → Sponsored ads → Reports (or Measurement &amp; reporting) → Sponsored Products → Search term</b> — export for 30–60 days. The .xlsx it hands out drops straight in; CSV works too.`,
     steps:["Drop the Search Term report (several files at once is fine — re-drops replace). Optional but worth it: add the Advertised-product report for the same period, plus your settlement files — terms in single-SKU ad groups are then judged against that SKU's own break-even ACOS instead of a flat line.","Export the negatives list and paste each term as a negative exact into the campaign it spent in.","Move the winners into their own exact-match keywords, then negate them where they came from so the two never bid against each other.","Check the campaign scoreboard monthly — and judge affordability per SKU in Ad Profitability, which knows each product's break-even ACOS."]},
   "traffic":{input:`<b>Business Reports → By ASIN → Detail Page Sales and Traffic By Child Item</b> → set roughly the last 30 days → Download (.csv). The By-Child version is the one with per-ASIN sessions and conversion.`,
-    steps:["Drop the .csv — one period at a time (mixing periods double-counts sessions).","Read the account conversion first: every judgement on the page is relative to it.","Work the 'Traffic comes, buyers don't' table worst-first — those pages already get the visitors; the listing is what loses them.","Feed the ⭐ winners in the Ads Optimizer, and fix invisible ASINs in search (keywords/ads), not in the listing editor."]},
+    steps:["Drop the .csv — one period at a time (mixing periods double-counts sessions).","Read the account conversion first: every judgement on the page is relative to it.","Work the 'Low conversion' table worst-first — those ASINs already get visitors, so conversion is the place to look next.","The ⭐ ASINs convert above your average; low-traffic ASINs are a traffic-sources question before a listing one."]},
   "stranded":{input:`<b>Fulfilment Reports → Inventory → Stranded Inventory</b> → Request .csv Download (no date range — it is a live snapshot). Optional: add settlement files so rows whose listings were deleted can be valued at the SKU's own average selling price.`,
     steps:["Drop the report — the snapshot lists every unit in the warehouse with no active listing to sell through.","Work the reasons panel: listing errors are minutes to fix and need no removal; deleted listings need a relist; under-review stock needs a case, not an edit.","Watch the auto-removal column — Amazon removes stranded stock itself after a deadline, and that removal is not free.","Cross-check the same ASINs in the Storage Fee Analyzer — stranded stock pays rent the whole time."]},
   "rto":{input:`<b>Fulfilment Reports → Sales → All Orders</b> → Order Date → last 30 days → Request Download (a .txt file). Optional: the <b>seller-fulfilled Return Report</b> (Orders → Manage Returns → View reports) to see which RTOs were already refunded.`,
@@ -2484,8 +2484,8 @@ const ADSO_INFO={route:"ads-optimizer",title:"Ads Optimizer",plan:"Pro",needPro:
   mock:PW_MOCKS.adsopt};
 const TD_INFO={route:"traffic",title:"Traffic Doctor",plan:"Pro",needPro:true,
   price:"₹499/month — unlock with Pro",priceAlt:"or ₹2,499/year (save ~58%)",
-  desc:"A SKU that doesn't sell fails one of three ways — no traffic, traffic that doesn't convert, or a lost Buy Box. This says which.",
-  feats:["Per-ASIN sessions, conversion and Buy Box share from Amazon's Business Report","Traffic-wasters flagged against your OWN account average, not a magic number","Winners that deserve more ads; invisible ASINs that need search fixes, not listing polish","Units-lost estimate per bleeder, clearly labelled as an estimate"],
+  desc:"Three signals for an underperforming SKU — low traffic, weak conversion, or low Featured Offer share. Where to investigate first.",
+  feats:["Per-ASIN sessions, conversion and Buy Box share from Amazon's Business Report","Low conversion flagged against your OWN account average, not a magic number","Above-average converters, and low-traffic ASINs separated from low-converting ones","Estimated upside at your account average, clearly labelled as a counterfactual"],
   mock:PW_MOCKS.traffic};
 const STR_INFO={route:"stranded",title:"Stranded Inventory",plan:"Pro",needPro:true,
   price:"₹499/month — unlock with Pro",priceAlt:"or ₹2,499/year (save ~58%)",
@@ -6174,7 +6174,7 @@ function recAddFiles(list){
 }
 function recRenderResults(){
   const out=document.getElementById("rec-out"); if(!out) return;
-  const kindLabel={settlement:"Settlement",mtr:"MTR",returns:"FBA returns",reimb:"Reimbursements",ledger:"Inventory Ledger",repl:"Replacements",mfnret:"Seller returns",error:"Skipped"};
+  const kindLabel={settlement:"Settlement",mtr:"MTR",returns:"FBA returns",reimb:"Reimbursements",ledger:"Inventory Ledger",repl:"Replacements",mfnret:"Seller returns",error:"Wrong report"};
   const kindOf=f=>f.kind==="error"?"⚠ "+kindLabel.error
     :f.kind==="settlement"&&f.parsed&&f.parsed.source==="unified"?"Unified txn":kindLabel[f.kind];
   let h=`<div class="rec-files">${recFiles.map((f,i)=>`<span class="rec-file"${f.kind==="error"?` title="${esc(f.msg)}"`:""}><b>${esc(f.name)}</b><span class="rf-kind">${kindOf(f)}</span><button type="button" data-rm="${i}" aria-label="Remove ${esc(f.name)}">✕</button></span>`).join("")}</div>`;
@@ -6801,7 +6801,7 @@ function fbWeightVerdict(w){
 function fbRenderResults(){
   const out=document.getElementById("fb-out"); if(!out) return;
   const wts=loadFbWeights();
-  let h=`<div class="rec-files">${fbFiles.map((f,i)=>`<span class="rec-file"${f.kind==="error"?` title="${esc(f.msg)}"`:""}><b>${esc(f.name)}</b><span class="rf-kind">${f.kind==="error"?"⚠ Skipped":(f.parsed&&f.parsed.source==="unified"?"Unified txn":"Settlement")}</span><button type="button" data-rm="${i}" aria-label="Remove ${esc(f.name)}">✕</button></span>`).join("")}</div>`;
+  let h=`<div class="rec-files">${fbFiles.map((f,i)=>`<span class="rec-file"${f.kind==="error"?` title="${esc(f.msg)}"`:""}><b>${esc(f.name)}</b><span class="rf-kind">${f.kind==="error"?"⚠ Wrong report":(f.parsed&&f.parsed.source==="unified"?"Unified txn":"Settlement")}</span><button type="button" data-rm="${i}" aria-label="Remove ${esc(f.name)}">✕</button></span>`).join("")}</div>`;
   const bad=fbFiles.filter(f=>f.kind==="error");
   if(bad.length) h+=`<div class="banner warn">${bad.map(f=>`<b>${esc(f.name)}</b>: ${esc(f.msg)}`).join("<br>")}</div>`;
   const settlements=fbFiles.filter(f=>f.kind==="settlement").map(f=>f.parsed);
@@ -7193,7 +7193,7 @@ function trAddFiles(list){
 }
 function trRenderResults(){
   const out=document.getElementById("tr-out"); if(!out) return;
-  let h=`<div class="rec-files">${trFiles.map((f,i)=>`<span class="rec-file"${f.kind==="error"?` title="${esc(f.msg)}"`:""}><b>${esc(f.name)}</b><span class="rf-kind">${f.kind==="error"?"⚠ Skipped":"Settlement"}</span><button type="button" data-rm="${i}" aria-label="Remove ${esc(f.name)}">✕</button></span>`).join("")}</div>`;
+  let h=`<div class="rec-files">${trFiles.map((f,i)=>`<span class="rec-file"${f.kind==="error"?` title="${esc(f.msg)}"`:""}><b>${esc(f.name)}</b><span class="rf-kind">${f.kind==="error"?"⚠ Wrong report":"Settlement"}</span><button type="button" data-rm="${i}" aria-label="Remove ${esc(f.name)}">✕</button></span>`).join("")}</div>`;
   const bad=trFiles.filter(f=>f.kind==="error");
   if(bad.length) h+=`<div class="banner warn">${bad.map(f=>`<b>${esc(f.name)}</b>: ${esc(f.msg)}`).join("<br>")}</div>`;
   const settlements=trFiles.filter(f=>f.kind==="settlement").map(f=>f.parsed);
@@ -9672,7 +9672,7 @@ function adpCompute(){
 }
 function adpRender(){
   const out=document.getElementById("adp-out"); if(!out) return;
-  const label={settlement:"Settlement",ads:"Ad report",error:"Skipped"};
+  const label={settlement:"Settlement",ads:"Ad report",error:"Wrong report"};
   let h=`<div class="rec-files">${adpFiles.map((f,i)=>`<span class="rec-file"${f.kind==="error"?` title="${esc(f.msg)}"`:""}><b>${esc(f.name)}</b><span class="rf-kind">${f.kind==="error"?"⚠ "+label.error:label[f.kind]}</span><button type="button" data-adprm="${i}" aria-label="Remove ${esc(f.name)}">✕</button></span>`).join("")}</div>`;
   const bad=adpFiles.filter(f=>f.kind==="error");
   if(bad.length) h+=`<div class="banner warn">${bad.map(f=>`<b>${esc(f.name)}</b>: ${esc(f.msg)}`).join("<br>")}</div>`;
@@ -10205,7 +10205,7 @@ function rtAddFiles(list){
 }
 function rtRenderResults(){
   const out=document.getElementById("rt-out"); if(!out) return;
-  const kindLabel={settlement:"Settlement",returns:"FBA returns",mfnret:"Seller returns",error:"Skipped"};
+  const kindLabel={settlement:"Settlement",returns:"FBA returns",mfnret:"Seller returns",error:"Wrong report"};
   let h=`<div class="rec-files">${rtFiles.map((f,i)=>`<span class="rec-file"${f.kind==="error"?` title="${esc(f.msg)}"`:""}><b>${esc(f.name)}</b><span class="rf-kind">${f.kind==="error"?"⚠ "+kindLabel.error:kindLabel[f.kind]}</span><button type="button" data-rm="${i}" aria-label="Remove ${esc(f.name)}">✕</button></span>`).join("")}</div>`;
   const bad=rtFiles.filter(f=>f.kind==="error");
   if(bad.length) h+=`<div class="banner warn">${bad.map(f=>`<b>${esc(f.name)}</b>: ${esc(f.msg)}`).join("<br>")}</div>`;
@@ -10465,7 +10465,7 @@ function stoAddFiles(list){
 }
 function stoRenderResults(){
   const out=document.getElementById("sto-out"); if(!out) return;
-  let h=`<div class="rec-files">${stoFiles.map((f,i)=>`<span class="rec-file"${f.kind==="error"?` title="${esc(f.msg)}"`:""}><b>${esc(f.name)}</b><span class="rf-kind">${f.kind==="error"?"⚠ Skipped":"Storage fees"}</span><button type="button" data-rm="${i}" aria-label="Remove ${esc(f.name)}">✕</button></span>`).join("")}</div>`;
+  let h=`<div class="rec-files">${stoFiles.map((f,i)=>`<span class="rec-file"${f.kind==="error"?` title="${esc(f.msg)}"`:""}><b>${esc(f.name)}</b><span class="rf-kind">${f.kind==="error"?"⚠ Wrong report":"Storage fees"}</span><button type="button" data-rm="${i}" aria-label="Remove ${esc(f.name)}">✕</button></span>`).join("")}</div>`;
   const bad=stoFiles.filter(f=>f.kind==="error");
   if(bad.length) h+=`<div class="banner warn">${bad.map(f=>`<b>${esc(f.name)}</b>: ${esc(f.msg)}`).join("<br>")}</div>`;
   const rows=stoFiles.filter(f=>f.kind==="storage").flatMap(f=>f.rows);
@@ -10702,7 +10702,7 @@ function rtoAddFiles(list){
 }
 function rtoRenderResults(){
   const out=document.getElementById("rto-out"); if(!out) return;
-  const kindLabel={orders:"All Orders",mfnret:"Seller returns",error:"Skipped"};
+  const kindLabel={orders:"All Orders",mfnret:"Seller returns",error:"Wrong report"};
   let h=`<div class="rec-files">${rtoFiles.map((f,i)=>`<span class="rec-file"${f.kind==="error"?` title="${esc(f.msg)}"`:""}><b>${esc(f.name)}</b><span class="rf-kind">${f.kind==="error"?"⚠ "+kindLabel.error:kindLabel[f.kind]}</span><button type="button" data-rm="${i}" aria-label="Remove ${esc(f.name)}">✕</button></span>`).join("")}</div>`;
   const bad=rtoFiles.filter(f=>f.kind==="error");
   if(bad.length) h+=`<div class="banner warn">${bad.map(f=>`<b>${esc(f.name)}</b>: ${esc(f.msg)}`).join("<br>")}</div>`;
@@ -10966,7 +10966,7 @@ function strAddFiles(list){
 }
 function strRenderResults(){
   const out=document.getElementById("str-out"); if(!out) return;
-  const kindLabel={stranded:"Stranded report",settlement:"Settlement",error:"Skipped"};
+  const kindLabel={stranded:"Stranded report",settlement:"Settlement",error:"Wrong report"};
   let h=`<div class="rec-files">${strFiles.map((f,i)=>`<span class="rec-file"${f.kind==="error"?` title="${esc(f.msg)}"`:""}><b>${esc(f.name)}</b><span class="rf-kind">${f.kind==="error"?"⚠ "+kindLabel.error:kindLabel[f.kind]}</span><button type="button" data-rm="${i}" aria-label="Remove ${esc(f.name)}">✕</button></span>`).join("")}</div>`;
   const bad=strFiles.filter(f=>f.kind==="error");
   if(bad.length) h+=`<div class="banner warn">${bad.map(f=>`<b>${esc(f.name)}</b>: ${esc(f.msg)}`).join("<br>")}</div>`;
@@ -11075,6 +11075,7 @@ function parseTraffic(text){
 }
 window.parseTraffic=parseTraffic; // exposed for verification/debugging
 const TD_MIN_SESS=100;   // below this a conversion rate is noise
+const TD_INVISIBLE=10;   // below this the ASIN had too little traffic to judge
 function trafficCompute(rowsIn){
   /* several files (periods/accounts should NOT be mixed — dedupe by ASIN keeps
      a re-drop from double counting) */
@@ -11087,10 +11088,10 @@ function trafficCompute(rowsIn){
   const starBar=t.cvr*1.5;                   // 'feed it traffic' = 1.5x your average
   const items=rows.map(r=>{
     let diag,fix;
-    if(r.sessions<10){ diag="invisible"; fix="Nobody sees it — this is an ads/SEO problem, not a listing problem."; }
-    else if(r.buyBox!==null&&r.buyBox<70&&r.sessions>=50){ diag="buybox"; fix="Visitors see someone else's offer — price/eligibility, not your listing."; }
-    else if(r.sessions>=TD_MIN_SESS&&r.cvr<lowBar){ diag="noconv"; fix="Traffic comes, buyers don't — images, price, reviews or the first bullet."; }
-    else if(r.sessions>=TD_MIN_SESS&&r.cvr>=starBar){ diag="star"; fix="Converts far above your average — it deserves more traffic (ads, deals)."; }
+    if(r.sessions<TD_INVISIBLE){ diag="invisible"; fix="Very little traffic in this export — investigate traffic sources before changing the listing."; }
+    else if(r.buyBox!==null&&r.buyBox<70&&r.sessions>=50){ diag="buybox"; fix="Not the Featured Offer consistently — check price, fulfilment, availability and seller performance."; }
+    else if(r.sessions>=TD_MIN_SESS&&r.cvr<lowBar){ diag="noconv"; fix="Traffic exists, conversion is below your account average — investigate the detail page, price, reviews, delivery promise and traffic quality."; }
+    else if(r.sessions>=TD_MIN_SESS&&r.cvr>=starBar){ diag="star"; fix="Converts above your account average on this export."; }
     else if(r.sessions<TD_MIN_SESS){ diag="thin"; fix=""; }
     else { diag="ok"; fix=""; }
     /* the one estimate, clearly labelled: units the ASIN would have sold at
@@ -11113,7 +11114,7 @@ window.trafficCompute=trafficCompute; // exposed for verification/debugging
 function tdStatus(x){
   if(x.diag==="noconv") return {k:"loss",l:"Traffic wasted"};
   if(x.diag==="buybox") return {k:"problem",l:"Losing Buy Box"};
-  if(x.diag==="invisible") return {k:"watch",l:"Invisible"};
+  if(x.diag==="invisible") return {k:"watch",l:"Low traffic"};
   if(x.diag==="star") return {k:"good",l:"Feed it traffic"};
   if(x.diag==="thin") return {k:"data",l:"Low sessions"};
   return {k:"info",l:"OK"};
@@ -11130,7 +11131,7 @@ function tdBody(){
   app.innerHTML=`
     <div class="wrap page">
       <h2>Traffic Doctor</h2>
-      <p class="lede">A SKU that doesn't sell fails one of three ways — <b>nobody sees it, people see it and don't buy, or buyers see someone else's offer.</b> Each needs a different fix, and this report is the only place Amazon says which one you have.</p>
+      <p class="lede">When a SKU underperforms, this report helps you see <b>where to investigate first</b>: low traffic, weak conversion, or low Featured Offer share. These metrics identify the <b>symptom, not necessarily the root cause</b> — Traffic Doctor turns them into a practical starting point.</p>
       ${helpHtml("traffic")}
       <label class="sa-drop" id="td-drop">
         <div class="ico">🩺</div>
@@ -11166,39 +11167,50 @@ function tdAddFiles(list){
 }
 function tdRenderResults(){
   const out=document.getElementById("td-out"); if(!out) return;
-  let h=`<div class="rec-files">${tdFiles.map((f,i)=>`<span class="rec-file"${f.kind==="error"?` title="${esc(f.msg)}"`:""}><b>${esc(f.name)}</b><span class="rf-kind">${f.kind==="error"?"⚠ Skipped":"Traffic report"}</span><button type="button" data-rm="${i}" aria-label="Remove ${esc(f.name)}">✕</button></span>`).join("")}</div>`;
+  let h=`<div class="rec-files">${tdFiles.map((f,i)=>`<span class="rec-file"${f.kind==="error"?` title="${esc(f.msg)}"`:""}><b>${esc(f.name)}</b><span class="rf-kind">${f.kind==="error"?"⚠ Wrong report":"Traffic report"}</span><button type="button" data-rm="${i}" aria-label="Remove ${esc(f.name)}">✕</button></span>`).join("")}</div>`;
   const bad=tdFiles.filter(f=>f.kind==="error");
   if(bad.length) h+=`<div class="banner warn">${bad.map(f=>`<b>${esc(f.name)}</b>: ${esc(f.msg)}`).join("<br>")}</div>`;
   const rows=tdFiles.filter(f=>f.kind==="traffic").flatMap(f=>f.rows);
   if(!rows.length){ out.innerHTML=h; tdWire(out); return; }
   const r=trafficCompute(rows);
   const t=r.totals;
+  h+=`<div class="banner info">Report period not included in this file. The traffic thresholds below apply to whatever date range you selected in Seller Central — 7 sessions means one a day over a week, or one a fortnight over 90 days.</div>`;
   h+=`<div class="stats">
     <div class="stat"><div class="k">Sessions (visitors)</div><div class="v">${num(t.sessions)}</div><div class="sa-sub" style="margin-top:3px">${num(t.asins)} ASINs · ${num(t.units)} units ordered</div></div>
     <div class="stat"><div class="k">Account conversion</div><div class="v">${t.cvr.toFixed(1)}%</div><div class="sa-sub" style="margin-top:3px">units ÷ sessions — your own benchmark</div></div>
-    <div class="stat ${r.noconv.length?"red":"green"}"><div class="k">Traffic being wasted</div><div class="v">${num(t.wastedSessions)}</div><div class="sa-sub" style="margin-top:3px">${num(r.noconv.length)} ASIN${r.noconv.length===1?"":"s"} converting below half your average</div></div>
-    <div class="stat ${r.invisible.length?"":"green"}"><div class="k">Invisible ASINs</div><div class="v">${num(r.invisible.length)}</div><div class="sa-sub" style="margin-top:3px">under 10 sessions — nobody sees them</div></div>
+    <div class="stat ${r.noconv.length?"red":"green"}"><div class="k">Low-conversion traffic</div><div class="v">${num(t.wastedSessions)} sessions</div><div class="sa-sub" style="margin-top:3px">on ${num(r.noconv.length)} ASIN${r.noconv.length===1?"":"s"} converting below half your account average</div></div>
+    <div class="stat ${r.invisible.length?"":"green"}"><div class="k">Low-traffic ASINs</div><div class="v">${num(r.invisible.length)}</div><div class="sa-sub" style="margin-top:3px">under ${TD_INVISIBLE} sessions in this export</div></div>
   </div>`;
   if(r.noconv.length){
-    h+=`<div class="panel"><h4>🩸 Traffic comes, buyers don't <span class="sa-sub">(${r.noconv.length} — converting below ${r.lowBar.toFixed(1)}%, half your account average)</span></h4>
-      <p class="sa-sub" style="margin:4px 0 10px">These pages get real visitors and lose them — the fix is the listing (images, price, reviews, first bullet), not more ads. The last column is an estimate: units this ASIN would have sold at your account's average conversion.</p>
+    h+=`<div class="panel"><h4>🩸 Low conversion <span class="sa-sub">(${r.noconv.length} — converting below ${r.lowBar.toFixed(1)}%, half your account average)</span></h4>
+      <p class="sa-sub" style="margin:4px 0 4px"><b>This is a prioritisation rule, not a diagnosis</b> — different products naturally convert at different rates.</p>
+      <p class="sa-sub" style="margin:4px 0 10px">These ASINs are getting meaningful traffic but converting well below your account benchmark. Investigate the detail page, price, reviews, delivery promise, Featured Offer status and traffic quality before paying for more traffic.</p>
       <div class="tblwrap"><table class="sa">
-      <thead><tr><th>ASIN</th><th>Product</th><th class="num">Sessions</th><th class="num">Conversion</th><th class="num">Buy Box</th><th class="num">Units</th><th class="num" title="Estimate: sessions × (account average − this ASIN's conversion)">Units lost vs avg*</th></tr></thead>
+      <thead><tr><th>ASIN</th><th>Product</th><th class="num">Sessions</th><th class="num">Conversion</th><th class="num" title="Featured Offer share — how often your offer held the Buy Box">Featured Offer</th><th class="num">Units</th><th class="num" title="Illustrative: sessions × (account average − this ASIN's conversion). Not a forecast.">Estimated upside at account avg*</th></tr></thead>
       <tbody>${r.noconv.slice(0,20).map(x=>`<tr>
         <td>${esc(x.asin)}</td><td class="sa-sub wrap">${esc(x.title)}</td>
         <td class="num"><b>${num(x.sessions)}</b></td>
         <td class="num" style="color:var(--red);font-weight:700">${x.cvr.toFixed(2)}%</td>
         <td class="num">${x.buyBox===null?"—":x.buyBox.toFixed(0)+"%"}</td>
         <td class="num">${num(x.units)}</td>
-        <td class="num">${Math.round(x.lostUnits)}${x.lostValue?`<span class="sa-sub"> ≈ ${inr0(x.lostValue)}</span>`:""}</td></tr>`).join("")}
+        <td class="num">≈ +${Math.round(x.lostUnits)}${x.lostValue?`<span class="sa-sub"> · ≈${inr0(x.lostValue)}</span>`:""}</td></tr>`).join("")}
       </tbody></table></div>
-      ${t.lostUnits>0?`<div class="sa-sub" style="margin-top:6px">* Together ≈ <b>${num(Math.round(t.lostUnits))} units${t.lostValue?" / "+inr0(t.lostValue):""}</b> <b>over whatever period this report covers</b> if these pages converted at your account average — an estimate, clearly, but of your own traffic at your own average. The Business Report export carries no dates, so this tool cannot know whether you exported 7 days or 90: read the figure against the range you chose in Seller Central.</div>`:""}</div>`;
+      ${(()=>{
+        /* The report holds three signals and can say which the evidence rules
+           OUT, which is the honest half of a diagnosis. It still must not name
+           the cause of what remains. */
+        const w=r.noconv[0]; if(!w) return "";
+        const bb=w.buyBox, high=bb!==null&&bb>=95, low=bb!==null&&bb<70;
+        return `<div class="banner info" style="margin-top:10px"><b>${esc(w.asin)} deserves attention:</b> ${num(w.sessions)} sessions, ${w.cvr.toFixed(2)}% conversion${bb===null?"":` and ${bb.toFixed(0)}% Featured Offer share`}. Traffic exists${high?" and Featured Offer availability looks healthy":""}, but conversion is well below the account's ${t.cvr.toFixed(2)}% benchmark.${high?` Featured Offer share is <b>not</b> the obvious issue here — investigate the offer, detail page and traffic quality next.`:low?` Low Featured Offer share may be part of the picture — check price, fulfilment and availability alongside the detail page.`:""}</div>`;
+      })()}
+      ${t.lostUnits>0?`<div class="sa-sub" style="margin-top:6px">* <b>Illustrative opportunity</b>: the additional units and sales — together ≈ <b>${num(Math.round(t.lostUnits))} units${t.lostValue?" / "+inr0(t.lostValue):""}</b> — if these ASINs had converted at your current account average over whatever period this export covers. <b>This is not a forecast, and not proof those sales were recoverable.</b></div>`:""}</div>`;
   }
   if(r.buybox.length){
-    h+=`<div class="panel"><h4>🥊 Losing the Buy Box <span class="sa-sub">(${r.buybox.length})</span></h4>
-      <div class="tblwrap"><table class="sa"><thead><tr><th>ASIN</th><th>Product</th><th class="num">Sessions</th><th class="num">Buy Box %</th><th class="num">Conversion</th></tr></thead>
+    h+=`<div class="panel"><h4>🥊 Low Featured Offer share <span class="sa-sub">(${r.buybox.length})</span></h4>
+      <p class="sa-sub" style="margin:4px 0 10px">These ASINs were not the Featured Offer consistently. Investigate price, fulfilment, availability and seller performance before concluding why.</p>
+      <div class="tblwrap"><table class="sa"><thead><tr><th>ASIN</th><th>Product</th><th class="num">Sessions</th><th class="num">Featured Offer %</th><th class="num">Conversion</th></tr></thead>
       <tbody>${r.buybox.slice(0,10).map(x=>`<tr><td>${esc(x.asin)}</td><td class="sa-sub wrap">${esc(x.title)}</td><td class="num">${num(x.sessions)}</td><td class="num" style="color:var(--red);font-weight:700">${x.buyBox.toFixed(0)}%</td><td class="num">${x.cvr.toFixed(2)}%</td></tr>`).join("")}</tbody></table></div>
-      <div class="sa-sub" style="margin-top:6px">Visitors arrive but see another seller's offer — check price competitiveness and fulfilment eligibility before touching the listing.</div></div>`;
+</div>`;
   }
   if(r.stars.length){
     h+=`<div class="panel"><h4>⭐ Feed the winners <span class="sa-sub">(${r.stars.length} — converting above ${r.starBar.toFixed(1)}%, 1.5× your average)</span></h4>
@@ -11207,24 +11219,24 @@ function tdRenderResults(){
       <div class="sa-sub" style="margin-top:6px">Every extra visitor converts here far above par — these are the ASINs worth advertising harder.</div></div>`;
   }
   if(r.invisible.length){
-    h+=`<div class="panel"><h4>👻 Invisible <span class="sa-sub">(${r.invisible.length} — under 10 sessions in the period)</span></h4>
-      <p class="sa-sub" style="margin:4px 0 8px">The listing may be fine — nobody reaches it. Fixes live in search: keywords, ads, category. Perfecting these pages first is effort in the wrong place.</p>
+    h+=`<div class="panel"><h4>👻 Low traffic <span class="sa-sub">(${r.invisible.length} — under ${TD_INVISIBLE} sessions in this export)</span></h4>
+      <p class="sa-sub" style="margin:4px 0 8px">These ASINs received very little traffic in the exported period. That can reflect low search visibility, low demand, a new listing, advertising coverage, availability or simply a short report period. Investigate traffic sources before changing the listing.</p>
       <div class="sa-sub">${r.invisible.slice(0,12).map(x=>esc(x.asin)).join(" · ")}${r.invisible.length>12?" · …":""}</div></div>`;
   }
   h+=`<details class="howto"><summary>How every number here is computed</summary><div class="hbody">
     <span class="htag">Formulas &amp; sources</span>
     <ol>
       <li>Everything comes from Amazon's own Business Report: sessions (visitors), unit session percentage (conversion), Featured Offer share (Buy Box), units and sales per child ASIN.</li>
-      <li>Judgements are relative to <b>your account's own average conversion (${t.cvr.toFixed(1)}%)</b> — not an industry number: wasted-traffic below half of it, winners above 1.5× of it. Rates need ${TD_MIN_SESS}+ sessions; under 10 sessions an ASIN is "invisible", between the two it's "low sessions" and left unjudged.</li>
-      <li>The only estimate on this page is <b>units lost vs avg</b> = sessions × (account average − ASIN conversion), valued at the ASIN's own average selling price. It is labelled with * everywhere it appears.</li>
-      <li>Status: <span class="st st-loss">Traffic wasted</span> · <span class="st st-problem">Losing Buy Box</span> &lt;70% with 50+ sessions · <span class="st st-watch">Invisible</span> &lt;10 sessions · <span class="st st-good">Feed it traffic</span> ≥1.5× average · <span class="st st-data">Low sessions</span>.</li>
+      <li>Judgements are relative to <b>your account's own average conversion (${t.cvr.toFixed(1)}%)</b> — not an industry number: wasted-traffic below half of it, winners above 1.5× of it. Rates need ${TD_MIN_SESS}+ sessions; under ${TD_INVISIBLE} sessions an ASIN is <b>low-traffic</b>, between the two it's "low sessions" and left unjudged. Every judgement here is a <b>prioritisation rule</b>, not a diagnosis — the report shows symptoms, not causes.</li>
+      <li>The only estimate on this page is <b>estimated upside at account avg</b> = sessions × (account average − ASIN conversion), valued at the ASIN's own average selling price. It is a counterfactual, not a loss the seller incurred, and is labelled with * everywhere it appears.</li>
+      <li>Status: <span class="st st-loss">Low conversion</span> · <span class="st st-problem">Low Featured Offer share</span> &lt;70% with 50+ sessions · <span class="st st-watch">Low traffic</span> &lt;${TD_INVISIBLE} sessions · <span class="st st-good">Feed it traffic</span> ≥1.5× average · <span class="st st-data">Low sessions</span>.</li>
     </ol>
   </div></details>`;
   const worst=r.noconv[0];
   h+=`<div style="display:flex;justify-content:flex-end;gap:8px;margin:14px 0 2px"><button type="button" class="fbtn" id="td-csv">⬇ Export CSV</button><button type="button" class="fbtn" id="td-pdf">📄 Print / Save PDF</button><button type="button" class="fbtn" id="td-share">📤 Share PDF</button></div>
   <div class="panel"><h4>What should I do next?</h4><ul style="margin:8px 0 0 18px;line-height:1.9;font-size:13.5px">
-    ${worst?`<li><b>${esc(worst.asin)}</b> got ${num(worst.sessions)} visitors and converted ${worst.cvr.toFixed(2)}% — run it through the <a href="#/listing-checker">Listing Checker</a> and compare its price against the top result for its main keyword before spending another rupee on ads.</li>`:""}
-    ${r.stars.length?`<li>The ⭐ winners convert far above your average — point ad budget at them in the <a href="#/ads-optimizer">Ads Optimizer</a> instead of at the bleeders.</li>`:""}
+    ${worst?`<li><b>${esc(worst.asin)}</b> had ${num(worst.sessions)} sessions but converted only ${worst.cvr.toFixed(2)}%, versus ${t.cvr.toFixed(2)}% across the account. Review its listing, price, Featured Offer status and traffic quality before increasing traffic spend — the <a href="#/listing-checker">Listing Checker</a> is one place to start.</li>`:""}
+    ${r.stars.length?`<li>The ⭐ ASINs convert above your account average on this export. If you are choosing where extra traffic goes, they are the better-evidenced candidates — see the <a href="#/ads-optimizer">Ads Optimizer</a>.</li>`:""}
     <li>Whether the extra sales would be profitable is a margin question — check the SKUs in the <a href="#/sku-report">SKU report</a> with your product costs.</li>
   </ul></div>`;
   out.innerHTML=h; tdWire(out,r);
@@ -11240,7 +11252,7 @@ function tdWire(out,r){
   const csv=out.querySelector("#td-csv");
   if(csv&&r) csv.addEventListener("click",()=>{
     saCsvDownload("traffic-doctor.csv",
-      ["ASIN","Product","Diagnosis","Sessions","Page views","Conversion %","Buy Box %","Units","Sales (INR)","Units lost vs avg (est)","Fix"],
+      ["ASIN","Product","Diagnosis","Sessions","Page views","Conversion %","Featured Offer %","Units","Sales (INR)","Units lost vs avg (est)","Fix"],
       r.items.map(x=>[x.asin,x.title,tdStatus(x).l,x.sessions,x.pageViews,x.cvr.toFixed(2),
         x.buyBox===null?"":x.buyBox.toFixed(1),x.units,x.sales.toFixed(2),Math.round(x.lostUnits)||"",x.fix]));
   });
@@ -11294,7 +11306,7 @@ function adsAddFiles(list){
 }
 function adsRenderResults(){
   const out=document.getElementById("ads-out"); if(!out) return;
-  let h=`<div class="rec-files">${adsFiles.map((f,i)=>`<span class="rec-file"${f.kind==="error"?` title="${esc(f.msg)}"`:""}><b>${esc(f.name)}</b><span class="rf-kind">${f.kind==="error"?"⚠ Skipped":f.kind==="ap"?"Advertised product":f.kind==="settlement"?"Settlement":"Search terms"}</span><button type="button" data-rm="${i}" aria-label="Remove ${esc(f.name)}">✕</button></span>`).join("")}</div>`;
+  let h=`<div class="rec-files">${adsFiles.map((f,i)=>`<span class="rec-file"${f.kind==="error"?` title="${esc(f.msg)}"`:""}><b>${esc(f.name)}</b><span class="rf-kind">${f.kind==="error"?"⚠ Wrong report":f.kind==="ap"?"Advertised product":f.kind==="settlement"?"Settlement":"Search terms"}</span><button type="button" data-rm="${i}" aria-label="Remove ${esc(f.name)}">✕</button></span>`).join("")}</div>`;
   const bad=adsFiles.filter(f=>f.kind==="error");
   if(bad.length) h+=`<div class="banner warn">${bad.map(f=>`<b>${esc(f.name)}</b>: ${esc(f.msg)}`).join("<br>")}</div>`;
   const all=adsFiles.filter(f=>f.kind==="st").flatMap(f=>f.st.terms);
