@@ -1264,9 +1264,11 @@ const CALCS = [
   fields:[
     {k:"price",label:"Selling Price (₹)",t:"num",d:999},
     {k:"cost",label:"Product Cost (₹)",t:"num",d:400},
-    {k:"fees",label:"Amazon Fees (₹/unit)",t:"num",dec:1,d:169},
+    {k:"fees",label:"Amazon Fees (₹/unit)",t:"num",dec:1,d:169,
+      hint:"Type your own, or get the exact figure for this SKU from the Amazon Profit Calculator — the default is only a placeholder."},
     {k:"cvr",label:"Conversion Rate (%)",t:"num",dec:1,d:10},
-    {k:"target",label:"Target Profit (% of price)",t:"num",dec:1,d:15,full:1},
+    {k:"target",label:"Target Profit (% of price)",t:"num",dec:1,d:15,full:1,
+      hint:"Your own target — the default is a starting point, not a recommended margin."},
   ],
   compute(v){
     const profit=v.price-v.cost-v.fees;
@@ -1286,7 +1288,7 @@ const CALCS = [
       ],
       banner:{t:profit<=0?"warn":"info",
         x:profit<=0
-          ? "This SKU loses money before a single ad rupee is spent. Fix price, cost or fees before advertising it."
+          ? "At these inputs the unit loses money before any advertising. Price, product cost or fees would have to change before ad spend can pay for itself." 
           : `Above ${beAcos.toFixed(1)}% ACOS you lose money on ad-driven sales. Keep CPC under ${inr(beCpc)} to break even, or under ${inr(tCpc)} to protect your ${v.target}% target profit.`},
       rows:[
         {l:"Selling price",v:inr0(v.price),mut:1},
@@ -1303,7 +1305,7 @@ const CALCS = [
 {
   id:"advertising-roi", icon:"📈", badge:"Updated",
   name:"Amazon Advertising ROI Calculator",
-  desc:"Project clicks, orders, sales, and ROAS from PPC budget, CPC, and CVR inputs.",
+  desc:"Project clicks, orders, ad sales and ROAS from your own PPC budget, CPC and conversion assumptions — gross, before product cost.",
   fields:[
     {k:"budget",label:"PPC Budget (₹)",t:"num",d:10000},
     {k:"cpc",label:"Avg CPC (₹)",t:"num",dec:1,d:12},
@@ -1311,6 +1313,7 @@ const CALCS = [
     {k:"aov",label:"Avg Order Value (₹)",t:"num",d:999},
   ],
   compute(v){
+    const known=v.cpc>0&&v.cvr>0;
     const clicks=v.cpc>0?v.budget/v.cpc:0;
     const orders=clicks*v.cvr/100;
     const sales=orders*v.aov;
@@ -1319,20 +1322,25 @@ const CALCS = [
     const cpo=orders>0?v.budget/orders:0;
     return {
       stats:[
-        {k:"Est. Clicks",v:num(clicks)},
-        {k:"Est. Orders",v:num(orders),t:"blue"},
-        {k:"Projected Sales",v:inr(sales),t:"green"},
-        {k:"ROAS",v:roas.toFixed(2)+"x",t:roas>=3?"green":"red"},
+        {k:"Est. clicks",v:known?num(clicks):"—"},
+        {k:"Est. orders",v:known?num(orders):"—",t:"blue"},
+        {k:"Projected ad sales",v:known?inr(sales):"—"},
+        {k:"ROAS",v:known?roas.toFixed(2)+"x":"—"},
       ],
-      banner:{t:roas>=4?"good":roas>=2.5?"info":"warn",
-        x:`${inr0(v.budget)} buys about ${num(clicks)} clicks, converting to roughly ${num(orders)} orders and ${inr(sales)} in sales — an ACOS of ${pc(acos)}.`},
+      /* ROAS of 3x is healthy at a 50% margin and loss-making at a 25% one,
+         so it cannot be graded without the seller's margin. State the
+         arithmetic and the break-even, not a verdict. */
+      banner: !known ? {t:"warn",
+        x:"Enter a CPC and a conversion rate above zero — without both, clicks, orders and ROAS are unknown rather than zero."}
+        : {t:"info",
+        x:`At your own CPC and conversion assumptions, ${inr0(v.budget)} buys about ${num(clicks)} clicks → roughly ${num(orders)} orders → ${inr(sales)} of ad-attributed sales, an ACOS of ${pc(acos)}. ROAS is gross sales per rupee of ad spend, not profit — this spend only pays for itself if your contribution margin after Amazon fees and product cost is above ${pc(acos)} of price. The Break-Even ACOS calculator works that out for a SKU.`},
       rows:[
-        {l:"Clicks",v:num(clicks),mut:1},
-        {l:"Orders",v:num(orders),mut:1},
-        {l:"Cost per order",v:inr(cpo),mut:1},
-        {l:"Projected sales",v:inr(sales),hl:1},
-        {l:"ACOS",v:pc(acos),mut:1},
-        {l:"ROAS",v:roas.toFixed(2)+"x",fin:1,loss:roas<1},
+        {l:"Clicks",v:known?num(clicks):"—",mut:1},
+        {l:"Orders",v:known?num(orders):"—",mut:1},
+        {l:"Cost per order",v:known?inr(cpo):"—",mut:1},
+        {l:"Projected ad-attributed sales",v:known?inr(sales):"—",hl:1},
+        {l:"ACOS — ad spend ÷ these projected ad sales",v:known?pc(acos):"—",mut:1},
+        {l:"ROAS — gross sales per ₹1 of ad spend, before any cost",v:known?roas.toFixed(2)+"x":"—",fin:1,loss:known&&roas<1},
       ],
     };
   }
@@ -1538,7 +1546,8 @@ const CALCS = [
     {k:"zone",label:"Zone",t:"seg",o:[{v:"local",l:"Local"},{v:"national",l:"National"}],d:"local",full:1},
     {k:"pack",label:"Packaging (₹)",t:"num",d:15},
     {k:"acos",label:"ACOS (%)",t:"num",dec:1,d:10},
-    {k:"ret",label:"Returns (%)",t:"num",dec:1,d:3},
+    {k:"retcost",label:"Expected return cost per sold unit (₹)",t:"num",dec:2,d:0,full:1,
+      hint:"Optional. Your average expected loss from returns per unit sold. A return rate alone cannot tell this calculator the financial loss."},
   ],
   compute(v){
     const feesAt=p=>{
@@ -1550,7 +1559,11 @@ const CALCS = [
       const feeSum=referral+closing+shipping+pp;   // storage is billed monthly, not per order
       return {referral,closing,shipping,pp,st:0,gst:feeSum*GST,total:feeSum*(1+GST),rate};
     };
-    const netAt=p=>{const r=p-feesAt(p).total-(v.cost+v.pack);return r>0?r*(1-(v.acos+v.ret)/100):r;};
+    /* ACOS is a share of the SELLING PRICE. Charging it against leftover
+       contribution both understated ads and made the ledger below disagree
+       with the total it sat under. */
+    const retC=Math.max(0,Number(v.retcost)||0);
+    const netAt=p=>p-feesAt(p).total-(v.cost+v.pack)-p*v.acos/100-retC;
     const MAX=49999;
     let price=0;
     for(let p=1;p<=MAX;p++){
@@ -1566,12 +1579,12 @@ const CALCS = [
       };
     }
     const f=feesAt(price),net=netAt(price),margin=net/price*100;
-    const mkt=price*v.acos/100,ret=price*v.ret/100;
+    const mkt=price*v.acos/100;
     return {
       stats:[
         {k:"Required Price",v:"₹"+price.toLocaleString("en-IN"),t:"blue"},
-        {k:"Net Profit There",v:inr(net),t:"green"},
-        {k:"Margin There",v:margin.toFixed(2)+"%"},
+        {k:"Estimated profit there",v:inr(net),t:"green"},
+        {k:"Margin there",v:margin.toFixed(2)+"%"},
         {k:"Amazon Fees There",v:inr(f.total)},
       ],
       banner:{t:"info",x:`₹${price.toLocaleString("en-IN")} is the lowest whole-rupee price meeting your target. Prices are scanned ₹1 at a time through every fee band, so band jumps are accounted for.`},
@@ -1583,8 +1596,9 @@ const CALCS = [
         ...(f.pp>0?[{l:"FBA pick & pack",v:"-"+inr0(f.pp),neg:1,mut:1}]:[]),
         {l:"GST on fees (18%)",v:"-"+inr(f.gst),neg:1,mut:1},
         {l:"Product + packaging",v:"-"+inr0(v.cost+v.pack),neg:1,mut:1},
-        {l:`Marketing (${v.acos}%) + Returns (${v.ret}%)`,v:"-"+inr(mkt+ret),neg:1,mut:1},
-        {l:"Net profit per unit",v:inr(net),fin:1},
+        {l:`Advertising at ${v.acos}% ACOS of the selling price`,v:"-"+inr(mkt),neg:1,mut:1},
+        ...(retC>0?[{l:"Expected return cost you entered",v:"-"+inr(retC),neg:1,mut:1}]:[]),
+        {l:"Estimated profit per unit",v:inr(net),fin:1},
       ],
     };
   }
