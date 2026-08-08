@@ -1135,8 +1135,19 @@ const CALCS = [
         {k:"Net Settlement",v:inr(settle),t:"blue"},
         {k:"Referral Rate",v:pc(rate*100)},
       ],
-      banner:{t:fpc>25?"warn":"info",
-        x:`Amazon keeps ${pc(fpc)} of this sale; you receive ${pc(100-fpc)}. Fee share falls as price rises because referral is percentage-based while fulfilment fees are broadly flat.`},
+      banner:(()=>{
+        /* Referral rates step at price bands, so a rupee more can cost a lot
+           more. Check the next rupee rather than asserting a smooth curve. */
+        const nx=sp+1, nRate=refRate(v.cat,nx);
+        const nFeeSum=nx*nRate+closingFee(nx,"fba",v.cat)+shipFee(nx,"fba",v.zone,billKg)+pp;
+        const nFpc=nx>0?nFeeSum*(1+GST)/nx*100:0;
+        const jump=nRate>rate;
+        return {t:jump?"warn":fpc>25?"warn":"info",
+          x:`Amazon keeps ${pc(fpc)} of this sale; you receive ${pc(100-fpc)}.`
+            +(jump
+              ? ` One rupee more crosses a referral band: at ₹${nx} the rate goes ${pc(rate*100)} → ${pc(nRate*100)} and the fee share rises to ${pc(nFpc)}. Fee share does not fall smoothly with price — it steps at each band.`
+              : ` Between bands the fee share eases as price rises, because fulfilment fees are broadly flat while referral is a percentage — but referral rates step at price bands, so check the band before repricing.`)};
+      })(),
       rows:[
         {l:"Selling Price",v:inr0(sp)},
         {l:`Referral fee (${(rate*100).toFixed(1)}%)`,v:"-"+inr(referral),neg:1,mut:1},
@@ -1147,12 +1158,14 @@ const CALCS = [
         {l:"GST on fees (18%)",v:"-"+inr(gst),neg:1,mut:1},
         {l:"Net Settlement",v:inr(settle),fin:1,loss:settle<0},
       ],
-      split:{title:"Fee composition",total:sp||1,items:[
+      /* Storage is excluded here: it is billed monthly against the account,
+         never against this order, so including it made the slices sum to more
+         than the selling price. */
+      split:{title:`Where every ${inr0(sp)} of this order goes — storage excluded, it is billed monthly`,total:sp||1,items:[
         {key:"ref",nm:"Referral",color:"#ef4444",val:referral},
         {key:"cl",nm:"Closing",color:"#f59e0b",val:closing},
         {key:"wh",nm:"Weight handling",color:"#eab308",val:wh},
         {key:"pp",nm:"Pick & pack",color:"#0ea5e9",val:pp},
-        {key:"st",nm:"Storage",color:"#14b8a6",val:st},
         {key:"gst",nm:"GST on fees",color:"#8b5cf6",val:gst},
         {key:"keep",nm:"You receive",color:"#22c55e",val:Math.max(0,settle)},
       ]},
@@ -1169,7 +1182,8 @@ const CALCS = [
     {k:"H",label:"Height (cm)",t:"num",dec:1,d:10},
     {k:"units",label:"Units in stock",t:"num",d:500},
     {k:"sales",label:"Units sold / month",t:"num",d:150},
-    {k:"age",label:"Days in stock",t:"num",d:60},
+    {k:"age",label:"Days in stock",t:"num",d:60,
+      hint:"Treated as one age for the whole quantity. Real stock usually arrived in batches, so the aged-inventory surcharge may apply to only part of it."},
     {k:"peak",label:"Season",t:"seg",o:[{v:"std",l:"Jan–Sep"},{v:"peak",l:"Oct–Dec"}],d:"std",full:1},
   ],
   compute(v){
@@ -1184,16 +1198,19 @@ const CALCS = [
     const perUnit=v.units>0?exposure/v.units:0;
     return {
       stats:[
-        {k:"Monthly Storage",v:inr(monthly),t:"blue"},
-        {k:"Months of Cover",v:isFinite(cover)?cover.toFixed(1)+" mo":"—",t:cover>6?"red":"green"},
-        {k:"Total Volume",v:totalCuft.toFixed(2)+" ft³"},
-        {k:"Cost / Unit / Mo",v:inr(perUnit),t:aged?"red":undefined},
+        {k:"Monthly storage",v:inr(monthly),t:"blue"},
+        {k:"Months of cover",v:isFinite(cover)?cover.toFixed(1)+" mo":"—"},
+        {k:"Total volume",v:totalCuft.toFixed(2)+" ft³"},
+        {k:"Cost per unit per month",v:inr(perUnit),t:aged?"red":undefined},
       ],
-      banner: aged ? {t:"warn",
-        x:`This inventory is over 365 days old, so an aged-storage surcharge of ${inr(surcharge)}/month applies on top of standard storage. Consider a removal order or a clearance promotion.`}
-        : (isFinite(cover)&&cover>6) ? {t:"warn",
-        x:`You are holding ${cover.toFixed(1)} months of cover. Beyond roughly 6 months you tie up cash and edge toward long-term storage fees.`}
-        : {t:"good",x:`Healthy cover at ${isFinite(cover)?cover.toFixed(1):"—"} months. Storage is a small, predictable cost at this turn rate.`},
+      /* No unsourced "healthy cover" norm: state what this stock costs to
+         hold for as long as it is projected to take to sell. */
+      banner: !isFinite(cover) ? {t:"warn",
+        x:`No monthly sales entered, so months of cover cannot be calculated — enter a sales rate, or read the monthly figure on its own.`}
+        : aged ? {t:"warn",
+        x:`These units are entered as over 365 days old, so Amazon's aged-inventory surcharge of ${inr(surcharge)}/month applies on top of standard storage. Note this calculator treats the whole quantity as one age — real stock usually arrived in batches.`}
+        : {t:"info",
+        x:`At ${num(v.sales)} units a month this stock is projected to take ${cover.toFixed(1)} months to clear, costing about ${inr(exposure*cover)} of storage over that period — roughly ${inr(v.units>0?exposure*cover/v.units:0)} per unit. Amazon charges its aged-inventory surcharge from 365 days.`},
       rows:[
         {l:"Unit volume",v:unitCuft.toFixed(4)+" ft³",mut:1},
         {l:"Total volume",v:totalCuft.toFixed(2)+" ft³",mut:1},
@@ -1229,7 +1246,7 @@ const CALCS = [
     const acosTxt=acos===null?(spent?"No ad sales":"—"):pc(acos);
     return {
       stats:[
-        {k:"ACOS",v:acosTxt,t:acos===null?(spent?"red":""):(acos>30?"red":"green")},
+        {k:"ACOS",v:acosTxt,t:acos===null?(spent?"red":""):""},
         {k:"ROAS",v:roas.toFixed(2)+"x",t:"blue"},
         {k:"TACoS",v:tacos===null?"—":pc(tacos)},
         {k:"Organic Share",v:v.total>0?pc(orgPc):"—"},
@@ -1238,10 +1255,10 @@ const CALCS = [
         ?{t:"warn",x:`You spent ${inr(v.spend)} and the ads returned no sales at all, so there is no ACOS to calculate — every rupee was lost. Check the Search Term report for terms taking clicks without orders before raising the budget.`}
         :tacos===null
         ?{t:"info",x:"Enter your total sales to see TACoS — what advertising costs against everything you sell, not just what ads are credited with."}
-        :{t:tacos<10?"good":tacos<20?"info":"warn",
-        x:tacos<10?"Healthy TACoS — ads are a small share of total revenue, which means real organic pull."
-         :tacos<20?"Moderate TACoS. Watch that organic sales grow as you scale spend, not just paid."
-         :"High TACoS — revenue is leaning heavily on ads. Work on organic rank and listing conversion."},
+        /* No TACoS norm: the number that decides whether this spend works is
+           the seller's contribution margin, which this tool does not hold. */
+        :{t:"info",
+        x:`Advertising is ${pc(tacos)} of everything you sold and ${pc(acos)} of what ads were credited with. Neither figure says whether the spend paid for itself — that depends on your contribution margin after Amazon fees and product cost, which this calculator does not know. Work it out per SKU in the Break-Even ACOS calculator. "Organic sales" here is simply total sales minus ad-attributed sales, so it moves with Amazon's attribution window.`},
       rows:[
         {l:"Ad sales",v:inr(v.adSales)+(v.total>0?"  ("+pc(adPc)+")":""),mut:1},
         {l:"Organic sales",v:inr(org)+(v.total>0?"  ("+pc(orgPc)+")":""),mut:1},
@@ -1348,27 +1365,31 @@ const CALCS = [
 {
   id:"marketing-budget", icon:"📊",
   name:"Amazon Marketing Budget Planner",
-  desc:"Plan monthly Amazon ad spend by category benchmarks and revenue targets.",
+  desc:"Turn a revenue target and a TACoS you choose into a monthly, weekly and daily ad budget.",
   fields:[
     {k:"revenue",label:"Monthly Revenue Target (₹)",t:"num",d:500000,full:1},
     {k:"cat",label:"Category",t:"sel",o:catOptions,d:"electronics",full:1},
-    {k:"custom",label:"Custom TACoS % (optional)",t:"num",dec:1,d:0,full:1},
+    {k:"custom",label:"Your TACoS % (optional)",t:"num",dec:1,d:0,full:1,
+      hint:"Use your own TACoS from Multi-Month Trends or your ad reports. Left blank, this tool falls back to a rough starting figure for the category — a placeholder, not a researched benchmark."},
   ],
   compute(v){
-    const tacos = v.custom>0 ? v.custom : (CATMAP[v.cat]||CATMAP.other).tacos;
+    const own = v.custom>0;
+    const tacos = own ? v.custom : (CATMAP[v.cat]||CATMAP.other).tacos;
     const monthly=v.revenue*tacos/100;
     return {
       stats:[
         {k:"Monthly Ad Budget",v:inr(monthly),t:"blue"},
         {k:"Daily Budget",v:inr(monthly/30),t:"green"},
         {k:"Weekly Budget",v:inr(monthly/4.345)},
-        {k:"TACoS Used",v:tacos+"%"},
+        {k:"TACoS used",v:tacos+"%"+(own?"":" (placeholder)")},
       ],
-      banner:{t:"info",
-        x:`Using a ${tacos}% TACoS benchmark for this category, plan about ${inr(monthly/30)} per day to support a ${inr0(v.revenue)} monthly revenue target. Enter a custom TACoS to match your own history.`},
+      banner:{t:own?"info":"warn",
+        x:own
+          ? `At your own ${tacos}% TACoS, a ${inr0(v.revenue)} monthly revenue target implies about ${inr(monthly/30)} of ad spend per day. This is arithmetic on your figure, not a forecast — it does not say the spend will produce that revenue.`
+          : `No TACoS entered, so this uses ${tacos}% as a rough starting figure for the category. That is a placeholder, not a researched benchmark — enter your own TACoS from Multi-Month Trends or your ad reports before budgeting from it.`},
       rows:[
         {l:"Revenue target",v:inr0(v.revenue),hl:1},
-        {l:"TACoS benchmark",v:tacos+"%",mut:1},
+        {l:own?"Your TACoS":"TACoS placeholder for this category",v:tacos+"%",mut:1},
         {l:"Monthly budget",v:inr(monthly),mut:1},
         {l:"Weekly budget",v:inr(monthly/4.345),mut:1},
         {l:"Daily budget",v:inr(monthly/30),fin:1},
@@ -1428,7 +1449,8 @@ const CALCS = [
     {k:"uplift",label:"Sales Uplift (%)",t:"num",dec:1,d:40},
     {k:"base",label:"Baseline Orders",t:"num",d:100},
     {k:"cost",label:"Unit Cost (₹)",t:"num",d:400},
-    {k:"fees",label:"Amazon Fees (₹)",t:"num",dec:1,d:169,full:1},
+    {k:"fees",label:"Amazon Fees (₹)",t:"num",dec:1,d:169,full:1,
+      hint:"Type your own, or get the exact figure for this SKU from the Amazon Profit Calculator — the default is only a placeholder."},
   ],
   compute(v){
     const dp=v.price*(1-v.disc/100);
@@ -1446,15 +1468,19 @@ const CALCS = [
     const beUplift = denom>0 ? ((baseContrib/denom)/v.base-1)*100 : Infinity;
     return {
       stats:[
-        {k:"Discounted Price",v:inr(dp)},
-        {k:"Incremental Orders",v:"+"+num(incr),t:"blue"},
-        {k:"Net vs Baseline",v:inr(net),t:worth?"green":"red"},
-        {k:"Coupon Fees",v:inr(cFees)},
+        {k:"Discounted price",v:inr(dp)},
+        {k:"Extra orders you assumed",v:"+"+num(incr)},
+        {k:"Break-even uplift needed",v:isFinite(beUplift)&&beUplift>0?beUplift.toFixed(0)+"%":"not reachable",t:"blue"},
+        {k:"Net vs baseline at your uplift",v:inr(net),t:worth?"green":"red"},
       ],
-      banner:{t:worth?"good":"warn",
-        x:worth
-          ? `Worth running: the coupon adds ${inr(net)} of contribution over baseline, driven by about ${num(incr)} extra orders.`
-          : `Not worth it at these numbers — contribution falls ${inr(Math.abs(net))} below baseline.${isFinite(beUplift)&&beUplift>0?` You would need roughly ${beUplift.toFixed(0)}% uplift to break even at this discount.`:" The discounted margin is too thin to recover at any volume."}`},
+      /* The uplift is the seller's assumption, so the outcome is too. The
+         only thing this tool can state without guessing is the uplift the
+         discount would have to produce to break even. */
+      banner:{t:"info",
+        x:(isFinite(beUplift)&&beUplift>0
+            ? `At a ${v.disc}% discount this coupon needs about ${beUplift.toFixed(0)}% more orders just to match your current contribution. `
+            : `At a ${v.disc}% discount the per-unit margin does not cover the coupon fee, so no amount of extra volume recovers it. `)
+          +`You have assumed ${v.uplift}% uplift, which would ${worth?"beat":"miss"} that break-even by ${inr(Math.abs(net))} — but the uplift is your estimate, not a measurement, so treat this as a break-even test rather than a verdict on whether to run the coupon.`},
       rows:[
         {l:"Regular price",v:inr0(v.price),mut:1},
         {l:`Discounted price (−${v.disc}%)`,v:inr(dp),hl:1},
