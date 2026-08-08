@@ -194,6 +194,7 @@
   .stat.warn{background:#fffaf0;border-color:#f5c26b} .stat.warn .v{color:#a1620a}
   .adp-ready{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
 .fbtn[disabled]{opacity:.45;cursor:not-allowed}
+.f-hint{font-size:11.5px;color:var(--muted);margin-top:4px;line-height:1.45}
 .chip.warnchip{background:#fffaf0;border-color:#f5c26b;color:#a1620a;font-weight:700}
   /* Next-step action cards: a heading, the evidence, and one link that goes
      where the fix is. A bulleted paragraph was read as commentary, not action. */
@@ -984,7 +985,7 @@ const CALCS = [
 {
   id:"profit", icon:"🧮", badge:"Popular",
   name:"Amazon Profit Calculator",
-  desc:"Calculate Amazon India fees, referral, closing, FBA charges, and final profit per SKU.",
+  desc:"Estimate contribution and profit per unit after Amazon fees, product cost and the costs you enter below.",
   fields:[
     {k:"sp",label:"Selling Price (₹)",t:"num",d:999},
     {k:"cost",label:"Product Cost (₹)",t:"num",d:400},
@@ -997,7 +998,8 @@ const CALCS = [
     {k:"zone",label:"Zone",t:"seg",o:[{v:"local",l:"Local"},{v:"national",l:"National"}],d:"local",full:1},
     {k:"pack",label:"Packaging (₹)",t:"num",d:15},
     {k:"acos",label:"ACOS (%)",t:"num",dec:1,d:10},
-    {k:"ret",label:"Returns (%)",t:"num",dec:1,d:3,full:1},
+    {k:"retcost",label:"Expected return cost per sold unit (₹)",t:"num",dec:2,d:0,full:1,
+      hint:"Optional. Your average expected loss from returns per unit sold — return logistics, unrecovered product value or non-refundable charges you want to account for. A return rate alone cannot tell this calculator the financial loss."},
     {k:"gstreg",label:"GST Registered (claim ITC)",t:"seg",o:[{v:"yes",l:"Yes"},{v:"no",l:"No"}],d:"yes",full:1},
   ],
   compute(v){
@@ -1019,12 +1021,18 @@ const CALCS = [
     // settlement and product+packaging cost (owner's convention).
     const landed=v.cost+v.pack;
     const st=(v.ful==="fba"&&sp>0)?unitStorage(v.L,v.W,v.H):0;   // one month at Rs 45/cu ft
-    const remain=Math.max(0,settle-landed);
-    const mkt=remain*v.acos/100, ret=remain*v.ret/100;
+    /* ACOS is ad spend divided by ad SALES. Charging it against whatever
+       contribution happened to be left understated advertising by 58% on the
+       default inputs -- a correct-looking percentage on the wrong base. */
+    const mkt=sp*v.acos/100;
+    const ret=Math.max(0,Number(v.retcost)||0);
     const net=settle-landed-st-mkt-ret;
     const margin=sp>0?net/sp*100:0;
     const inv=landed+mkt+ret;
     const roi=inv>0?net/inv*100:0;
+    /* What share of the selling price can go on ads before this unit stops
+       making money, given every other cost entered. */
+    const beAcos=sp>0?Math.max(0,(settle-landed-st-ret))/sp*100:0;
     const loss=net<0;
     const cat=CATMAP[v.cat];
     const gstReg=v.gstreg!=="no";
@@ -1040,35 +1048,36 @@ const CALCS = [
       ["fba","FBA pick & pack","#0ea5e9",pp],
       ["st","FBA storage (1 month)","#38bdf8",st],
       ["gst","GST on Amazon fees","#8b5cf6",gst],
-      ["mkt","Marketing / ads","#6366f1",mkt],
-      ["rt","Return loss","#a855f7",ret],
+      ["mkt","Advertising (ACOS of price)","#6366f1",mkt],
+      ["rt","Expected return cost","#a855f7",ret],
       ["np",loss?"Net loss":"Net profit kept","#22c55e",Math.max(0,net)],
     ].filter(s=>s[3]>0||s[0]==="np");
 
     return {
       stats:[
-        {k:"Settlement",v:inr(settle),t:"blue"},
-        {k:"Net Profit",v:inr(net),t:loss?"red":"green"},
-        {k:"Net Margin",v:pc(margin)},
-        {k:"ROI",v:pc(roi)},
-        ...(gstReg?[
-          {k:"GST ITC Recoverable",v:inr(itc)},
-          {k:"Profit After ITC",v:inr(netItc),t:netItc<0?"red":"green"},
-        ]:[]),
+        {k:"Estimated proceeds after Amazon fees",v:inr(settle),t:"blue"},
+        {k:"Estimated profit per unit",v:inr(net),t:loss?"red":"green"},
+        {k:"Net margin",v:pc(margin)},
+        {k:"Break-even ACOS",v:pc(beAcos)},
       ],
-      banner: (sp>0 && margin<15) ? {t:"warn",
-        x:`Low margin (${margin.toFixed(1)}%). A sustainable range is usually 15–25%. Consider raising price, cutting cost, or trimming ad spend.`} : null,
+      /* No unsourced "healthy margin" band: what this tool can prove is how
+         much room is left before the unit stops making money. */
+      banner: (sp>0 && net<=0) ? {t:"warn",
+        x:`At these inputs the unit does not make money — estimated ${inr(net)} per unit. Break-even ACOS is ${pc(beAcos)}, so any advertising above that deepens the loss.`}
+        : (sp>0 && beAcos<v.acos) ? {t:"warn",
+        x:`Advertising at ${v.acos}% ACOS is above this unit's break-even ACOS of ${pc(beAcos)} — at that spend the unit loses money.`} : null,
       rows:[
         {l:"Selling Price",v:inr0(sp)},
         {l:`Amazon Fees (${sp>0?(fees/sp*100).toFixed(2):"0.00"}% of SP)`,v:"-"+inr(fees),neg:1,mut:1},
         {l:"Settlement from Amazon",v:inr(settle),hl:1},
         {l:"Product + Packaging",v:"-"+inr0(landed),neg:1,mut:1},
         ...(st>0?[{l:"FBA storage while it sits (1 month)",v:"-"+inr(st),neg:1,mut:1}]:[]),
-        {l:`Marketing (${v.acos}%) + Returns (${v.ret}%) of remaining`,v:"-"+inr(mkt+ret),neg:1,mut:1},
-        {l:`Net ${loss?"Loss":"Profit"} per Unit`,v:inr(net),fin:1,loss:loss},
+        {l:`Advertising at ${v.acos}% ACOS of the selling price`,v:"-"+inr(mkt),neg:1,mut:1},
+        ...(ret>0?[{l:"Expected return cost you entered",v:"-"+inr(ret),neg:1,mut:1}]:[]),
+        {l:`Estimated ${loss?"loss":"profit"} per unit`,v:inr(net),fin:1,loss:loss},
+        {l:"Break-even ACOS — ad share of price before this unit stops making money",v:pc(beAcos),mut:1},
         ...(gstReg?[
-          {l:"GST on fees recoverable as ITC",v:"+"+inr(itc),mut:1},
-          {l:"Net Profit after ITC",v:inr(netItc),fin:1,loss:netItc<0},
+          {l:"GST on Amazon fees potentially eligible for ITC",v:inr(itc),mut:1},
         ]:[]),
       ],
       note: [
@@ -1086,12 +1095,11 @@ const CALCS = [
           ? "FBA fulfilment uses Amazon's published fee table for a Standard STEP tier, on billing weight plus 100 g packaging rounded up to the next 500 g. Amazon prices standard-size weight handling as Regional or National only — there is no Local rate — so \"Local\" here is charged at the Regional rate. Premium and Advanced sellers pay a little less, Basic a little more."
           : null,
         gstReg
-          ? "The 18% GST Amazon charges on its fees is claimable back as input tax credit (ITC) in your GST return, so it isn't a true cost for registered sellers."
+          ? "If eligible, the 18% GST Amazon charges on its fees may be available as input tax credit against your GST liability. Eligibility conditions apply, so it is shown separately and is NOT added to the profit figure above." 
           : null,
       ].filter(Boolean).join(" "),
       split:{title:`Where every ${inr0(sp)} goes`,total:sp||1,
         items:seg.map(s=>({key:s[0],nm:s[1],color:s[2],val:(s[0]==="np"&&loss)?net:s[3]}))},
-      bench:{title:`Your margin vs. ${cat.name} benchmark`,you:margin,...cat.bench},
     };
   }
 },
@@ -3700,7 +3708,8 @@ function fieldHtml(f,val){
         `<button type="button" data-v="${o.v}" class="${o.v===val?"on":""}" aria-pressed="${o.v===val}" title="${esc(o.l)}">${esc(o.l)}</button>`).join("")}</div>`;
   }
   return `<label id="${lid}" for="${id}">${esc(f.label)}</label>
-    <input id="${id}" data-k="${f.k}" data-dec="${f.dec?1:0}" inputmode="${f.dec?"decimal":"numeric"}" value="${val}">`;
+    <input id="${id}" data-k="${f.k}" data-dec="${f.dec?1:0}" inputmode="${f.dec?"decimal":"numeric"}" value="${val}">${
+      f.hint?`<div class="f-hint">${esc(f.hint)}</div>`:""}`;
 }
 
 function renderCalc(id){
