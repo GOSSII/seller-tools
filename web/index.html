@@ -6091,9 +6091,9 @@ const REC_CHECKS={
   refundFee:{icon:"💸",title:"Refunds where the referral fee wasn't returned",
     why:"When Amazon refunds a buyer it normally credits back most of the referral fee it charged you. On these refunds the original order was charged a referral fee and the refund credits none of it back.",
     claim:`<b>Seller Central → Help → Get Support → Selling on Amazon</b> → describe it as "Referral fee not credited back on refund" and quote the Order ID and refund date. Ask them to compare the refund's fee lines with the original order.`},
-  safeT:{icon:"🛡️",title:"SAFE-T-eligible refunds (seller-fulfilled)",
+  safeT:{icon:"🛡️",title:"Potential SAFE-T cases (seller-fulfilled refunds)",
     why:"Amazon refunded the buyer on these Easy Ship / Self Ship orders. If the item never came back, came back damaged or the refund was against policy, claim reimbursement through SAFE-T.",
-    claim:`<b>Seller Central → Help → Get Support → Selling on Amazon → search "SAFE-T"</b> → File a SAFE-T claim → enter the Order ID, and paste the text from the row's <b>📋 Claim</b> button. File within <b>60 days</b> of the refund date — older rows are marked.`},
+    claim:`<b>Seller Central → Help → Get Support → Selling on Amazon → search "SAFE-T"</b> → File a SAFE-T claim → enter the Order ID, and paste the text from the row's <b>📋 Claim</b> button. Based on the SAFE-T filing policy configured for this refund date, the window is <b>60 days</b> — rows past it are marked and are not counted as claimable. Amazon can change this policy; confirm the current window before filing.`},
   shipped:{icon:"📦",title:"Shipped but no payment line",
     why:"These orders are shipments in your MTR with no Order payment in any settlement you loaded. Cancelled and refunded shipments, and anything shipped in the last fortnight of the loaded period, are already excluded — but the payment still most often sits in a statement you haven't loaded. Load every statement covering the period before raising a claim.",
     claim:`First search the Order ID in <b>Payments → Transaction View</b>. If the shipment is over 30 days old and still unpaid: <b>Help → Get Support → Selling on Amazon → Payments</b>, quoting the Order ID and ship date.`},
@@ -6191,15 +6191,28 @@ function recRenderResults(){
   const allIssues=REC_ORDER.flatMap(k=>res.issues[k]);
   const openCount=allIssues.filter(x=>!done[recKey(x)]).length;
   const n=res.notes||{};
+  /* Six counters, two of them generic ("issues", "to action"), turned a set of
+     unproven and mostly time-expired candidates into a to-do list. On a file
+     where nothing is provably owed, the screen still read as four red issues
+     with four Claim buttons. Confidence now leads: what is proven, what merely
+     needs a look, and what could not be checked. */
+  const safeTRows=res.issues.safeT||[];
+  const expired=safeTRows.filter(x=>x.days!==null&&x.days>60).length;
+  const live=safeTRows.length-expired;
   h+=`<div class="stats">
-    <div class="stat blue"><div class="k">Checked</div><div class="v">${res.ordersChecked} orders · ${res.refundsChecked} refunds</div></div>
-    <div class="stat ${allIssues.length?"red":"green"}"><div class="k">Issues flagged</div><div class="v">${allIssues.length}</div></div>
-    <div class="stat green"><div class="k">Claimable (upper bound)</div><div class="v">${inr(res.recovery)}</div></div>
-    <div class="stat"><div class="k">Refunds to review</div><div class="v">${inr(res.review)}</div></div>
-    <div class="stat"><div class="k">Shipped, not yet paid</div><div class="v">${inr(res.unpaid)}</div></div>
-    <div class="stat"><div class="k">Still to action</div><div class="v">${openCount}</div></div>
+    <div class="stat ${res.recovery>0.005?"green":""}"><div class="k">Confirmed claimable</div><div class="v">${inr(res.recovery)}</div>
+      <div class="sa-sub" style="margin-top:3px">${res.recovery>0.005?"proven by these files":"nothing in these files proves Amazon owes you a fee credit"}</div></div>
+    <div class="stat"><div class="k">Refund cases to assess</div><div class="v">${safeTRows.length}${safeTRows.length?" · "+inr(res.review):""}</div>
+      <div class="sa-sub" style="margin-top:3px">${safeTRows.length?(live?`${live} inside the filing window · ${expired} window appears closed`:"filing window appears closed on all of them"):"none found"}</div></div>
+    <div class="stat"><div class="k">Checked</div><div class="v">${res.ordersChecked} orders · ${res.refundsChecked} refunds</div>
+      <div class="sa-sub" style="margin-top:3px">${res.unpaid>0.005?inr(res.unpaid)+" shipped but not yet paid":"across the statements you loaded"}</div></div>
+  </div>
+  <div class="act ${res.recovery>0.005?"hot":""}" style="margin-top:12px">
+    <h5>${res.recovery>0.005?`Potential reimbursement to review: ${inr(res.recovery)}`:"No confirmed reimbursement found"}</h5>
+    <p>${res.recovery>0.005
+      ?`These files show fees Amazon charged and did not credit back. Amazon still decides each claim — check the evidence on each row before filing.`
+      :`The loaded reports do <b>not</b> prove Amazon currently owes you a fee reimbursement. ${safeTRows.length?`${safeTRows.length} seller-fulfilled refund${safeTRows.length===1?"":"s"} need contextual review below, but ${safeTRows.length===1?"it is":"they are"} <b>not</b> included in the ${inr(res.recovery)} confirmed amount.`:""} A clean audit is a result, not an empty screen.`}</p>
   </div>`;
-  h+=`<div class="banner info"><b>Claimable</b> is only what these files prove Amazon owes you — referral fees charged and never credited back. The other two totals are deliberately kept out of it: <b>refunds to review</b> are SAFE-T <i>candidates</i> (most seller-fulfilled refunds are ordinary returns you won't get back), and <b>shipped, not yet paid</b> is usually settlement timing.</div>`;
   if(n.manyUnmatched)
     h+=`<div class="banner warn">${res.issues.shipped.length} of ${n.mtrOrders} shipped orders have no payment line — that is a lot, and the usual cause is missing statements rather than missing money. <b>Payments → All Statements keeps a separate weekly series for each Account Type</b> — <i>Electronic Transactions</i> and <i>Cash On Delivery Transactions and Non-Transactional Fees</i>. Switch the Account Type dropdown and download both series for the period, then drop them here too.</div>`;
   if(!n.feesItemised&&res.ordersChecked)
@@ -6227,7 +6240,7 @@ function recRenderResults(){
     if(n.weightLinesAudited) bits.push(`<b>${n.weightLinesAudited.toLocaleString("en-IN")}</b> weight-handling charges against each SKU's usual band`);
     h+=`<div class="banner ${found?"warn":"good"}">${found?"⚠️":"✅"} <b>Fee audit:</b> checked ${bits.join(" and ")}. ${
       found?`<b>${found}</b> charge${found>1?"s look":" looks"} wrong — listed below. Amazon requires fee claims within <b>30 days of the order</b>, so start with the newest.`
-           :`Every one was charged correctly — nothing to claim. Amazon only allows fee claims within 30 days, so it is worth re-running this each time you download a statement.`}</div>`;
+           :`Every one was charged correctly — nothing to claim. Claim deadlines vary by fee type, so check the applicable Amazon policy if you ever do find a mismatch.`}</div>`;
   }
   if(n.negativeNoRevenue)
     h+=`<div class="banner info">${n.negativeNoRevenue} order${n.negativeNoRevenue>1?"s carry":" carries"} fulfilment fees here but no sale — the revenue is in a statement you haven't loaded, so ${n.negativeNoRevenue>1?"they were":"it was"} left out of the loss-making check rather than counted as a loss.</div>`;
@@ -6250,24 +6263,30 @@ function recRenderResults(){
   if(!mtrRows.length)
     h+=`<div class="banner info">No MTR loaded — the <b>shipped-but-not-paid</b> check needs one. Get it from <b>Reports → Tax Document Library → Merchant Tax Reports → B2C</b> and drop it here too.</div>`;
   if(!allIssues.length)
-    h+=`<div class="banner good">✅ Nothing to chase — ${n.feesItemised?"every refund credited its referral fee, no negative orders":"no SAFE-T-eligible refunds"}${mtrRows.length?", and every MTR shipment has a payment line":""}.</div>`;
+    h+=`<div class="banner good">✅ <b>No confirmed money to claim from these reports.</b> ${n.feesItemised?"Every refund credited its referral fee back, and no order netted negative":"No potential SAFE-T cases were found"}${mtrRows.length?", and every MTR shipment has a matching payment line":""}. That is a clean audit, not a missing result.</div>`;
   else
     h+=`<div style="display:flex;justify-content:flex-end;gap:8px;margin:14px 0 2px"><button type="button" class="fbtn" id="rec-csv">⬇ Export checklist CSV</button><button type="button" class="fbtn" id="rec-pdf">📄 Print / Save PDF</button><button type="button" class="fbtn" id="rec-share">📤 Share PDF</button></div>`;
   for(const k of REC_ORDER){
     const rows=res.issues[k]; if(!rows.length) continue;
     const c=REC_CHECKS[k];
-    h+=`<div class="panel"><h4>${c.icon} ${esc(c.title)} <span class="sa-sub">(${rows.length})</span></h4>
+    const shutN=rows.filter(x=>x.days!==null&&x.days!==undefined&&x.days>60).length;
+    h+=`<div class="panel"><h4>${c.icon} ${esc(c.title)} <span class="sa-sub">(${rows.length}${shutN?` · ${shutN} filing window appears closed`:""})</span></h4>
       <p class="sa-sub" style="margin:4px 0 10px">${esc(c.why)}</p>
       <div class="tblwrap"><table class="sa">
         <thead><tr><th style="width:36px">Done</th><th>Order</th><th>SKU</th><th>Date</th><th class="num">₹ at stake</th><th>Note</th><th style="width:86px"></th></tr></thead>
         <tbody>${rows.map(x=>{const key=recKey(x),dn=!!done[key];const ct=recClaimText(x);
-          return `<tr class="${dn?"rec-done":""}">
+          /* A row whose filing window has passed must not carry a button that
+             looks like a working claim path — that is the nudge that sends a
+             seller to Amazon with a case Amazon will reject. */
+          const shut=x.days!==null&&x.days!==undefined&&x.days>60;
+          return `<tr class="${dn?"rec-done":""}"${shut?' style="opacity:.62"':""}>
             <td><input type="checkbox" data-done="${esc(key)}"${dn?" checked":""} aria-label="Mark ${esc(x.orderId||"row")} done"></td>
             <td>${esc(x.orderId||"—")}</td><td>${esc(x.sku||"—")}</td>
             <td>${esc(x.date||"—")}</td>
             <td class="num">${x.amount===null?"—":inr(x.amount)}</td>
             <td class="sa-sub">${esc(x.note||"")}</td>
-            <td>${ct?`<button type="button" class="fbtn rec-copy" data-claim="${esc(ct)}" title="Copy a ready-to-paste claim text for this order">📋 Claim</button>`:""}</td></tr>`;}).join("")}
+            <td>${shut?`<span class="chip" title="Based on the SAFE-T filing policy configured for this refund date: 60 days">Window likely closed</span>`
+              :ct?`<button type="button" class="fbtn rec-copy" data-claim="${esc(ct)}" title="Copy the evidence for this order, then review it in Seller Central before filing">Review &amp; prepare →</button>`:""}</td></tr>`;}).join("")}
         </tbody></table></div>
       <div class="rec-claim"><b>How to claim:</b> ${c.claim}</div></div>`;
   }
