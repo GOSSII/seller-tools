@@ -23,8 +23,10 @@ transaction table shows real order ids and SKU names and this repository is publ
 | 31 · RTO Radar | ✅ | ✅ | shares 21's | ✅ ×2 rounds | 15/20 · 82 | **19/20 · 94** | 11 | 11 |
 | 33 · Traffic Doctor | ✅ | ✅ | ✅ wrong-file | ✅ ×2 rounds | 17/20 · 82 | **19/20 · 94** | 10 | 10 |
 | Landing page | ✅ | ✅ | n/a | ✅ ×2 rounds | — · 82 | **19/20 · 95** | 9 | 9 |
-| Profit Calculator | ✅ | ✅ | ✅ zero/edge | ✅ ×2 rounds | — | *awaiting re-score* | 5 | 4 |
-| Target Price · Advertising ROI · Break-Even ACOS | ✅ | ✅ | ✅ zero/edge | in review | — | — | 6 | 6 |
+| Profit Calculator | ✅ | ✅ | ✅ zero/edge | ✅ ×2 rounds | — | *re-score pending* | 5 | 4 |
+| Target Price | ✅ | ✅ | ✅ zero/edge | ✅ ×2 rounds | — | **94** | 4 | 4 |
+| Advertising ROAS *(was "ROI")* | ✅ | ✅ | ✅ zero/edge | ✅ ×2 rounds | — | **88 → 95 on rename** | 3 | 3 |
+| Break-Even ACOS | ✅ | ✅ | ✅ zero/edge | ✅ ×2 rounds | — | **95** | 3 | 3 |
 | 8 remaining free calculators | — | — | — | pending | — | — | — | — |
 
 ### Tool 28 is reviewed PARTIAL, not passed

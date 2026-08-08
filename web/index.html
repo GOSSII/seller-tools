@@ -997,7 +997,7 @@ const CALCS = [
     {k:"ful",label:"Fulfillment",t:"seg",o:[{v:"self",l:"Self"},{v:"easyship",l:"Easy Ship"},{v:"fba",l:"FBA"}],d:"self",full:1},
     {k:"zone",label:"Zone",t:"seg",o:[{v:"local",l:"Local"},{v:"national",l:"National"}],d:"local",full:1},
     {k:"pack",label:"Packaging (₹)",t:"num",d:15},
-    {k:"acos",label:"ACOS (%)",t:"num",dec:1,d:10},
+    {k:"acos",label:"Expected ACOS (%)",t:"num",dec:1,d:10},
     {k:"retcost",label:"Expected return cost per sold unit (₹)",t:"num",dec:2,d:0,full:1,
       hint:"Optional. Your average expected loss from returns per unit sold — return logistics, unrecovered product value or non-refundable charges you want to account for. A return rate alone cannot tell this calculator the financial loss."},
     {k:"gstreg",label:"GST Registered (claim ITC)",t:"seg",o:[{v:"yes",l:"Yes"},{v:"no",l:"No"}],d:"yes",full:1},
@@ -1267,7 +1267,7 @@ const CALCS = [
     {k:"fees",label:"Amazon Fees (₹/unit)",t:"num",dec:1,d:169,
       hint:"Type your own, or get the exact figure for this SKU from the Amazon Profit Calculator — the default is only a placeholder."},
     {k:"cvr",label:"Conversion Rate (%)",t:"num",dec:1,d:10},
-    {k:"target",label:"Target Profit (% of price)",t:"num",dec:1,d:15,full:1,
+    {k:"target",label:"Target profit margin (%)",t:"num",dec:1,d:15,full:1,
       hint:"Your own target — the default is a starting point, not a recommended margin."},
   ],
   compute(v){
@@ -1304,8 +1304,8 @@ const CALCS = [
 },
 {
   id:"advertising-roi", icon:"📈", badge:"Updated",
-  name:"Amazon Advertising ROI Calculator",
-  desc:"Project clicks, orders, ad sales and ROAS from your own PPC budget, CPC and conversion assumptions — gross, before product cost.",
+  name:"Amazon Advertising ROAS Calculator",
+  desc:"Project clicks, orders, ad-attributed sales, ACOS and ROAS from your PPC budget, CPC and conversion assumptions.",
   fields:[
     {k:"budget",label:"PPC Budget (₹)",t:"num",d:10000},
     {k:"cpc",label:"Avg CPC (₹)",t:"num",dec:1,d:12},
@@ -1481,7 +1481,7 @@ const CALCS = [
     {k:"ful",label:"Fulfillment",t:"seg",o:[{v:"self",l:"Self"},{v:"easyship",l:"Easy Ship"},{v:"fba",l:"FBA"}],d:"self",full:1},
     {k:"zone",label:"Zone",t:"seg",o:[{v:"local",l:"Local"},{v:"national",l:"National"}],d:"local",full:1},
     {k:"pack",label:"Packaging (₹)",t:"num",d:15},
-    {k:"acos",label:"ACOS (%)",t:"num",dec:1,d:10},
+    {k:"acos",label:"Expected ACOS (%)",t:"num",dec:1,d:10},
     {k:"ret",label:"Returns (%)",t:"num",dec:1,d:3},
   ],
   compute(v){
@@ -1534,7 +1534,7 @@ const CALCS = [
 {
   id:"target-price", icon:"🎯", badge:"New",
   name:"Amazon Target Price Calculator",
-  desc:"Work backwards: tell it the margin or profit you want, and it finds the lowest price that gets you there.",
+  desc:"Estimate the lowest selling price that reaches your target profit or margin using the costs and assumptions you enter.",
   fields:[
     {k:"goal",label:"Target Type",t:"seg",o:[{v:"margin",l:"Margin %"},{v:"profit",l:"Profit ₹"}],d:"margin"},
     {k:"target",label:"Target Value",t:"num",dec:1,d:20},
@@ -1545,7 +1545,7 @@ const CALCS = [
     {k:"ful",label:"Fulfillment",t:"seg",o:[{v:"self",l:"Self"},{v:"easyship",l:"Easy Ship"},{v:"fba",l:"FBA"}],d:"self",full:1},
     {k:"zone",label:"Zone",t:"seg",o:[{v:"local",l:"Local"},{v:"national",l:"National"}],d:"local",full:1},
     {k:"pack",label:"Packaging (₹)",t:"num",d:15},
-    {k:"acos",label:"ACOS (%)",t:"num",dec:1,d:10},
+    {k:"acos",label:"Expected ACOS (%)",t:"num",dec:1,d:10},
     {k:"retcost",label:"Expected return cost per sold unit (₹)",t:"num",dec:2,d:0,full:1,
       hint:"Optional. Your average expected loss from returns per unit sold. A return rate alone cannot tell this calculator the financial loss."},
   ],
@@ -1600,6 +1600,7 @@ const CALCS = [
         ...(retC>0?[{l:"Expected return cost you entered",v:"-"+inr(retC),neg:1,mut:1}]:[]),
         {l:"Estimated profit per unit",v:inr(net),fin:1},
       ],
+      note:"Potential GST input tax credit is not included when calculating the required price — the GST on Amazon's fees is treated as a cost here, which is the conservative assumption.",
     };
   }
 },

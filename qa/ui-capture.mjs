@@ -31,11 +31,21 @@ const SIX = fs.readdirSync(S).filter((f) => f.endsWith('.txt')).map((f) => path.
 const FILE_B = path.join(S, '54493020605.txt');
 const FILE_A = path.join(S, '54492020605.txt');
 
+const TRAFFIC = path.join(ROOT, 'qa-data/raw/SELLER-A/traffic/BusinessReport-08-08-26.csv');
+const ALLORDERS = path.join(ROOT, 'qa-data/raw/SELLER-B/allorders/50020020673.txt');
+
 const TOOLS = [
   { id: 'tool-21-settlement', route: 'settlement-analyzer', input: '#sa-file', files: [FILE_B] },
   { id: 'tool-23-sku-profitability', route: 'sku-report', input: '#sku-file', files: [FILE_B] },
   { id: 'tool-24-trends', route: 'trends', input: '#tr-file', files: SIX },
-].filter((t) => !only || t.id.includes(only) || t.route.includes(only));
+  { id: 'tool-25-reconcile', route: 'reconcile', input: '#rec-file', files: SIX },
+  { id: 'tool-28-ad-profit', route: 'ad-profit', input: '#adp-file', files: SIX },
+  { id: 'tool-31-rto', route: 'rto', input: '#rto-file', files: [ALLORDERS] },
+  { id: 'tool-33-traffic', route: 'traffic', input: '#td-file', files: [TRAFFIC] },
+  { id: 'landing-page', route: '', input: null, files: [] },
+  { id: 'calc-profit', route: 'profit', input: null, files: [] },
+  { id: 'calc-acos', route: 'acos', input: null, files: [] },
+].filter((t) => !only || t.id.includes(only) || (t.route && t.route.includes(only)));
 
 const shot = async (page, dir, name, opts = {}) => {
   fs.mkdirSync(dir, { recursive: true });
@@ -77,9 +87,9 @@ for (const tool of TOOLS) {
     const dir = path.join(OUT, tool.id, vp.n + '-before');
 
     // ---- A. initial screen, before upload
-    await page.goto(`${BASE}/#/${tool.route}`, { waitUntil: 'domcontentloaded' });
-    await page.waitForSelector(tool.input, { timeout: 15000 });
-    await page.waitForTimeout(350);
+    await page.goto(BASE + (tool.route ? `/#/${tool.route}` : '/'), { waitUntil: 'domcontentloaded' });
+    if (tool.input) await page.waitForSelector(tool.input, { timeout: 15000 });
+    await page.waitForTimeout(500);
     await shot(page, dir, 'A-initial-viewport');
     await shot(page, dir, 'A-initial-fullpage', { fullPage: true });
     // open the how-to accordion — it is the tool's own instructions
@@ -91,9 +101,10 @@ for (const tool of TOOLS) {
       await page.$eval('details.howto', (d) => { d.open = false; });
     }
 
-    // ---- B/C/D/E. loaded results
+    // ---- B/C/D/E. loaded results (tools without an input are captured as-is)
+    if (!tool.input) { await slices(page, dir, 'PAGE', vp.h); await ctx.close(); continue; }
     await page.setInputFiles(tool.input, tool.files);
-    await page.waitForTimeout(1100);
+    await page.waitForTimeout(1400);
     await shot(page, dir, 'C-results-top');
     await slices(page, dir, 'RESULTS', vp.h);
     await shot(page, dir, 'FULLPAGE-results', { fullPage: true });
