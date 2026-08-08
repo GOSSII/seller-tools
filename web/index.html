@@ -192,7 +192,9 @@
   /* A negative settlement is not an error and not a success — amber, not red,
      not green. Green on a negative number read as "received". */
   .stat.warn{background:#fffaf0;border-color:#f5c26b} .stat.warn .v{color:#a1620a}
-  .chip.warnchip{background:#fffaf0;border-color:#f5c26b;color:#a1620a;font-weight:700}
+  .adp-ready{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.fbtn[disabled]{opacity:.45;cursor:not-allowed}
+.chip.warnchip{background:#fffaf0;border-color:#f5c26b;color:#a1620a;font-weight:700}
   /* Next-step action cards: a heading, the evidence, and one link that goes
      where the fix is. A bulleted paragraph was read as commentary, not action. */
   .acts{display:grid;grid-template-columns:1fr;gap:10px;margin-top:10px}
@@ -9466,7 +9468,7 @@ async function gstinvGenerate(){
    file answers alone: after fees, refunds, product cost AND ads,
    which SKUs actually make money? Everything stays local.
    ============================================================ */
-let adpFiles=[], adpSort="damage";
+let adpFiles=[], adpSort="payout", adpAdv=false;
 /* Amazon's unified reporting renamed every one of these columns — an export
    from the current console calls spend "Total cost", the SKU "Advertised
    product SKU" and orders "Purchases". Keep both vocabularies. */
@@ -9552,7 +9554,7 @@ function adpBody(){
   app.innerHTML=`
     <div class="wrap page">
       <h2>Ad Profitability by SKU</h2>
-      <p class="lede">Your settlement says what each SKU earned. Your advertising report says what each SKU cost to promote. Neither file answers the only question that matters — <b>which SKUs still make money once the ads are paid for</b> — so this one joins them.</p>
+      <p class="lede">Your settlement says what each SKU earned. Your advertising report says what each SKU cost to promote. Neither file alone answers <b>which SKUs still make money once the ads are paid for</b> — so this one joins them. It needs <b>both</b> files, plus your product cost, before it will call anything profitable; with fewer inputs it says exactly what it cannot yet know.</p>
       ${helpHtml("ad-profit")}
       <label class="sa-drop" id="adp-drop">
         <div class="ico">📉</div>
@@ -9613,15 +9615,17 @@ function adpCompute(){
     if(a) seen.add(s.sku);
     const spend=a?a.spend:0;
     const cost=Number(costs[s.sku])||0;
-    const cogs=cost*(s.units||0);
+    const hasCost=cost>0;
+    const cogs=hasCost?cost*(s.units||0):null;
     const payout=s.net;                    // after Amazon fees, taxes and refunds
-    const afterAds=payout-spend;
-    const profit=afterAds-cogs;            // only meaningful once a cost is set
-    const beforeAdsProfit=payout-cogs;
+    const afterAds=a?payout-spend:null;     // null until ad spend is attributable
+    const profit=(hasCost&&afterAds!==null)?afterAds-cogs:null;
+    const beforeAdsProfit=hasCost?payout-cogs:null;
     const sales=s.sales||0;
     const clicks=a?a.clicks:0,impressions=a?a.impressions:0,adOrders=a?a.adOrders:0;
     return {sku:s.sku,units:s.units,orders:s.orders,sales,payout,spend,afterAds,
-      cost,cogs,profit,beforeAdsProfit,hasCost:cost>0,
+      cost,cogs,profit,beforeAdsProfit,hasCost,
+      account:s.sku==="(no SKU)",
       adSales:a?a.adSales:0,adOrders,clicks,impressions,
       /* Click metrics come straight off the ad report's own counts — never
          derived from settlement figures. A zero denominator reads "—". */
@@ -9632,14 +9636,17 @@ function adpCompute(){
       tacos:sales>0&&spend>0?spend/sales*100:null,
       // Break-even ACOS: the share of a sale you can spend on ads before the
       // SKU stops making money. Uses profit when a cost is known.
-      breakEven:(cost>0&&sales>0)?beforeAdsProfit/sales*100:null,
-      flips:(cost>0?beforeAdsProfit>0&&profit<=0:payout>0&&afterAds<=0),
+      breakEven:(hasCost&&sales>0)?beforeAdsProfit/sales*100:null,
+      /* "Ads turn this SKU into a loss" is only knowable once the ad spend is
+         attributable to the SKU. With no ad report it is not zero, it is
+         unknown — and a green 0 reads as reassurance the data cannot give. */
+      flips:!a?false:(hasCost?beforeAdsProfit>0&&profit<=0:payout>0&&afterAds<=0),
       matched:!!a};
   });
   // Ad spend on SKUs that never appear in the settlement (no sales at all).
   const orphans=[...ads.values()].filter(a=>!seen.has(a.key))
     .map(a=>({sku:a.key,units:0,orders:0,sales:0,payout:0,spend:a.spend,afterAds:-a.spend,
-      cost:0,cogs:0,profit:-a.spend,beforeAdsProfit:0,hasCost:false,
+      cost:0,cogs:null,profit:null,beforeAdsProfit:null,hasCost:false,account:false,
       adSales:a.adSales,adOrders:a.adOrders,clicks:a.clicks,impressions:a.impressions,
       ctr:a.impressions>0?a.clicks/a.impressions*100:null,
       cpc:a.clicks>0?a.spend/a.clicks:null,
@@ -9648,14 +9655,15 @@ function adpCompute(){
       flips:false,matched:false,orphan:true}));
   const all=out.concat(orphans);
   const totals=all.reduce((t,r)=>{
-    t.sales+=r.sales; t.payout+=r.payout; t.spend+=r.spend; t.cogs+=r.cogs;
-    t.afterAds+=r.afterAds; t.profit+=r.profit; t.units+=r.units;
+    t.sales+=r.sales; t.payout+=r.payout; t.spend+=r.spend; t.cogs+=r.cogs||0;
+    t.afterAds+=r.afterAds||0; t.profit+=r.profit||0; t.units+=r.units;
+    if(!r.account){ t.skuPayout+=r.payout; t.skuSales+=r.sales; }
     t.clicks+=r.clicks||0; t.impressions+=r.impressions||0;
     t.adOrders+=r.adOrders||0; t.adSales+=r.adSales||0;
-    if(r.flips){ t.flipCount++; t.flipLoss+=Math.abs(r.hasCost?r.profit:r.afterAds); }
+    if(r.flips){ t.flipCount++; t.flipLoss+=Math.abs((r.hasCost?r.profit:r.afterAds)||0); }
     return t;
   },{sales:0,payout:0,spend:0,cogs:0,afterAds:0,profit:0,units:0,flipCount:0,flipLoss:0,
-     clicks:0,impressions:0,adOrders:0,adSales:0});
+     skuPayout:0,skuSales:0,clicks:0,impressions:0,adOrders:0,adSales:0});
   const unattributed=adpSpendFromSettlement(records);
   return {rows:all,totals,haveAds:ads.size>0,adRows,adNoKey,asinOnly,unattributed,
     costed:all.filter(r=>r.hasCost).length,settlementCount:settle.length};
@@ -9672,18 +9680,44 @@ function adpRender(){
     out.innerHTML=h; adpWire(out); return;
   }
   const t=r.totals;
-  const pctOfProfit=t.payout>0?Math.min(100,t.spend/t.payout*100):null;
-  h+=`<div class="stats">
-    <div class="stat"><div class="k">Payout after Amazon fees</div><div class="v">${inr0(t.payout)}</div></div>
-    <div class="stat ${t.spend>0?"red":""}"><div class="k">Advertising</div><div class="v">${inr0(-t.spend)}</div></div>
-    <div class="stat ${t.afterAds>0?"green":"red"}"><div class="k">Left after ads</div><div class="v">${inr0(t.afterAds)}</div></div>
-    <div class="stat ${t.flipCount?"red":"green"}"><div class="k">SKUs ads turn to a loss</div><div class="v">${t.flipCount}</div></div>
-  </div>`;
+  const pctOfProfit=(r.haveAds&&t.payout>0)?Math.min(100,t.spend/t.payout*100):null;
+  /* Ad profitability needs three things and the seller has one of them here.
+     Saying so up front is the difference between an empty screen and a screen
+     that pretends the missing inputs were zeros. */
+  const ready=[["Settlement data",true,"Loaded"],
+    ["Advertising attribution",r.haveAds,r.haveAds?"Loaded":"Missing"],
+    ["Product costs",r.costed>0,r.costed>0?`${r.costed} SKU${r.costed===1?"":"s"} costed`:"Not added"]];
+  if(!r.haveAds||!r.costed)
+    h+=`<div class="banner warn"><b>Ad profitability is not ready yet.</b><div class="adp-ready">${ready.map(([k,ok,v])=>
+      `<span class="chip ${ok?"":"warnchip"}">${ok?"✓":"⚠"} ${esc(k)}: ${esc(v)}</span>`).join("")}</div>${
+      !r.haveAds?`Upload the Sponsored Products <b>Advertised Product</b> report to calculate SKU-level ad impact. `:""}${
+      !r.costed?`Add a product cost to calculate actual profit.`:""}</div>`;
+  const adsPct=(r.unattributed.total>0&&t.sales>0)?r.unattributed.total/t.sales*100:null;
+  if(!r.haveAds){
+    /* Two different statements. "Advertising ₹0" would claim no money was
+       spent; the truth is that ₹0 of a known spend could be attributed. */
+    h+=`<div class="stats">
+      <div class="stat"><div class="k">Net settlement cash flow</div><div class="v">${inr0(t.payout)}</div>
+        <div class="sa-sub">everything these statements settled, ads and balances included</div></div>
+      <div class="stat ${r.unattributed.total>0?"red":""}"><div class="k">Sponsored Ads billed</div>
+        <div class="v">${r.unattributed.total>0?inr0(-r.unattributed.total):"None in these files"}</div>
+        <div class="sa-sub">${r.unattributed.total>0?`${adsPct!==null?adsPct.toFixed(1)+"% of sales · ":""}charged in the settlement`:"no advertising service fee appears"}</div></div>
+      <div class="stat warn"><div class="k">SKU-attributed ad spend</div><div class="v">Not available</div>
+        <div class="sa-sub">the settlement does not say which SKUs spent it</div></div>
+      <div class="stat warn"><div class="k">SKU ad profitability</div><div class="v">Cannot calculate yet</div>
+        <div class="sa-sub">needs the Advertised Product report</div></div>
+    </div>`;
+    h+=`<div class="banner warn"><b>Advertising detected, but SKU attribution is missing.</b> ${r.unattributed.rows?`Your settlement contains <b>${inr0(r.unattributed.total)}</b> of Sponsored Ads spend across ${r.unattributed.rows} charge(s), but the settlement report does not identify which SKUs consumed it.`:`No advertising charge appears in these statements.`} Upload <b>Advertising console → Sponsored Ads → Reports → Sponsored Products → Advertised product</b> for the same date range. Until then the table below shows <b>settlement contribution only — ad profitability pending</b>.</div>`;
+  }else{
+    h+=`<div class="stats">
+      <div class="stat"><div class="k">Settlement contribution</div><div class="v">${inr0(t.skuPayout)}</div>
+        <div class="sa-sub">products only — account-level lines are listed separately</div></div>
+      <div class="stat ${t.spend>0?"red":""}"><div class="k">Advertising</div><div class="v">${inr0(-t.spend)}</div></div>
+      <div class="stat ${t.afterAds>0?"green":"red"}"><div class="k">After ads</div><div class="v">${inr0(t.afterAds)}</div></div>
+      <div class="stat ${t.flipCount?"red":"green"}"><div class="k">SKUs ads turn to a loss</div><div class="v">${t.flipCount}</div></div>
+    </div>`;
   if(pctOfProfit!==null)
     h+=`<div class="banner ${pctOfProfit>=50?"warn":"info"}">Advertising is taking <b>${pctOfProfit.toFixed(1)}%</b> of everything Amazon paid you after its own fees${t.flipCount?`, and turns <b>${t.flipCount} SKU${t.flipCount===1?"":"s"}</b> from profit into a loss worth <b>${inr0(t.flipLoss)}</b>`:""}.</div>`;
-  if(!r.haveAds){
-    h+=`<div class="banner warn">No advertising report loaded, so nothing can be attributed to a SKU. ${r.unattributed.rows?`This settlement does show <b>${inr0(r.unattributed.total)}</b> of advertising across ${r.unattributed.rows} charge(s), but Amazon records it as one unattributed service fee — the per-SKU split only exists in <b>Advertising console → Sponsored Ads → Reports → Sponsored Products → Advertised product</b>. Export it for the same dates and drop it here.`:`Add the <b>Advertised product</b> report from the Advertising console.`}</div>`;
-  }else{
     /* The two files carry their own periods. If the ad report covers less
        spend than the statements were charged, the seller is measuring one
        month of ads against two months of payout and every ACOS reads low. */
@@ -9702,13 +9736,29 @@ function adpRender(){
   }
   if(r.haveAds&&t.impressions>0)
     h+=`<div class="banner info">Across the whole account: <b>${num(t.impressions)}</b> impressions → <b>${num(t.clicks)}</b> clicks (CTR ${(t.clicks/t.impressions*100).toFixed(2)}%) at <b>${t.clicks?inr(t.spend/t.clicks):"—"}</b> per click → <b>${num(t.adOrders)}</b> ad orders (CVR ${t.clicks?(t.adOrders/t.clicks*100).toFixed(1):"—"}%)${t.sales>0&&t.spend>0?` · TACOS <b>${(t.spend/t.sales*100).toFixed(1)}%</b> of total sales`:""}. A low CTR is an ad problem (image, price, title); a low CVR with a healthy CTR is a listing problem — the click was earned and the page lost it.</div>`;
-  const sorters={damage:(a,b)=>(a.hasCost?a.profit:a.afterAds)-(b.hasCost?b.profit:b.afterAds),
+  /* "(no SKU)" is the account-level bucket — advertising billed without SKU
+     attribution, balance movements, account fees. Ranked beside real products
+     it dominates "worst after ads" and distorts every total. Same rule as the
+     SKU Profitability Report. */
+  const acct=r.rows.find(x=>x.account)||null;
+  const products=r.rows.filter(x=>!x.account);
+  if(acct)
+    h+=`<div class="panel"><h4>🧾 Account-level amounts not attributable to a SKU <b class="${acct.payout<0?"red":""}">${inr0(acct.payout)}</b></h4>
+      <p class="sa-sub">Advertising billed without SKU attribution, balance movements carried between statements, and other account-level charges. <b>Excluded from the SKU rankings and per-SKU verdicts below</b> — judge it separately.</p></div>`;
+  /* Every ad-derived sort is meaningless until the ad report exists. Offering
+     "Worst after ads" with no ad data silently sorts by something else. */
+  const adSorts={damage:1,spend:1,acos:1};
+  if(!r.haveAds&&adSorts[adpSort]) adpSort="payout";
+  const sorters={damage:(a,b)=>((a.hasCost?a.profit:a.afterAds)||0)-((b.hasCost?b.profit:b.afterAds)||0),
+    payout:(a,b)=>a.payout-b.payout,
     spend:(a,b)=>b.spend-a.spend, acos:(a,b)=>(b.acos??-1)-(a.acos??-1), sales:(a,b)=>b.sales-a.sales};
-  const rows=[...r.rows].sort(sorters[adpSort]||sorters.damage);
+  const rows=[...products].sort(sorters[adpSort]||sorters.payout);
   h+=`<div style="display:flex;gap:8px;align-items:center;justify-content:flex-end;margin:14px 0 2px;flex-wrap:wrap">
       <span class="sa-sub">Sort by</span>
-      ${[["damage","Worst after ads"],["spend","Ad spend"],["acos","ACOS"],["sales","Sales"]]
-        .map(([k,t2])=>`<button type="button" class="fbtn${adpSort===k?" on":""}" data-adpsort="${k}">${t2}</button>`).join("")}
+      ${[["payout","Settlement contribution",true],["sales","Sales",true],
+         ["damage","Worst after ads",r.haveAds],["spend","Ad spend",r.haveAds],["acos","ACOS",r.haveAds]]
+        .map(([k,t2,on])=>`<button type="button" class="fbtn${adpSort===k?" on":""}"${on?"":' disabled title="Upload an advertising report to use this sort"'} data-adpsort="${k}">${t2}</button>`).join("")}
+      <button type="button" class="fbtn${adpAdv?" on":""}" id="adp-adv" aria-pressed="${adpAdv?"true":"false"}">${adpAdv?"Hide":"Show"} ad metrics</button>
       <button type="button" class="fbtn" id="adp-csv">⬇ Export CSV</button>
     </div>
     <div class="sku-costall">
@@ -9716,22 +9766,31 @@ function adpRender(){
       <input id="adp-cost-all" type="number" min="0" inputmode="decimal" placeholder="apply to all" style="max-width:150px">
       <button class="fbtn" id="adp-apply-all">Apply to all SKUs</button>
       <span class="sa-sub">saved in this browser, shared with the SKU Profitability Report</span></div>
+    ${r.haveAds?"":`<p class="sa-sub" style="margin:10px 0 4px"><b>Settlement contribution only — ad profitability pending.</b> Every figure below is what Amazon settled for the SKU. Ad spend, ACOS and profit stay blank until the Advertised Product report is loaded.</p>`}
     <div class="tblwrap"><table class="sa">
-      <thead><tr><th>SKU</th><th class="num">Units</th><th class="num">Sales</th>
-        <th class="num">Payout after fees</th><th class="num">Ad spend</th>
-        <th class="num" title="Clicks ÷ impressions, from the ad report's own counts">CTR</th>
+      <thead><tr><th>SKU</th><th class="num">Units</th><th class="num">Gross sales</th>
+        <th class="num" title="What this SKU's own settlement lines net to — sales less Amazon's fees, taxes and refunds. Not profit: product cost is not in it.">Settlement contribution</th>
+        <th class="num">Ad spend</th>
+        <th class="num" title="Your cost per unit. Type it here — it saves in this browser and the SKU Profitability Report picks it up too.">Product cost</th>
+        ${adpAdv?`<th class="num" title="Clicks ÷ impressions, from the ad report's own counts">CTR</th>
         <th class="num" title="Ad spend ÷ clicks">CPC</th>
         <th class="num" title="Ad orders ÷ clicks">CVR</th>
-        <th class="num" title="Your cost per unit. Type it here — it saves in this browser and the SKU Profitability Report picks it up too.">Cost/unit ₹</th><th class="num">ACOS</th>
         <th class="num" title="Ad spend ÷ TOTAL settlement sales — what advertising costs the whole SKU, not just its ad-attributed sales">TACOS</th>
-        <th class="num" title="How much of a sale can go on ads before this SKU stops making money. Needs a product cost.">Break-even ACOS</th><th class="num">After ads${r.costed?" &amp; cost":""}</th><th>Verdict</th></tr></thead>
+        <th class="num" title="How much of a sale can go on ads before this SKU stops making money. Needs a product cost.">Break-even ACOS</th>`:""}
+        <th class="num" title="Ad spend ÷ this SKU's ad-attributed sales">ACOS</th>
+        <th class="num">After ads${r.costed?" &amp; cost":""}</th><th>Verdict</th></tr></thead>
       <tbody>${rows.map(x=>{
         const bottom=x.hasCost?x.profit:x.afterAds;
+        /* "Profitable" is only sayable when the tool holds every input:
+           settlement contribution MINUS attributed ad spend MINUS product
+           cost. Missing either one makes the answer unknown, not positive. */
         const verdict=x.orphan?(x.adSales>0?["Sales settled under another SKU","warn"]:["Ad spend, no sales","bad"])
+          :!r.haveAds?["Profit cannot be determined — needs ad report","muted"]
+          :!x.hasCost?["Profit cannot be determined — needs product cost","muted"]
           :x.flips?["Ads turn profit into a loss","bad"]
-          :bottom>0?["Profitable after ads","good"]
-          :x.spend>0?["Loss before ads too","warn"]
-          :["No ads on this SKU","muted"];
+          :bottom>0?["Profitable after ads & cost","good"]
+          :x.spend>0?["Loss after ads & product cost","bad"]
+          :["Loss before ads","warn"];
         const vc=verdict[1]==="good"?"var(--green)":verdict[1]==="bad"?"var(--red)":verdict[1]==="warn"?"var(--orange)":"var(--muted)";
         const over=x.acos!==null&&x.breakEven!==null&&x.acos>x.breakEven;
         return `<tr>
@@ -9739,26 +9798,29 @@ function adpRender(){
           <td class="num">${x.units||"—"}</td>
           <td class="num">${x.sales?inr0(x.sales):"—"}</td>
           <td class="num">${x.payout?inr0(x.payout):"—"}</td>
-          <td class="num">${x.spend?inr0(-x.spend):"—"}</td>
-          <td class="num">${x.ctr===null?"—":x.ctr.toFixed(2)+"%"}</td>
+          <td class="num">${r.haveAds?(x.spend?inr0(-x.spend):"—"):'<span class="sa-sub" title="The settlement bills advertising as one account-level service fee. Upload the Advertised Product report to split it by SKU.">Not attributed</span>'}</td>
+          <td class="num"><input type="number" min="0" inputmode="decimal" class="sku-cost-in" data-cost-sku="${esc(x.sku)}" value="${x.cost?x.cost:""}" placeholder="Enter cost" aria-label="Product cost per unit for ${esc(x.sku)}"></td>
+          ${adpAdv?`<td class="num">${x.ctr===null?"—":x.ctr.toFixed(2)+"%"}</td>
           <td class="num">${x.cpc===null?"—":inr(x.cpc)}</td>
           <td class="num">${x.cvr===null?"—":x.cvr.toFixed(1)+"%"}</td>
-          <td class="num"><input type="number" min="0" inputmode="decimal" class="sku-cost-in" data-cost-sku="${esc(x.sku)}" value="${x.cost?x.cost:""}" placeholder="0" aria-label="Product cost per unit for ${esc(x.sku)}"></td>
-          <td class="num"${over?' style="color:var(--red);font-weight:700"':""}>${x.acos===null?"—":x.acos.toFixed(1)+"%"}</td>
           <td class="num">${x.tacos===null?"—":x.tacos.toFixed(1)+"%"}</td>
-          <td class="num"${x.breakEven===null&&x.spend>0?' title="Add this SKU\'s product cost to see the break-even ACOS"':""}>${x.breakEven===null?"—":x.breakEven.toFixed(1)+"%"}</td>
-          <td class="num" style="font-weight:700;color:${bottom>0?"var(--green)":"var(--red)"}">${inr0(bottom)}</td>
+          <td class="num">${x.breakEven===null?`<span class="sa-sub">Needs product cost</span>`:x.breakEven.toFixed(1)+"%"}</td>`:""}
+          <td class="num"${over?' style="color:var(--red);font-weight:700"':""}>${x.acos===null?"—":x.acos.toFixed(1)+"%"}</td>
+          <td class="num" style="font-weight:700;color:${bottom===null?"var(--muted)":bottom>0?"var(--green)":"var(--red)"}">${bottom===null?"—":inr0(bottom)}</td>
           <td class="sa-sub" style="color:${vc}">${verdict[0]}</td>
         </tr>`;}).join("")}</tbody>
     </table></div>
-    <div class="banner info">ACOS here is measured against that SKU's own advertising sales, and break-even ACOS against everything it actually earned — so a SKU whose ACOS sits above its break-even line is being advertised at a loss. Attribution windows mean ad sales and settlement sales never line up perfectly; treat the verdict as a direction, not a decimal.</div>`;
+    <div class="banner info"><b>Ad attribution and settlement timing use different clocks.</b> ACOS uses Amazon Ads' attributed sales, while settlement contribution uses posted settlement activity, so small differences are expected. ACOS is measured against that SKU's own advertising sales and break-even ACOS against everything it actually earned — a SKU whose ACOS sits above its break-even line is being advertised at a loss. Use the result as a decision signal rather than expecting exact reconciliation at SKU level.</div>`;
   out.innerHTML=h; adpWire(out,rows);
 }
 function adpWire(out,rows){
+  const adv=out.querySelector("#adp-adv");
+  if(adv) adv.addEventListener("click",()=>{ adpAdv=!adpAdv; adpRender(); });
   out.querySelectorAll("[data-adprm]").forEach(b=>b.addEventListener("click",()=>{
     adpFiles.splice(Number(b.dataset.adprm),1); adpRender();
   }));
   out.querySelectorAll("[data-adpsort]").forEach(b=>b.addEventListener("click",()=>{
+    if(b.disabled) return;
     adpSort=b.dataset.adpsort; adpRender();
   }));
   /* Costs are entered here rather than only in the SKU report: this is where
