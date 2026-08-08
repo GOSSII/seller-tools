@@ -10,6 +10,7 @@ Everything produced by the full production audit, and how to re-run it.
 | [TOOL_MANIFEST.md](TOOL_MANIFEST.md) | All **33** tools across 43 routes, with the 18 required fields each, plus the Website Tool → Amazon Report → columns → calculation map |
 | [BUG_REGISTER.md](BUG_REGISTER.md) | 52 defects + 1 privacy finding, with expected vs actual, root cause, fix, regression test and status |
 | [UX_REGISTER.md](UX_REGISTER.md) | 22 UX findings with seller impact and whether implemented; beginner-comprehension scores; information-architecture recommendation |
+| [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) | **Run this before any release.** The automated gates with their pass thresholds, the six defect families this audit found repeatedly, and the states to open by hand |
 | [UI_VISUAL_AUDIT.md](UI_VISUAL_AUDIT.md) | The screenshot round: per-tool desktop/mobile/error coverage, before/after UX scores, what the rendered UI exposed that the numbers could not, and every copy change made |
 
 ## Independent second opinion
@@ -28,6 +29,8 @@ Everything produced by the full production audit, and how to re-run it.
 | `qa/tests/render-check.mjs` | Renders the premium tools against a real file and prints stat cards, ledger and banners — the before/after evidence |
 | `qa/tests/perf.mjs` | 1k / 10k / 50k / 100k row timings against the shipped parser |
 | `qa/responsive-audit.mjs` | 140 route × width layout, tap-target and accessible-name checks |
+| `qa/consistency-audit.mjs` | Sweeps all 38 routes for label, helper-text and validation-copy drift |
+| `qa/syncheck.py` | Syntax-checks the application `<script>` inside `web/index.html` — necessary, **not** sufficient |
 | `qa/fixtures/settlement-balance-and-ads.txt` | Sanitized fixture reproducing the balance-movement and Cost-of-Advertising shapes |
 | `qa/fixtures/settlement-multiunit-bom.csv` | Sanitized fixture: BOM + CRLF + comma-delimited + a multi-unit order |
 
