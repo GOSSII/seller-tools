@@ -1,0 +1,17 @@
+settlement-id	settlement-start-date	settlement-end-date	deposit-date	total-amount	currency	transaction-type	order-id	merchant-order-id	adjustment-id	shipment-id	marketplace-name	amount-type	amount-description	amount	fulfillment-id	posted-date	posted-date-time	order-item-code	merchant-order-item-id	merchant-adjustment-item-id	sku	quantity-purchased	promotion-id
+99000000003	25.05.2026 12:10:23 UTC	01.06.2026 12:10:23 UTC	03.06.2026 12:10:23 UTC	-1408.13	INR																		
+99000000003						Order	111-0000001-0000001				Amazon.in	ItemPrice	Principal	399.00	MFN	26.05.2026	26.05.2026 04:45:29 UTC	65200000001			FIX-SKU-A	1	
+99000000003						Order	111-0000001-0000001				Amazon.in	ItemFees	Fixed closing fee	-22.00	MFN	26.05.2026	26.05.2026 04:45:29 UTC	65200000001			FIX-SKU-A	1	
+99000000003						Order	111-0000001-0000001				Amazon.in	ItemFees	Fixed closing fee IGST	-3.96	MFN	26.05.2026	26.05.2026 04:45:29 UTC	65200000001			FIX-SKU-A	1	
+99000000003						Order	111-0000002-0000002				Amazon.in	ItemPrice	Principal	499.00	MFN	26.05.2026	26.05.2026 04:45:29 UTC	65200000002			FIX-SKU-B	1	
+99000000003						Order	111-0000002-0000002				Amazon.in	ItemFees	Fixed closing fee	-22.00	MFN	26.05.2026	26.05.2026 04:45:29 UTC	65200000002			FIX-SKU-B	1	
+99000000003						Order	111-0000002-0000002				Amazon.in	ItemFees	Fixed closing fee IGST	-3.96	MFN	26.05.2026	26.05.2026 04:45:29 UTC	65200000002			FIX-SKU-B	1	
+99000000003						Refund	111-0000002-0000002				Amazon.in	ItemPrice	Principal	-499.00	MFN	26.05.2026	26.05.2026 04:45:29 UTC	65200000002			FIX-SKU-B	1	
+99000000003						Refund	111-0000002-0000002				Amazon.in	ItemFees	Refund commission	-70.00	MFN	26.05.2026	26.05.2026 04:45:29 UTC	65200000002			FIX-SKU-B	1	
+99000000003						Refund	111-0000002-0000002				Amazon.in	ItemFees	Refund commission IGST	-12.60	MFN	26.05.2026	26.05.2026 04:45:29 UTC	65200000002			FIX-SKU-B	1	
+99000000003						other-transaction					Amazon.in	other-transaction	Payable to Amazon	-1000.00	MFN	25.05.2026							
+99000000003						Debt Adjustment	20082211408-202605301221					Debt Adjustment	Debt adjustment against Electronic Transaction (Credit Card/Net Banking/GC) Accounts	500.00		30.05.2026							
+99000000003						ServiceFee						Cost of Advertising	TransactionTotalAmount	-780.21		01.06.2026							
+99000000003						other-transaction	111-0000001-0000001				Amazon.in	other-transaction	Amazon Easy Ship Charges	-55.00	MFN	26.05.2026							
+99000000003						other-transaction	111-0000001-0000001				Amazon.in	other-transaction	MFNPostagePurchaseCompleteIGST	-9.90	MFN	26.05.2026							
+99000000003						other-transaction						other-transaction	Marketplace Facilitator Levy 2027	-327.50		02.06.2026							

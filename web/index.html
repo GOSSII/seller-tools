@@ -108,6 +108,11 @@
   /* Single column until there is genuinely room for a 400 px form beside the
      results. minmax() lets the form give way rather than force a scrollbar. */
   .cols{display:grid;grid-template-columns:1fr;gap:16px;align-items:start}
+  /* A grid item's automatic minimum size is its min-content width, so one wide
+     child (a date input, a long unbreakable string) grows the track past the
+     viewport and scrolls the whole page sideways on a phone. Same guard as
+     .fields>* below. */
+  .cols>*{min-width:0}
   @media(min-width:900px){.cols{grid-template-columns:minmax(320px,400px) 1fr;gap:20px}}
   .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
   @media(min-width:600px){.card{padding:20px}}
@@ -127,7 +132,11 @@
   label{display:block;font-size:13px;font-weight:600;margin-bottom:6px}
   /* 16 px is the threshold below which iOS Safari zooms the page on focus.
      Height is 44 px to meet the minimum comfortable touch target. */
-  input,select{width:100%;min-height:44px;padding:0 12px;font-size:16px;color:var(--ink);
+  /* min-width:0 matters: Chrome gives <input type="date"> a wide intrinsic
+     minimum (its shadow spinner + placeholder), which on a 390 px phone grew
+     the field grid to 488 px and made the whole Payout Forecaster page scroll
+     sideways. width:100% alone does not override an intrinsic minimum. */
+  input,select{width:100%;min-width:0;min-height:44px;padding:0 12px;font-size:16px;color:var(--ink);
     background:#fff;border:1px solid #d6dce6;border-radius:10px;outline:none;appearance:none;-webkit-appearance:none;font-family:inherit}
   /* Checkboxes keep their native look — appearance:none above is meant for
      text fields/selects and left checkboxes with no visible tick. */
@@ -1173,29 +1182,39 @@ const CALCS = [
     {k:"total",label:"Total Sales (₹)",t:"num",d:50000,full:1},
   ],
   compute(v){
-    const acos=v.adSales>0?v.spend/v.adSales*100:0;
+    /* ACOS is spend ÷ ad sales. With no ad sales that division is undefined,
+       NOT zero — and 0.00% in green read as "perfect ads" on the exact screen
+       where the seller had spent money and sold nothing. Undefined stays
+       undefined, and says why. */
+    const noAdSales=!(v.adSales>0), spent=v.spend>0;
+    const acos=noAdSales?null:v.spend/v.adSales*100;
     const roas=v.spend>0?v.adSales/v.spend:0;
-    const tacos=v.total>0?v.spend/v.total*100:0;
+    const tacos=v.total>0?v.spend/v.total*100:null;
     const org=Math.max(0,v.total-v.adSales);
     const orgPc=v.total>0?org/v.total*100:0;
     const adPc=v.total>0?v.adSales/v.total*100:0;
+    const acosTxt=acos===null?(spent?"No ad sales":"—"):pc(acos);
     return {
       stats:[
-        {k:"ACOS",v:pc(acos),t:acos>30?"red":"green"},
+        {k:"ACOS",v:acosTxt,t:acos===null?(spent?"red":""):(acos>30?"red":"green")},
         {k:"ROAS",v:roas.toFixed(2)+"x",t:"blue"},
-        {k:"TACoS",v:pc(tacos)},
-        {k:"Organic Share",v:pc(orgPc)},
+        {k:"TACoS",v:tacos===null?"—":pc(tacos)},
+        {k:"Organic Share",v:v.total>0?pc(orgPc):"—"},
       ],
-      banner:{t:tacos<10?"good":tacos<20?"info":"warn",
+      banner:acos===null&&spent
+        ?{t:"warn",x:`You spent ${inr(v.spend)} and the ads returned no sales at all, so there is no ACOS to calculate — every rupee was lost. Check the Search Term report for terms taking clicks without orders before raising the budget.`}
+        :tacos===null
+        ?{t:"info",x:"Enter your total sales to see TACoS — what advertising costs against everything you sell, not just what ads are credited with."}
+        :{t:tacos<10?"good":tacos<20?"info":"warn",
         x:tacos<10?"Healthy TACoS — ads are a small share of total revenue, which means real organic pull."
          :tacos<20?"Moderate TACoS. Watch that organic sales grow as you scale spend, not just paid."
          :"High TACoS — revenue is leaning heavily on ads. Work on organic rank and listing conversion."},
       rows:[
-        {l:"Ad sales",v:inr(v.adSales)+"  ("+pc(adPc)+")",mut:1},
-        {l:"Organic sales",v:inr(org)+"  ("+pc(orgPc)+")",mut:1},
+        {l:"Ad sales",v:inr(v.adSales)+(v.total>0?"  ("+pc(adPc)+")":""),mut:1},
+        {l:"Organic sales",v:inr(org)+(v.total>0?"  ("+pc(orgPc)+")":""),mut:1},
         {l:"Total sales",v:inr(v.total),hl:1},
-        {l:"ACOS — spend ÷ ad sales",v:pc(acos),mut:1},
-        {l:"TACoS — spend ÷ total sales",v:pc(tacos),mut:1},
+        {l:"ACOS — spend ÷ ad sales",v:acosTxt,mut:1},
+        {l:"TACoS — spend ÷ total sales",v:tacos===null?"— (enter total sales)":pc(tacos),mut:1},
         {l:"ROAS — ad sales ÷ spend",v:roas.toFixed(2)+"x",fin:1},
       ],
       split:{title:"Paid vs organic revenue",total:v.total||1,items:[
@@ -4165,20 +4184,30 @@ function saRead(file){
 }
 
 function saAggregate(r){
-  let sales=0,fees=0,tax=0,credits=0,allSum=0; const feeAgg={};
+  let sales=0,fees=0,tax=0,credits=0,ads=0,balance=0,unknown=0,allSum=0; const feeAgg={};
   for(const rec of r.records) for(const l of rec.amounts){
     allSum+=l.amount;
-    if(/^principal$/i.test(l.amountDescription)){sales+=l.amount;continue;}
-    const label=l.amountDescription||l.amountType||"(unlabelled)",t=saIsTax(label);
-    if(t)tax+=l.amount; else if(l.amount<0)fees+=l.amount; else credits+=l.amount;
-    const a=feeAgg[label]||(feeAgg[label]={count:0,total:0,isTax:t});
+    const kind=saLineKind(l,rec.transactionType);
+    if(kind==="principal"){sales+=l.amount;continue;}
+    const label=l.amountDescription||l.amountType||"(unlabelled)";
+    if(kind==="tax")tax+=l.amount;
+    else if(kind==="ads")ads+=l.amount;
+    else if(kind==="balance")balance+=l.amount;
+    else if(kind==="unknown")unknown+=l.amount;
+    else if(kind==="fee")fees+=l.amount;
+    else credits+=l.amount;
+    const a=feeAgg[label]||(feeAgg[label]={count:0,total:0,isTax:kind==="tax",kind});
     a.count++;a.total+=l.amount;
   }
-  return {sales,fees,tax,credits,allSum,feeAgg};
+  /* `fees` is what Amazon CHARGED for selling and fulfilling this period.
+     Advertising and balance movements are returned separately and must never
+     be folded back in — see saLineKind for what that mistake looked like. */
+  return {sales,fees,tax,credits,ads,balance,unknown,allSum,feeAgg};
 }
 
 /* ---- daily trend charts (single-series bar charts, site palette,
         colors validated for CVD + contrast on white) ---- */
+window.saAggregate=saAggregate; // exposed for verification/debugging
 function saParseDate(s){
   if(!s) return null;
   s=String(s).trim().split(/[T ]/)[0];
@@ -4244,8 +4273,75 @@ function saWireTips(root){
 
 /* ---- money flow: every settlement line assigned to exactly one
         named bucket, so the rows always sum to the deposit. ---- */
-function saBucketOf(lab,amt){
+/* ---- ONE place that says what a settlement line IS ------------------------
+   Amazon answers this in its own columns, but not always in the column you
+   would expect:
+
+   * Advertising arrives as transaction-type "ServiceFee" with amount-TYPE
+     "Cost of Advertising" and an amount-DESCRIPTION of "TransactionTotalAmount"
+     — an internal token that means nothing to a seller. Reading the
+     description first filed real ad spend under "Other fees": on one live
+     account that hid Rs 4,491.98 of advertising, 44% of gross sales and more
+     than every Amazon fee put together.
+
+   * "Payable to Amazon" and the paired "Debt adjustment against …" rows are
+     movements of the seller's OWN balance — between the Electronic and the
+     COD/Non-Transactional series, or carried forward from an earlier week.
+     The pair nets to zero across the two statements. Counted as fees they
+     showed Rs 4,183.33 of "Amazon fees" against Rs 1,696 of sales when Amazon
+     had charged Rs 398; counted as credits the other half told the seller
+     Amazon had reimbursed them Rs 1,639.24 that it never paid.
+
+   Every consumer — the analyzer, the SKU report, Trends, Reconciliation —
+   goes through this function so the four can never disagree again. */
+const SA_ADVERTISING=/advertis/i;
+const SA_BALANCE=/^payable to amazon$|^debt adjustment|reserve|^balance adjustment$/i;
+/* Fees Amazon is KNOWN to charge for selling and fulfilling. A row has to look
+   like one of these to be called a fee — see saLineKind for why. */
+const SA_KNOWN_FEE=/commission|closing fee|referral|easy ship|weight handling|pick.*pack|postage|base fee|\bfba\b|storage|shipping (charge|fee|service)|subscription|removal|disposal|return fee|technology fee|fixed fee|variable closing|promo|labelling|prep service|inbound transport/i;
+const SA_KNOWN_CREDIT=/reimburse|compensat|goodwill/i;
+function saLineKind(l,tt){
+  const d=(l&&l.amountDescription||"").trim(), t=(l&&l.amountType||"").trim();
+  if(/^principal$/i.test(d)) return "principal";
+  if(/^debt adjustment$/i.test((tt||"").trim())||SA_BALANCE.test(d)) return "balance";
+  if(SA_ADVERTISING.test(t)||SA_ADVERTISING.test(d)) return "ads";
+  if(saIsTax(d||t)) return "tax";
+  /* Credits are checked BEFORE fees: the fee patterns are deliberately broad
+     ("fba", "storage"), and "FBA Inventory Reimbursement" is money coming TO
+     the seller, not a fee. Narrow, unambiguous words win over broad ones. */
+  if(SA_KNOWN_CREDIT.test(d)||SA_KNOWN_CREDIT.test(t)) return "credit";
+  if(SA_KNOWN_FEE.test(d)||SA_KNOWN_FEE.test(t)) return "fee";
+  /* Anything we do not confidently recognise is UNKNOWN — never a fee just
+     because it is negative. Amazon adds and renames payment-report descriptors
+     (India changed fee categories twice in 2026 alone); the old rule
+     "negative means fee, positive means credit" is how a debt adjustment
+     became a fee in the first place, and it would silently do the same to the
+     next new row type. Unknown rows still count towards the settlement
+     reconciliation — they are real money — but are kept out of every fee and
+     profit ratio, and shown to the seller so the gap is visible rather than
+     absorbed. */
+  return "unknown";
+}
+window.saLineKind=saLineKind; // exposed for verification/debugging
+/* Amazon's internal tokens are not English. "TransactionTotalAmount" against a
+   "Cost of Advertising" amount-type is the seller's Sponsored Ads bill; showing
+   the token taught nobody anything. Only rename where the raw label is genuinely
+   opaque — a seller cross-checking against Seller Central still needs to
+   recognise the ordinary fee names. */
+function saNiceLabel(label,kind){
+  const l=(label||"").trim();
+  if(kind==="ads"&&/^transactiontotalamount$/i.test(l)) return "Sponsored Ads spend (billed as a service fee)";
+  if(/^MFNPostagePurchaseComplete/i.test(l)) return "GST on postage you bought through Amazon"+(/IGST$/i.test(l)?" (IGST)":"");
+  if(/^payable to amazon$/i.test(l)) return "Balance carried forward — what you owed Amazon at the start";
+  if(/^debt adjustment against (electronic|cod)/i.test(l))
+    return "Balance squared against your "+(/electronic/i.test(l)?"Electronic Transactions":"COD / Non-Transactional")+" account";
+  return l;
+}
+function saBucketOf(lab,amt,kind){
   lab=(lab||"").trim();
+  if(kind==="balance")return "balance";
+  if(kind==="ads")return "ads";
+  if(kind==="unknown")return "unknown";
   if(/^tcs/i.test(lab))return "tcs";
   if(/tds|194/i.test(lab))return "tds";
   if(/^product tax/i.test(lab))return "prodTax";
@@ -4259,27 +4355,33 @@ function saBucketOf(lab,amt){
 const SA_BUCKET_NAMES={gross:"Gross product sales",refunded:"Refunded sales",promo:"Promotions funded by you",
   referral:"Referral & closing fees",fulfil:"Fulfilment & shipping fees",gstFees:"GST on Amazon fees (ITC)",
   prodTax:"Product & shipping tax (net)",shipNet:"Buyer shipping (net)",tcs:"TCS withheld",tds:"TDS u/s 194-O",
-  credits:"Reimbursements & credits",otherFees:"Other fees",otherPrincipal:"Other credits"};
+  credits:"Reimbursements & credits",otherFees:"Other fees",otherPrincipal:"Other credits",
+  ads:"Advertising (Sponsored Ads)",balance:"Account balance moved between statements — not a fee",
+  unknown:"Not recognised — counted in your payout, left out of the fee figures"};
 function saFlow(records){
-  const B={gross:0,refunded:0,promo:0,referral:0,fulfil:0,gstFees:0,prodTax:0,shipNet:0,tcs:0,tds:0,credits:0,otherFees:0,otherPrincipal:0};
-  let orders=0,units=0,refunds=0;
+  const B={gross:0,refunded:0,promo:0,referral:0,fulfil:0,gstFees:0,prodTax:0,shipNet:0,tcs:0,tds:0,credits:0,otherFees:0,otherPrincipal:0,ads:0,balance:0,unknown:0};
+  let orders=0,units=0,refunds=0,orderIds=new Set();
   for(const rec of records){
     const isOrder=rec.transactionType==="Order";
     const isRefund=/refund/i.test(rec.transactionType);
-    if(isOrder){orders++;units+=rec.quantity||0;}
+    if(isOrder){orders++;units+=rec.quantity||0;if(rec.orderId)orderIds.add(rec.orderId);}
     if(rec.transactionType==="Refund")refunds++;
     for(const l of rec.amounts){
-      const a=l.amount;
-      if(/^principal$/i.test(l.amountDescription)){
+      const a=l.amount,kind=saLineKind(l,rec.transactionType);
+      if(kind==="principal"){
         if(isOrder)B.gross+=a; else if(isRefund)B.refunded+=a; else B.otherPrincipal+=a;
         continue;
       }
-      B[saBucketOf(l.amountDescription||l.amountType,a)]+=a;
+      B[saBucketOf(l.amountDescription||l.amountType,a,kind)]+=a;
     }
   }
-  return {B,orders,units,refunds};
+  /* `orders` counts order-ITEM groups, which is what the per-row table shows.
+     `distinctOrders` is the number of real Amazon orders — on a multi-SKU
+     order the two differ, and average order value must use the latter. */
+  return {B,orders,units,refunds,distinctOrders:orderIds.size||orders};
 }
 
+window.saFlow=saFlow; // exposed for verification/debugging
 /* When a dropped file matches no parser, say what WAS found — the first few
    column names tell the seller instantly which report they exported, where a
    bare "not recognised" leaves them guessing. Never fail silently. */
@@ -4470,31 +4572,45 @@ function saRenderResults(){
   const byType={}; for(const rec of r.records) byType[rec.transactionType]=(byType[rec.transactionType]||0)+1;
   const sv=n=>`<span class="${n<0?'amt-neg':(n>0?'amt-pos':'')}">${inr(n)}</span>`;
 
+  const flowPre=saFlow(r.records);
+  const feePct=flowPre.B.gross?Math.abs(agg.fees)/flowPre.B.gross*100:0;
   let h=`<div class="stats">
     <div class="stat blue"><div class="k">Deposit total</div><div class="v">${inr(total)}</div></div>
     <div class="stat green"><div class="k">Net product sales</div><div class="v">${inr(agg.sales)}</div></div>
-    <div class="stat red"><div class="k">Amazon fees</div><div class="v">${inr(agg.fees)}</div></div>
-    <div class="stat"><div class="k">Taxes, GST &amp; withholding</div><div class="v">${inr(agg.tax)}</div></div>
-  </div>`;
+    <div class="stat red"><div class="k">Amazon fees</div><div class="v">${inr(agg.fees)}</div>
+      <div class="sa-sub" style="margin-top:3px">${flowPre.B.gross?pc(feePct)+" of gross sales — selling &amp; fulfilment only":"selling &amp; fulfilment only"}</div></div>
+    ${agg.ads?`<div class="stat red"><div class="k">Advertising</div><div class="v">${inr(agg.ads)}</div>
+      <div class="sa-sub" style="margin-top:3px">Sponsored Ads billed in this statement</div></div>`
+      :`<div class="stat"><div class="k">Taxes, GST &amp; withholding</div><div class="v">${inr(agg.tax)}</div></div>`}
+  </div>
+  ${agg.balance?`<div class="banner info" style="text-align:left;margin-top:12px"><b>${inr(agg.balance)}</b> of this statement is your own balance moving, not a charge — Amazon carrying a previous balance forward (“Payable to Amazon”) or squaring the Electronic and COD account series against each other. It changes what lands in your bank, so it is in the ledger below, but it is <b>not</b> an Amazon fee and is excluded from the fee figures above. Load the same period's other Account Type and the two halves cancel out.</div>`:""}`;
 
+  /* Reconciliation is an invariant, not decoration: the sum of every parsed
+     line must equal Amazon's own settlement total. It is reported together
+     with anything the classifier did not recognise, so a new Amazon row type
+     shows up as a visible gap instead of being quietly absorbed into "fees". */
   const diff=Math.abs(agg.allSum-total),okRecon=diff<=1;
   h+=`<div class="sa-recon ${okRecon?'ok':'bad'}">
     <span>${okRecon?'✅':'⚠️'} Sum of all ${r.records.length} line items = <b>${inr(agg.allSum)}</b> —</span>
     <span>${okRecon?'matches the deposit total to the paisa.':`differs from the deposit total by ${inr(diff)}; check the file is complete.`}</span>
   </div>`;
+  if(Math.abs(agg.unknown)>=0.005)
+    h+=`<div class="banner warn" style="text-align:left"><b>${inr(agg.unknown)}</b> of this settlement is a transaction type this tool does not recognise yet. It <b>is</b> included in the payout reconciliation above — it is real money — but it is deliberately left out of the fee and profit figures, because guessing what it was is how a number becomes wrong. You can see the exact labels in the breakdown below, marked “Not recognised”. If you tell us what they are we'll add them: <a href="/contact.html">contact</a>.</div>`;
 
   if(r.summary)
     h+=`<div class="panel"><div class="sa-sub" style="font-size:13px">Settlement <b>${esc(r.summary.settlementId)}</b> · ${esc(r.summary.settlementStartDate)} → ${esc(r.summary.settlementEndDate)} · deposited ${esc(r.summary.depositDate)}${agg.credits?` · credits &amp; reimbursements ${inr(agg.credits)}`:""}</div></div>`;
 
   // Business stats + money flow (every line in exactly one bucket).
-  const flow=saFlow(r.records);
+  const flow=flowPre;
   const FB=flow.B;
   const flowSum=Object.values(FB).reduce((s,x)=>s+x,0);
   h+=`<div class="stats" style="margin-top:14px">
-    <div class="stat"><div class="k">Orders · Units</div><div class="v">${flow.orders} · ${flow.units}</div></div>
-    <div class="stat"><div class="k">Avg order value</div><div class="v">${flow.orders?inr(FB.gross/flow.orders):"—"}</div></div>
+    <div class="stat"><div class="k">Orders · Units</div><div class="v">${flow.distinctOrders} · ${flow.units}</div></div>
+    <div class="stat"><div class="k">Gross avg order value</div><div class="v">${flow.distinctOrders?inr(FB.gross/flow.distinctOrders):"—"}</div>
+      <div class="sa-sub" style="margin-top:3px">before refunds</div></div>
     <div class="stat ${FB.gross&&Math.abs(FB.refunded)/FB.gross>0.1?"red":""}"><div class="k">Refund rate (by value)</div><div class="v">${FB.gross?(Math.abs(FB.refunded)/FB.gross*100).toFixed(1)+"%":"—"}</div></div>
-    <div class="stat green"><div class="k">GST on fees — claim as ITC</div><div class="v">${inr(Math.abs(Math.min(0,FB.gstFees)))}</div></div>
+    <div class="stat green"><div class="k">GST charged on Amazon fees</div><div class="v">${inr(Math.abs(Math.min(0,FB.gstFees)))}</div>
+      <div class="sa-sub" style="margin-top:3px">may be claimable as input tax credit — check with your CA</div></div>
   </div>`;
   const rowsFlow=[
     ["Gross product sales",FB.gross],
@@ -4502,12 +4618,15 @@ function saRenderResults(){
     ["Promotions funded by you",FB.promo],
     ["Referral & closing fees",FB.referral],
     ["Fulfilment & shipping fees",FB.fulfil],
-    ["GST on Amazon fees (claimable as ITC in GSTR-3B)",FB.gstFees],
+    ["Advertising (Sponsored Ads)",FB.ads],
+    ["GST charged on Amazon fees (usually claimable as ITC in GSTR-3B)",FB.gstFees],
     ["Product & shipping tax collected (net)",FB.prodTax+FB.shipNet],
     ["TCS withheld (claim in GSTR-2A/8A)",FB.tcs],
     ["TDS u/s 194-O (visible in Form 26AS)",FB.tds],
     ["Reimbursements & credits",FB.credits+FB.otherPrincipal],
     ["Other fees",FB.otherFees],
+    ["Your own balance moved (carried forward / between account types) — not a fee",FB.balance],
+    ["Not recognised — in your payout, but left out of the fee figures below",FB.unknown],
   ].filter(x=>Math.abs(x[1])>=0.005);
   h+=`<div class="panel"><h4>Where the money went <span class="sa-sub">— every line of the settlement in one bucket; adds up to your deposit</span></h4>
     <div class="rows">${rowsFlow.map(([l,v])=>`<div class="r mut"><span class="rl">${esc(l)}</span><span class="rv ${v<0?"neg":""}">${v<0?"−":"+"}${inr(Math.abs(v))}</span></div>`).join("")}
@@ -4535,8 +4654,12 @@ function saRenderResults(){
     <div class="tblwrap"><table class="sa">
       <thead><tr><th>Label</th><th>Category</th><th class="num">Lines</th><th class="num">Total</th></tr></thead>
       <tbody>${feeRows.map(([label,a])=>`<tr>
-        <td>${esc(label)}</td>
-        <td>${a.isTax?'<span class="chip tax">Tax / GST</span>':'<span class="chip">Fee</span>'}</td>
+        <td>${esc(saNiceLabel(label,a.kind))}</td>
+        <td>${a.kind==="tax"?'<span class="chip tax">Tax / GST</span>'
+          :a.kind==="ads"?'<span class="chip">Advertising</span>'
+          :a.kind==="balance"?'<span class="chip">Balance moved — not a fee</span>'
+          :a.kind==="credit"?'<span class="chip">Credit</span>'
+          :'<span class="chip">Fee</span>'}</td>
         <td class="num">${a.count}</td><td class="num">${sv(a.total)}</td></tr>`).join("")}</tbody>
     </table></div></div>`;
 
@@ -4662,6 +4785,7 @@ function gstCompute(r){
   return {heads,byLabel,sales};
 }
 
+window.gstCompute=gstCompute; // exposed for verification/debugging
 function renderGstReport(){
   document.title="GST & TCS Report — Seller Tools India";
   const md=document.querySelector('meta[name="description"]');
@@ -4784,20 +4908,29 @@ function skuCompute(r){
     if(isRefund){s.refunds++;s.unitsReturned+=Math.abs(rec.quantity||0);}
     for(const l of rec.amounts){
       s.net+=l.amount;
-      if(/^principal$/i.test(l.amountDescription)){
+      const kind=saLineKind(l,rec.transactionType);
+      if(kind==="principal"){
         if(isOrder)s.sales+=l.amount;
         else if(isRefund)s.refundValue+=l.amount;
         else s.other+=l.amount;
       }else{
         const label=l.amountDescription||l.amountType||"";
-        if(saIsTax(label))s.taxes+=l.amount; else s.fees+=l.amount;
-        const bk=saBucketOf(label,l.amount);
+        /* Advertising and balance movements are still part of this row's net —
+           the money really did move — but they are NOT Amazon's selling fees,
+           so they must stay out of the fee column and out of fees-as-%-of-sales. */
+        if(kind==="tax")s.taxes+=l.amount;
+        else if(kind==="ads")s.ads=(s.ads||0)+l.amount;
+        else if(kind==="balance")s.balance=(s.balance||0)+l.amount;
+        else if(kind==="unknown")s.unknown=(s.unknown||0)+l.amount;
+        else s.fees+=l.amount;
+        const bk=saBucketOf(label,l.amount,kind);
         s.b[bk]=(s.b[bk]||0)+l.amount;
       }
     }
   }
   return Object.values(bySku);
 }
+window.skuCompute=skuCompute; // exposed for verification/debugging
 /* One judgement per SKU, from rules a seller can check by hand (they are
    printed in the formulas panel). `adv` = advanced P&L mode; `cpuKnown` =
    a product cost has been entered for this SKU. The order matters: a missing
@@ -4872,14 +5005,21 @@ function skuRenderResults(){
   const r=saParsed,out=document.getElementById("sku-out"); if(!out)return;
   const skus=skuCompute(r);
   const sv=n=>`<span class="${n<0?'amt-neg':(n>0?'amt-pos':'')}">${inr(n)}</span>`;
-  const totals=skus.reduce((t,s)=>({sales:t.sales+s.sales,fees:t.fees+s.fees,refund:t.refund+s.refundValue,net:t.net+s.net,units:t.units+s.units}),{sales:0,fees:0,refund:0,net:0,units:0});
-  const sorted=[...skus].sort((a,b)=>{
+  const totals=skus.reduce((t,s)=>({sales:t.sales+s.sales,fees:t.fees+s.fees,refund:t.refund+s.refundValue,net:t.net+s.net,units:t.units+s.units,ads:t.ads+(s.ads||0),balance:t.balance+(s.balance||0)}),{sales:0,fees:0,refund:0,net:0,units:0,ads:0,balance:0});
+  /* "(no SKU)" is not a product — it is the account-level bucket for lines
+     Amazon never ties to one (advertising, balance movements, subscription).
+     Counting it as a SKU, ranking it as the weakest earner and then advising
+     the seller to check "its price and weight band" was the worst single piece
+     of advice in the product. It gets its own section instead. */
+  const realSkus=skus.filter(s=>s.sku!=="(no SKU)");
+  const acct=skus.find(s=>s.sku==="(no SKU)")||null;
+  const sorted=[...realSkus].sort((a,b)=>{
     if(skuSort==="sales")return b.sales-a.sales;
     if(skuSort==="refund")return (b.sales?Math.abs(b.refundValue)/b.sales:0)-(a.sales?Math.abs(a.refundValue)/a.sales:0);
     return b.net-a.net;
   });
-  const best=sorted.reduce((m,s)=>s.net>m.net?s:m,sorted[0]||{net:0,sku:"—"});
-  const worst=sorted.reduce((m,s)=>s.net<m.net?s:m,sorted[0]||{net:0,sku:"—"});
+  const best=sorted.length?sorted.reduce((m,s)=>s.net>m.net?s:m,sorted[0]):{net:0,sku:"—"};
+  const worst=sorted.length?sorted.reduce((m,s)=>s.net<m.net?s:m,sorted[0]):{net:0,sku:"—"};
   const feePct=totals.sales?Math.abs(totals.fees)/totals.sales*100:0;
   const refundPct=totals.sales?Math.abs(totals.refund)/totals.sales*100:0;
 
@@ -4904,15 +5044,31 @@ function skuRenderResults(){
   const lossCount=costed.filter(x=>x.truePL<0).length;
 
   let h=`<div class="stats">
-    <div class="stat blue"><div class="k">SKUs · Units</div><div class="v">${skus.length} · ${totals.units}</div></div>
+    <div class="stat blue"><div class="k">SKUs · Units</div><div class="v">${realSkus.length} · ${totals.units}</div></div>
     <div class="stat green"><div class="k">Net across all SKUs</div><div class="v">${inr(totals.net)}</div></div>
-    <div class="stat"><div class="k">Fees as % of sales</div><div class="v">${feePct.toFixed(1)}%</div></div>
+    <div class="stat"><div class="k">Fees as % of sales</div><div class="v">${feePct.toFixed(1)}%</div>
+      <div class="sa-sub" style="margin-top:3px">${inr(Math.abs(totals.fees))} of ${inr(totals.sales)} gross${totals.ads?` · ads ${inr(Math.abs(totals.ads))} counted separately`:""}</div></div>
     <div class="stat ${refundPct>10?'red':''}"><div class="k">Refunds as % of sales</div><div class="v">${refundPct.toFixed(1)}%</div></div>
     ${advOn?`<div class="stat ${trueProfit<0?'red':'green'}"><div class="k">True profit after product cost</div><div class="v">${costed.length?inr(trueProfit):"—"}</div><div class="sa-sub" style="margin-top:3px">${costed.length?`across ${costed.length} costed SKU${costed.length===1?"":"s"} · ${lossCount} loss-making`:"enter product costs below"}${needCost?` · <b>${needCost} still need a cost</b>`:""}</div></div>`:""}
   </div>`;
 
-  if(skus.length>1)
+  if(realSkus.length>1)
     h+=`<div class="banner info">Best earner: <b>${esc(best.sku)}</b> (${inr(best.net)} net). Weakest: <b>${esc(worst.sku)}</b> (${inr(worst.net)} net).${worst.net<0?" A negative net means this SKU took money out of your settlement — check its price, weight slab and return rate.":""}</div>`;
+
+  /* Account-level lines shown as what they are, next to the products but never
+     ranked among them. Advertising and balance movements get named explicitly:
+     a seller who sees only a lump sum cannot act on it. */
+  if(acct&&Math.abs(acct.net)>=0.005){
+    const b=acct.b||{};
+    const parts=[["ads","Advertising (Sponsored Ads)"],["balance","Your own balance moved between statements — not a fee"],
+      ["fulfil","Fulfilment & shipping charged to the account"],["otherFees","Other account-level fees"],
+      ["credits","Credits & reimbursements"],["gstFees","GST charged on those fees"]]
+      .map(([k,nm])=>[nm,b[k]||0]).filter(x=>Math.abs(x[1])>=0.005);
+    h+=`<div class="panel"><h4>Account-level lines <span class="sa-sub">— real money, but Amazon never ties these to a product</span></h4>
+      <div class="rows">${parts.map(([nm,v])=>`<div class="r mut"><span class="rl">${esc(nm)}</span><span class="rv ${v<0?"neg":""}">${v<0?"−":"+"}${inr(Math.abs(v))}</span></div>`).join("")}
+      <div class="r fin"><span class="rl">Total not attributable to any SKU</span><span class="rv ${acct.net<0?"neg":""}">${inr(acct.net)}</span></div></div>
+      <div class="banner info" style="margin-top:10px">These are <b>not</b> a product's problem and are excluded from every per-SKU figure above. ${b.ads?`The advertising here is per-account; for spend broken down by SKU use the <a href="#/ad-profit">Ad Profitability</a> report with your Sponsored Products advertised-product export. `:""}${b.balance?`The balance movement is Amazon carrying your own money forward or squaring your two account series — load the same period's other Account Type and it cancels out. `:""}</div></div>`;
+  }
 
   if(skuShowUpgrade && !skuIsPro)
     h+=`<div class="panel" style="border-color:var(--blue-line);background:var(--blue-soft)">
@@ -6562,7 +6718,7 @@ const trFmtMonth=m=>new Date(m+"-01T00:00:00Z").toLocaleDateString("en-IN",{mont
    the month of its posted-date, falling back to the statement's start month;
    lines with no usable date at all are counted in `skipped`, never guessed. */
 function trendCompute(settlements,mtrRows){
-  const zeros=()=>({gross:0,refunded:0,fees:0,taxes:0,credits:0,net:0,orders:0,units:0,refunds:0});
+  const zeros=()=>({gross:0,refunded:0,fees:0,taxes:0,credits:0,net:0,orders:0,units:0,refunds:0,ads:0,balance:0,unknown:0});
   const months=new Map(), skus=new Map(); let skipped=0;
   for(const p of settlements){
     const fd=p.summary?(saParseDate(p.summary.settlementStartDate)||saParseDate(p.summary.depositDate)):null;
@@ -6583,16 +6739,20 @@ function trendCompute(settlements,mtrRows){
       }
       for(const l of rec.amounts){
         e.net+=l.amount; if(sm)sm.net+=l.amount;
-        if(/^principal$/i.test(l.amountDescription)){
+        const kind=saLineKind(l,rec.transactionType);
+        if(kind==="principal"){
           if(isOrder){e.gross+=l.amount;if(sm)sm.sales+=l.amount;}
           else if(isRefund)e.refunded+=l.amount;
           else e.credits+=l.amount;
-        }else{
-          const label=l.amountDescription||l.amountType||"";
-          if(saIsTax(label))e.taxes+=l.amount;
-          else if(l.amount<0)e.fees+=l.amount;
-          else e.credits+=l.amount;
-        }
+        }else if(kind==="tax")e.taxes+=l.amount;
+        /* Advertising and balance movements used to land in `fees`, which made
+           the fee-share chart read 156.9% of sales on a real account whose
+           Amazon fees were 21.5%. They are tracked, and charted, on their own. */
+        else if(kind==="ads")e.ads+=l.amount;
+        else if(kind==="balance")e.balance+=l.amount;
+        else if(kind==="unknown")e.unknown+=l.amount;
+        else if(kind==="fee")e.fees+=l.amount;
+        else e.credits+=l.amount;
       }
     }
   }
@@ -6609,9 +6769,15 @@ function trendCompute(settlements,mtrRows){
       mo++; if(mo>12){mo=1;y++;}
     }
   }
+  /* A month with no sales has no fee RATIO — the denominator is zero. Writing
+     0% made an empty month look like a perfect one, and worse, made it a valid
+     baseline: a real account compared May's 150% against an April that never
+     sold anything and announced "fees up 150.1 points". Null means unknown,
+     and every consumer below skips a null rather than treating it as zero. */
   for(const e of out){
-    e.feePct=e.gross?Math.abs(e.fees)/e.gross*100:0;
-    e.refundPct=e.gross?Math.abs(e.refunded)/e.gross*100:0;
+    e.feePct=e.gross?Math.abs(e.fees)/e.gross*100:null;
+    e.refundPct=e.gross?Math.abs(e.refunded)/e.gross*100:null;
+    e.adPct=e.gross?Math.abs(e.ads)/e.gross*100:null;
   }
   /* How much of each month the loaded statements actually cover. A month that
      is only half covered is not a low month — it is half a month, and drawing
@@ -6722,7 +6888,10 @@ function trendInsights(months,skus){
       dGross:p?pct(rate(e,"gross"),rate(p,"gross")):null,
       dNet:p?pct(rate(e,"net"),rate(p,"net")):null,
       dUnits:p?pct(rate(e,"units"),rate(p,"units")):null,
-      dFeePp:p?e.feePct-p.feePct:null,dRefundPp:p?e.refundPct-p.refundPct:null};
+      /* Only compare a ratio against a month that HAD one. A month with no
+         sales has no fee or refund share to be up or down from. */
+      dFeePp:(p&&p.feePct!==null&&e.feePct!==null)?e.feePct-p.feePct:null,
+      dRefundPp:(p&&p.refundPct!==null&&e.refundPct!==null)?e.refundPct-p.refundPct:null};
   });
   const L=rows[rows.length-1],P=rows[rows.length-2];
   const name=m=>trFmtMonth(m);
@@ -6735,7 +6904,8 @@ function trendInsights(months,skus){
     notes.push({k:"bad",t:`Sales rose but the payout rate <b>fell</b> (${inr0(P.netD)}/day → ${inr0(L.netD)}/day) — fees or refunds ate more than the growth brought in.`});
   if(L.dRefundPp!==null&&L.dRefundPp>=3&&L.refundPct>=5)
     notes.push({k:"bad",t:`Refunds jumped to <b>${L.refundPct.toFixed(1)}%</b> of sales in ${name(L.m)} (up ${L.dRefundPp.toFixed(1)} points) — find the SKU behind it in the <a href="#/sku-report">SKU report</a> before it compounds.`});
-  const squeeze3=rows.length>=3&&rows.slice(-3).every((r,i,a)=>i===0||r.feePct>a[i-1].feePct);
+  const squeeze3=rows.length>=3&&rows.slice(-3).every(r=>r.feePct!==null)
+    &&rows.slice(-3).every((r,i,a)=>i===0||r.feePct>a[i-1].feePct);
   if((L.dFeePp!==null&&L.dFeePp>=2)||squeeze3)
     notes.push({k:"bad",t:`Fees are taking a growing share of every sale — ${squeeze3?`up three straight months to <b>${L.feePct.toFixed(1)}%</b>`:`up ${L.dFeePp.toFixed(1)} points to <b>${L.feePct.toFixed(1)}%</b>`}. Run <a href="#/reconcile">Reconciliation</a>'s fee audit and check weight bands in the <a href="#/fee-bands">Fee Band Optimizer</a>.`});
   if(rows.length>=3){
@@ -6836,36 +7006,49 @@ function trRenderResults(){
   const M=t.months.filter(m=>covered.has(m.m));
   const partials=M.filter(m=>m.partial);
   const totGross=M.reduce((s,e)=>s+e.gross,0), totNet=M.reduce((s,e)=>s+e.net,0),
-        totFees=M.reduce((s,e)=>s+e.fees,0), totRef=M.reduce((s,e)=>s+e.refunded,0);
+        totFees=M.reduce((s,e)=>s+e.fees,0), totRef=M.reduce((s,e)=>s+e.refunded,0),
+        totAds=M.reduce((s,e)=>s+(e.ads||0),0), totBal=M.reduce((s,e)=>s+(e.balance||0),0);
+  const monthsWithSales=M.filter(e=>e.gross>0).length;
   const sv=n=>`<span class="${n<0?'amt-neg':(n>0?'amt-pos':'')}">${inr(n)}</span>`;
   const mo={lbl:m=>trFmtMonth(m),unit:`monthly · ${M.length} month${M.length===1?"":"s"}`,x:"m"};
   h+=`<div class="stats">
-    <div class="stat blue"><div class="k">Months covered</div><div class="v">${M.length}</div></div>
+    <div class="stat blue"><div class="k">Months covered</div><div class="v">${M.length}</div>
+      ${monthsWithSales<M.length?`<div class="sa-sub" style="margin-top:3px">${monthsWithSales} with sales</div>`:""}</div>
     <div class="stat green"><div class="k">Gross sales</div><div class="v">${inr(totGross)}</div></div>
-    <div class="stat"><div class="k">Fees as % of sales</div><div class="v">${totGross?(Math.abs(totFees)/totGross*100).toFixed(1)+"%":"—"}</div></div>
+    <div class="stat"><div class="k">Fees as % of sales</div><div class="v">${totGross?(Math.abs(totFees)/totGross*100).toFixed(1)+"%":"—"}</div>
+      <div class="sa-sub" style="margin-top:3px">Amazon's selling &amp; fulfilment fees only</div></div>
+    ${totAds?`<div class="stat ${totGross&&Math.abs(totAds)/totGross>0.2?"red":""}"><div class="k">Advertising as % of sales</div><div class="v">${totGross?(Math.abs(totAds)/totGross*100).toFixed(1)+"%":"—"}</div>
+      <div class="sa-sub" style="margin-top:3px">${inr(Math.abs(totAds))} of Sponsored Ads in these statements</div></div>`:""}
     <div class="stat ${totGross&&Math.abs(totRef)/totGross>0.1?"red":""}"><div class="k">Refund rate (by value)</div><div class="v">${totGross?(Math.abs(totRef)/totGross*100).toFixed(1)+"%":"—"}</div></div>
     <div class="stat ${totNet<0?"red":"green"}"><div class="k">Net payout</div><div class="v">${inr(totNet)}</div></div>
-  </div>`;
+  </div>
+  ${totBal?`<div class="banner info" style="text-align:left">${inr(Math.abs(totBal))} of these statements is your own balance moving between weeks and between the Electronic and COD account series — it changes the payout but is not a fee, so it is excluded from the fee share above.</div>`:""}`;
   if(settlements.length===1)
     h+=`<div class="banner info">Only one settlement loaded — drop more statements to see a real trend.</div>`;
   if(partials.length)
     h+=`<div class="banner warn">${partials.map(m=>`<b>${esc(trFmtMonth(m.m))}</b> (${m.coverDays} of ${m.monthDays} days)`).join(" and ")} ${partials.length>1?"are":"is"} only part of a month — the statements you loaded don't cover the rest of it. Those bars are shorter because the period is shorter, not because sales fell. Load the neighbouring statements for a like-for-like month.</div>`;
   h+=`<div class="banner info">Months here are <b>when Amazon settled the money</b>, not when the buyer ordered. Amazon's own SKU and Business Reports count by order date, so the two will not agree — an order placed late in the month is usually paid in the next one. Across a whole account the gap is small; <b>for a single SKU it can be several times over or under</b>, depending on when in the month that product sells.</div>`;
+  /* Ratio charts plot only the months that HAVE a ratio — a month with no
+     sales has no fee share, and drawing it as a 0% bar reads as "a month with
+     no fees", which is the opposite of what an empty month means. */
+  const Mr=M.filter(e=>e.feePct!==null||e.refundPct!==null);
   h+=`<div class="panel"><h4>Month by month <span class="sa-sub">— hover a bar for the exact figure</span></h4><div class="vizgrid">${
       saBarChart("Product sales",M,"gross","#16a34a",v=>inr(v),mo)
     }${
       saBarChart("Net payout",M,"net","#2f5af0",v=>inr(v),mo)
     }${
-      saBarChart("Fees as % of sales",M,"feePct","#e5484d",v=>v.toFixed(1)+"%",mo)
+      saBarChart("Fees as % of sales",Mr,"feePct","#e5484d",v=>v.toFixed(1)+"%",mo)
     }${
-      saBarChart("Refund rate (by value)",M,"refundPct","#f5872b",v=>v.toFixed(1)+"%",mo)
+      saBarChart("Refund rate (by value)",Mr,"refundPct","#f5872b",v=>v.toFixed(1)+"%",mo)
+    }${
+      totAds?saBarChart("Advertising as % of sales",Mr,"adPct","#8b5cf6",v=>v.toFixed(1)+"%",mo):""
     }</div>
     <div class="tblwrap" style="margin-top:12px"><table class="sa">
       <thead><tr><th>Month</th><th class="num">Orders</th><th class="num" title="Units whose settlement landed in this month">Units settled</th>${t.haveOrdered?`<th class="num" title="Units ordered in this month, from the MTR — this is the basis Amazon's own reports use">Units ordered</th>`:""}<th class="num">Gross sales</th><th class="num">Refunds</th><th class="num">Fees</th><th class="num">Fee %</th><th class="num">Refund %</th><th class="num">Net payout</th></tr></thead>
       <tbody>${M.map(e=>`<tr>
         <td>${esc(trFmtMonth(e.m))}${e.partial?` <span class="sa-sub" title="Statements cover only ${e.coverDays} of ${e.monthDays} days of this month">· ${e.coverDays}/${e.monthDays} days</span>`:""}</td><td class="num">${e.orders}</td><td class="num">${e.units}</td>${t.haveOrdered?`<td class="num"${e.orderedPartial?' title="Your MTR does not cover this whole month"':""}><b>${e.orderedUnits||"—"}</b>${e.orderedPartial?'<span class="sa-sub"> ·part</span>':""}</td>`:""}
         <td class="num">${inr(e.gross)}</td><td class="num">${sv(e.refunded)}</td><td class="num">${sv(e.fees)}</td>
-        <td class="num">${e.feePct.toFixed(1)}%</td><td class="num ${e.refundPct>10?'amt-neg':''}">${e.refundPct.toFixed(1)}%</td>
+        <td class="num">${e.feePct===null?'<span class="sa-sub" title="No sales settled in this month, so there is no ratio to show">—</span>':e.feePct.toFixed(1)+"%"}</td><td class="num ${e.refundPct!==null&&e.refundPct>10?'amt-neg':''}">${e.refundPct===null?'<span class="sa-sub">—</span>':e.refundPct.toFixed(1)+"%"}</td>
         <td class="num"><b>${sv(e.net)}</b></td></tr>`).join("")}
       </tbody></table></div></div>`;
   // Month-over-month reading, full months only.
@@ -6884,8 +7067,8 @@ function trRenderResults(){
           <td class="num">${inr0(r.gross)}</td><td class="num">${dp(r.dGross)}</td>
           <td class="num"><b>${inr0(r.net)}</b></td><td class="num">${dp(r.dNet)}</td>
           <td class="num">${num(r.units)}</td><td class="num">${dp(r.dUnits)}</td>
-          <td class="num">${r.feePct.toFixed(1)}% ${r.dFeePp===null?"":dp(r.dFeePp,1)}</td>
-          <td class="num">${r.refundPct.toFixed(1)}% ${r.dRefundPp===null?"":dp(r.dRefundPp,1)}</td></tr>`).join("")}
+          <td class="num">${r.feePct===null?"—":r.feePct.toFixed(1)+"%"} ${r.dFeePp===null?"":dp(r.dFeePp,1)}</td>
+          <td class="num">${r.refundPct===null?"—":r.refundPct.toFixed(1)+"%"} ${r.dRefundPp===null?"":dp(r.dRefundPp,1)}</td></tr>`).join("")}
         </tbody></table></div>`;
       if(ins.movers.up.length||ins.movers.down.length){
         const li=x=>`<li><b>${esc(x.sku)}</b> — ${inr0(x.prev)} → ${inr0(x.last)}${x.note==="new"?' <span class="st st-good">new</span>':""}</li>`;
@@ -6915,9 +7098,19 @@ function trRenderResults(){
       }${
         saBarChart("Average orders per day",D,"avgOrders","#2f5af0",v=>v.toFixed(1),{lbl:d=>d,unit:"by weekday",x:"short"})
       }</div>
-      <div class="banner ${Math.abs(gap)>=15?"warn":"info"}" style="margin-top:12px"><b>${esc(best.name)}</b> is your strongest day at ${inr(best.avgGross)} average, <b>${esc(worst.name)}</b> the weakest at ${inr(worst.avgGross)}${
-        wk.length&&wd.length?` — weekends run <b>${gap>=0?"+":""}${gap.toFixed(0)}%</b> against weekdays`:""
-      }. ${Math.abs(gap)>=15?"That is a big enough gap to plan around: concentrate coupons, budget and launches on the strong days rather than spreading them evenly.":"The spread is modest, so day-of-week targeting is unlikely to move much — spend the effort on price and ads instead."}</div>
+      ${(function(){
+        /* A verdict needs enough weeks behind it. With one Tuesday and one
+           Thursday in the file, "concentrate your budget on Tuesdays" was
+           advice from a single day's orders. RTO Radar and Traffic Doctor both
+           guard their samples; this panel did not. */
+        const TR_MIN_OCCUR=4, TR_MIN_ORDERS=30;
+        const weakest=Math.min(...D.map(d=>d.days)), totalOrders=D.reduce((s,d)=>s+d.orders,0);
+        if(weakest<TR_MIN_OCCUR||totalOrders<TR_MIN_ORDERS)
+          return `<div class="banner info" style="margin-top:12px">Not enough weeks yet to call a day-of-week pattern — the thinnest weekday here occurred <b>${weakest} time${weakest===1?"":"s"}</b> across <b>${totalOrders} order${totalOrders===1?"":"s"}</b>. The table below is what happened; treat it as history, not a rule, until each weekday has ${TR_MIN_OCCUR}+ occurrences and the period carries ${TR_MIN_ORDERS}+ orders.</div>`;
+        return `<div class="banner ${Math.abs(gap)>=15?"warn":"info"}" style="margin-top:12px"><b>${esc(best.name)}</b> is your strongest day at ${inr(best.avgGross)} average, <b>${esc(worst.name)}</b> the weakest at ${inr(worst.avgGross)}${
+          wk.length&&wd.length?` — weekends run <b>${gap>=0?"+":""}${gap.toFixed(0)}%</b> against weekdays`:""
+        }. ${Math.abs(gap)>=15?"That is a big enough gap to plan around: concentrate coupons, budget and launches on the strong days rather than spreading them evenly.":"The spread is modest, so day-of-week targeting is unlikely to move much — spend the effort on price and ads instead."}</div>`;
+      })()}
       <div class="tblwrap" style="margin-top:12px"><table class="sa">
         <thead><tr><th>Day</th><th class="num">Times in period</th><th class="num">Orders</th><th class="num">Units</th><th class="num">Gross sales</th><th class="num">Avg per day</th></tr></thead>
         <tbody>${D.map(d=>`<tr${d.name===best.name?' class="rec-done"':""}>
@@ -6975,7 +7168,8 @@ function trWire(out){
     saCsvDownload("trends-month-over-month.csv",
       ["Month","Sales (INR)","Sales MoM %","Net payout (INR)","Net MoM %","Units","Units MoM %","Fee %","Fee MoM pp","Refund %","Refund MoM pp"],
       ins.rows.map(r=>[r.m,r.gross.toFixed(2),d(r.dGross),r.net.toFixed(2),d(r.dNet),
-        r.units,d(r.dUnits),r.feePct.toFixed(1),d(r.dFeePp),r.refundPct.toFixed(1),d(r.dRefundPp)]));
+        r.units,d(r.dUnits),r.feePct===null?"":r.feePct.toFixed(1),d(r.dFeePp),
+        r.refundPct===null?"":r.refundPct.toFixed(1),d(r.dRefundPp)]));
   });
 }
 
@@ -10206,12 +10400,24 @@ function rtoRenderResults(){
   const r=rtoCompute(orders,mfn);
   const t=r.totals;
   const rate=t.shipped>0?t.rto/t.shipped*100:0;
-  const cancelRate=(t.shipped+t.cancelled)>0?t.cancelled/(t.shipped+t.cancelled)*100:0;
+  /* Cancellations are counted against the orders that have actually RESOLVED —
+     a pending order has not had its chance to be cancelled yet. That is
+     defensible, but only if the seller is told: on a file that was 72% pending
+     it turned 35 cancellations out of 189 order items into a red "67.3%".
+     Below a usable sample the rate is withheld rather than shouted. */
+  const resolved=t.shipped+t.cancelled;
+  const cancelRate=resolved>0?t.cancelled/resolved*100:0;
+  const cancelThin=resolved<RTO_MIN_SHIPPED;
+  const cancelOfAll=t.rows>0?t.cancelled/t.rows*100:0;
   h+=`<div class="banner info">Coverage — orders placed ${esc(saFmtDay(t.dates[0]))} → ${esc(saFmtDay(t.dates[1]))} · ${num(t.rows)} order items${t.pending?` · ${num(t.pending)} still pending/unshipped (not judged)`:""}. Recent orders may still be in transit — an RTO can take 2–3 weeks to be recorded.</div>`;
   h+=`<div class="stats">
     <div class="stat ${rate>=6?"red":rate>=4?"":"green"}"><div class="k">RTO rate</div><div class="v">${rate.toFixed(1)}%</div><div class="sa-sub" style="margin-top:3px">${num(t.rto)} of ${num(t.shipped)} shipped orders came back</div></div>
     <div class="stat ${t.rtoValue>0?"red":""}"><div class="k">Order value on RTO parcels</div><div class="v">${inr0(t.rtoValue)}</div><div class="sa-sub" style="margin-top:3px">${r.haveReturns?num(t.rtoRefunded)+" of "+num(t.rto)+" already refunded per the Return Report":"add the seller-fulfilled Return Report to see how many are already refunded"}</div></div>
-    <div class="stat ${cancelRate>12?"red":""}"><div class="k">Cancelled before shipping</div><div class="v">${cancelRate.toFixed(1)}%</div><div class="sa-sub" style="margin-top:3px">${num(t.cancelled)} orders — cancellations, not RTO</div></div>
+    <div class="stat ${!cancelThin&&cancelRate>12?"red":""}"><div class="k">Cancelled before shipping</div>
+      <div class="v">${cancelThin?num(t.cancelled):cancelRate.toFixed(1)+"%"}</div>
+      <div class="sa-sub" style="margin-top:3px">${cancelThin
+        ?`${num(t.cancelled)} of ${num(t.rows)} order items — too few have resolved yet for a rate`
+        :`${num(t.cancelled)} of the ${num(resolved)} orders that have shipped or been cancelled${t.pending?` (${num(t.pending)} still pending — ${cancelOfAll.toFixed(1)}% of all ${num(t.rows)} order items)`:""}`} — cancellations, not RTO</div></div>
     <div class="stat"><div class="k">Worst state (enough data)</div><div class="v">${(()=>{const w=r.states.find(s=>!s.thin&&s.rate!==null);return w?esc(w.state):"—";})()}</div><div class="sa-sub" style="margin-top:3px">${(()=>{const w=r.states.find(s=>!s.thin&&s.rate!==null);return w?w.rate.toFixed(1)+"% of "+num(w.shipped)+" shipped":"—";})()}</div></div>
   </div>`;
   const visStates=r.states.filter(s=>s.shipped>0).slice(0,25);
@@ -10232,15 +10438,18 @@ function rtoRenderResults(){
       <tbody>${r.pins.slice(0,15).map(p=>`<tr><td><b>${esc(p.pin)}</b></td><td>${esc(p.city)}</td><td class="sa-sub">${esc(p.state)}</td><td class="num">${num(p.rto)}</td><td class="num">${inr(p.value)}</td></tr>`).join("")}</tbody></table></div></div>`;
   }
   const visSkus=r.skus.filter(s=>s.rto>0||!s.thin).slice(0,20);
+  /* An empty table with only a header tells the seller nothing — say why it is
+     empty, the same way every other panel in this product does. */
   h+=`<div class="panel"><h4>RTO by SKU</h4>
-    <div class="tblwrap"><table class="sa">
+    ${visSkus.length?`<div class="tblwrap"><table class="sa">
       <thead><tr><th>SKU</th><th>Status</th><th class="num">Shipped</th><th class="num">Came back</th><th class="num">RTO rate</th><th class="num">Value</th></tr></thead>
       <tbody>${visSkus.map(e=>`<tr>
         <td class="wrap">${esc(e.sku)}</td><td>${stChip(rtoStatus(e))}</td>
         <td class="num">${num(e.shipped)}</td><td class="num"><b>${num(e.rto)}</b></td>
         <td class="num">${e.thin?'<span class="sa-sub">—</span>':e.rate.toFixed(1)+"%"}</td>
         <td class="num">${e.rtoValue?inr(e.rtoValue):"—"}</td></tr>`).join("")}
-      </tbody></table></div></div>`;
+      </tbody></table></div>`
+      :`<div class="banner info">No SKU has ${RTO_MIN_SHIPPED}+ shipped orders in this file yet, and none has had a parcel come back — so there is nothing here to judge. Load a longer period, or come back once more of these orders have been delivered.</div>`}</div>`;
   if(r.services.length>1){
     h+=`<div class="panel"><h4>By delivery speed</h4>
       <div class="tblwrap"><table class="sa"><thead><tr><th>Ship service</th><th class="num">Shipped</th><th class="num">Came back</th><th class="num">RTO rate</th></tr></thead>
@@ -10652,7 +10861,7 @@ function tdRenderResults(){
         <td class="num">${num(x.units)}</td>
         <td class="num">${Math.round(x.lostUnits)}${x.lostValue?`<span class="sa-sub"> ≈ ${inr0(x.lostValue)}</span>`:""}</td></tr>`).join("")}
       </tbody></table></div>
-      ${t.lostUnits>0?`<div class="sa-sub" style="margin-top:6px">* Together ≈ <b>${num(Math.round(t.lostUnits))} units${t.lostValue?" / "+inr0(t.lostValue):""}</b> a month if these pages converted at your account average — an estimate, clearly, but of your own traffic at your own average.</div>`:""}</div>`;
+      ${t.lostUnits>0?`<div class="sa-sub" style="margin-top:6px">* Together ≈ <b>${num(Math.round(t.lostUnits))} units${t.lostValue?" / "+inr0(t.lostValue):""}</b> <b>over whatever period this report covers</b> if these pages converted at your account average — an estimate, clearly, but of your own traffic at your own average. The Business Report export carries no dates, so this tool cannot know whether you exported 7 days or 90: read the figure against the range you chose in Seller Central.</div>`:""}</div>`;
   }
   if(r.buybox.length){
     h+=`<div class="panel"><h4>🥊 Losing the Buy Box <span class="sa-sub">(${r.buybox.length})</span></h4>
