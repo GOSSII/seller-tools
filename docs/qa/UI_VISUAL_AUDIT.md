@@ -22,8 +22,8 @@ transaction table shows real order ids and SKU names and this repository is publ
 | 28 · Ad Profitability | ✅ | ✅ | ⚠ **partial** | ✅ ×2 rounds | 14/20 · 79 | **17.5/20 · 94** | 17 | 15 |
 | 31 · RTO Radar | ✅ | ✅ | shares 21's | ✅ ×2 rounds | 15/20 · 82 | **19/20 · 94** | 11 | 11 |
 | 33 · Traffic Doctor | ✅ | ✅ | ✅ wrong-file | ✅ ×2 rounds | 17/20 · 82 | **19/20 · 94** | 10 | 10 |
-| Landing page | ✅ | ✅ | n/a | in review | — | — | — | — |
-| 12 free calculators | — | — | — | pending | — | — | — | — |
+| Landing page | ✅ | ✅ | n/a | ✅ ×2 rounds | — · 82 | **19/20 · 95** | 9 | 9 |
+| 12 free calculators | ✅ started | — | — | in review | — | — | — | — |
 
 ### Tool 28 is reviewed PARTIAL, not passed
 
