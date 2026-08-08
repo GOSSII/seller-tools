@@ -1678,7 +1678,7 @@ const HELP={
   "ad-profit":{input:`Two files. <b>Payments → All Statements → Flat File V2</b> (or a Monthly Unified Transaction report) for what each SKU actually earned — and, from the <b>Advertising console → Sponsored Ads → Reports</b>, a <b>Sponsored Products “Advertised product”</b> report for the same period, which is the only place ad spend is broken down per SKU.`,
     steps:["Drop the settlement (or unified transaction) file, and the advertised-product report for the same dates.","Fill in product costs for your main SKUs — without them the table shows payout, not profit.","Read the “ads turn profit into loss” list first: those SKUs earn money until the advertising is counted.","Compare each SKU's ACOS against its break-even ACOS — anything above it is being advertised at a loss."]},
   "reconcile":{input:`Settlement file(s): <b>Payments → All Statements → Download Flat File V2</b> — drop every statement for the period you're checking, <b>from both Account Types</b>: All Statements keeps a separate weekly series for <i>Electronic Transactions</i> and for <i>Cash On Delivery Transactions and Non-Transactional Fees</i>, and orders paid through the series you skip will look unpaid. Optional for Easy Ship / self-ship sellers: the <b>seller-fulfilled Return Report</b> (Orders → Manage Returns → View reports → All Returns, 60-day ranges) sorts the SAFE-T list by strength — refunds whose item never came back rise to the top, items delivered back drop down, and claims already filed disappear. Optional: the <b>Inventory Ledger</b> (detailed view) finds stock Amazon misplaced and never reimbursed, and the <b>Replacements</b> report stops replacement flows being misread as unreturned refunds. Optional: the <b>FBA customer returns</b> and <b>Reimbursements</b> reports (<b>Reports → Fulfilment</b>, Download tab, exact dates matching your statements — both together) unlock the refunded-never-returned and damaged-at-Amazon checks. Optional but recommended: the matching MTR — <b>Reports → Tax Document Library → Merchant Tax Reports → B2C</b> (.csv) — so shipped-but-unpaid orders can be caught too.`,
-    steps:["Drop your settlement file(s), and the MTR for the same months if you have it.","Work through each issue list — every row shows the order, the amount at stake and the exact Seller Central path to claim it.","Tick rows off as you raise them (ticks are saved in your browser), and export the checklist as CSV to track claims."]},
+    steps:["Drop your settlement file(s), and the MTR for the same months if you have it.","Work through each issue list — every row shows the order, the amount involved and, where a case is still actionable, the exact Seller Central path.","Tick rows off as you raise them (ticks are saved in your browser), and export the checklist as CSV to track claims."]},
   "fnsku-labels":{input:`Your FNSKU (starts with X0) is in <b>Inventory → FBA Inventory</b> — the FNSKU column — or on the <b>Print item labels</b> page (<b>Manage Inventory</b> → tick your FBA listings → <b>Print item labels</b>). Copy it from either place; the product name can be anything your packers will recognise.`,
     steps:["Add a row per product: FNSKU/code, product name, condition (defaults to New) and how many stickers you need.","Pick the paper: A4 sticker sheets with 65, 40 or 24 labels per page, or a 4×6 thermal sheet (12 per page).","Generate, check the preview, download — and print at 100% scale (never \"fit to page\", or the barcode dimensions shift).","Stick one label per unit, covering any existing barcode on the retail packaging."]},
   "listing-checker":{input:`Copy the title, bullet points and description straight from <b>Seller Central → Inventory → Manage Inventory → Edit</b> (the listing edit page). Target keywords: your main search terms, comma-separated — the <b>Search term report</b> is the best source.`,
@@ -5375,7 +5375,7 @@ function skuRenderResults(){
    RECONCILIATION & SAFE-T FINDER (Pro)
    Cross-checks settlement file(s) — parsed with the SAME
    parseSettlement as the analyzer — plus an optional MTR, and
-   flags money worth chasing. Everything stays in the browser.
+   separates confirmed discrepancies from cases needing evidence. Everything stays in the browser.
    ============================================================ */
 let recFiles=[]; // {name, kind:"settlement"|"mtr", parsed?|rows?}
 const REC_DONE_KEY="rec_done";
@@ -5416,7 +5416,7 @@ window.parseMtr=parseMtr; // exposed for verification/debugging
 /* Pure cross-check over parsed settlements + MTR rows, so it is testable.
    Returns {issues:{refundFee,safeT,shipped,negative}, ordersChecked,
    refundsChecked, recovery, unpaid, notes}. Amounts follow the settlement
-   sign convention (each issue's `amount` is the positive ₹ at stake;
+   sign convention (each issue's `amount` is the positive figure involved;
    null = unknown). `recovery` counts only claimable money (refund fee +
    SAFE-T); unpaid shipments are timing as often as they are money, so they
    are totalled separately in `unpaid` and never inflate the headline. */
@@ -6070,34 +6070,38 @@ function recCompute(settlements,mtrRows,extra){
 window.recCompute=recCompute; // exposed for verification/debugging
 
 const REC_CHECKS={
-  notReturned:{icon:"👻",title:"Refunded, never returned, never reimbursed",
+  notReturned:{icon:"👻",amt:"Refund value",title:"Refunded, never returned, never reimbursed",
     why:"A refunded FBA buyer has 45 days to send the item back to the fulfilment centre, after which Amazon normally reimburses the seller. On these orders 45+ days have passed with no return in the FBA customer returns report and no line in the Reimbursements report. Partial and low-value refunds — which Amazon.in often issues without asking for the item back — are marked for review instead of claimed.",
     claim:`<b>Seller Central → Help → Get Support → Fulfilment by Amazon</b> → "Customer refunded, item not returned, no reimbursement received". Quote the Order ID and the refund date, and note that 45 days have passed. Check the refund amount first — a partial or goodwill refund may never have required a return.`},
-  fcDamaged:{icon:"📦",title:"Returned damaged — in Amazon's hands",
+  fcDamaged:{icon:"📦",amt:"Unit value",title:"Returned damaged — in Amazon's hands",
     why:"These returns came back marked damaged by the carrier or at the fulfilment centre — damage that happened while Amazon was responsible for the unit, which its policy reimburses. Only returns 30+ days old are listed (Amazon reimburses on its own clock), reimbursements are matched by order AND by SKU, and customer-damaged / defective returns are deliberately excluded: policy puts those on the buyer or the product. Counted under Refunds to review, not Claimable — only Amazon's answer proves the money.",
     claim:`<b>Seller Central → Help → Get Support → Fulfilment by Amazon</b> → quote the Order ID, the return date and the disposition (carrier-damaged / warehouse-damaged) from the FBA customer returns report, and ask for reimbursement under the FBA lost and damaged inventory policy.`},
-  lostWh:{icon:"🗃️",title:"Lost in the fulfilment centre, never reimbursed",
+  lostWh:{icon:"🗃️",amt:"Value of units",title:"Lost in the fulfilment centre, never reimbursed",
     why:"Amazon's Inventory Ledger records these units as misplaced (reason M) 30+ days ago, they were never recorded found (reason F), and no inventory-side reimbursement exists for the SKU. Amazon's FBA lost-inventory policy reimburses stock it loses; order-level reimbursements are a different mechanism and are not counted as settling these. Valued at the SKU's own average unit price from your statements. Counted under review — only Amazon's answer proves the money.",
     claim:`<b>Seller Central → Help → Get Support → Fulfilment by Amazon</b> → "Inventory lost in fulfilment centre, not reimbursed". Quote the MSKU, the adjustment date from the Inventory Ledger, and the quantity. Amazon researches against the same ledger you just read.`},
-  feeOver:{icon:"⚠️",title:"Closing fee charged above Amazon's own rate card",
+  feeOver:{icon:"⚠️",amt:"Overcharged",title:"Closing fee charged above Amazon's own rate card",
     why:"The fixed closing fee depends only on the item's price band and how it was fulfilled — the fee category can only make it cheaper. These orders were charged more than the published maximum for their band, which is a billing error, not a category difference.",
     claim:`<b>Seller Central → Help → Get Support → Selling on Amazon → Payments</b> → "Incorrect closing fee charged". Quote the Order ID, the item price and the fee charged, and cite the fee schedule (Selling on Amazon fee schedule, Table 1 and Table 2). <b>Amazon requires fee claims within 30 calendar days of the order</b> — rows older than that are marked and may be refused.`},
-  weightJump:{icon:"⚖️",title:"Charged for a heavier parcel than usual",
+  weightJump:{icon:"⚖️",amt:"Excess charged",title:"Charged for a heavier parcel than usual",
     why:"Amazon bills weight handling on the band it measured at the fulfilment centre, using the greater of actual and volumetric weight. When one shipment of a SKU is billed a band above the one it normally ships in, either the parcel was packed differently or Amazon mis-measured it — the second is reimbursable.",
     claim:`Check the packed weight and dimensions first — a bigger box legitimately costs more. If they were unchanged: <b>Seller Central → Help → Get Support → Fulfilment by Amazon</b> → request a <b>measurement re-check</b> for the ASIN, quoting the Order ID and the fee charged. Amazon re-measures and refunds the difference on confirmed errors.`},
-  feeDup:{icon:"👯",title:"The same fee charged twice on one order",
+  feeDup:{icon:"👯",amt:"Duplicated fee",title:"The same fee charged twice on one order",
     why:"An identical fee line appears twice against the same order and item. Occasionally that is a genuine second unit, so check the quantity before claiming — but a duplicate on a single-unit order is money back.",
     claim:`<b>Seller Central → Help → Get Support → Selling on Amazon → Payments</b> → describe it as a duplicate fee charge, quoting the Order ID, the fee name and the amount. Same <b>30-day</b> claim window as any other fee dispute.`},
-  refundFee:{icon:"💸",title:"Refunds where the referral fee wasn't returned",
+  refundFee:{icon:"💸",amt:"Fee not credited",title:"Refunds where the referral fee wasn't returned",
     why:"When Amazon refunds a buyer it normally credits back most of the referral fee it charged you. On these refunds the original order was charged a referral fee and the refund credits none of it back.",
     claim:`<b>Seller Central → Help → Get Support → Selling on Amazon</b> → describe it as "Referral fee not credited back on refund" and quote the Order ID and refund date. Ask them to compare the refund's fee lines with the original order.`},
-  safeT:{icon:"🛡️",title:"Potential SAFE-T cases (seller-fulfilled refunds)",
-    why:"Amazon refunded the buyer on these Easy Ship / Self Ship orders. If the item never came back, came back damaged or the refund was against policy, claim reimbursement through SAFE-T.",
-    claim:`<b>Seller Central → Help → Get Support → Selling on Amazon → search "SAFE-T"</b> → File a SAFE-T claim → enter the Order ID, and paste the text from the row's <b>📋 Claim</b> button. Based on the SAFE-T filing policy configured for this refund date, the window is <b>60 days</b> — rows past it are marked and are not counted as claimable. Amazon can change this policy; confirm the current window before filing.`},
-  shipped:{icon:"📦",title:"Shipped but no payment line",
+  safeT:{icon:"🛡️",amt:"Refund value",title:"Potential SAFE-T cases (seller-fulfilled refunds)",
+    why:"Amazon refunded the buyer on these Easy Ship / Self Ship orders. These types of seller-fulfilled refunds may qualify for SAFE-T in some circumstances — for example depending on return status, condition and policy. Verify the evidence and the current filing window before submitting a claim.",
+    claim:`<b>Seller Central → Help → Get Support → Selling on Amazon → search "SAFE-T"</b> → File a SAFE-T claim → enter the Order ID, and paste the evidence from the row's <b>Review &amp; prepare</b> button. Based on the SAFE-T filing policy configured for this refund date, the window is <b>60 days</b>. Amazon can change this policy; confirm the current window before filing.`,
+    /* Replaces the filing path when every row in the section already sits
+       outside the window. Instructions must not describe a button those rows
+       do not have, or a path that ends in a rejected case. */
+    shutClaim:`<b>If you believe one of these cases still qualifies:</b> open the order in Seller Central and verify the current SAFE-T filing policy and the return status first. These rows fall outside the filing window configured for their refund dates, so they are <b>not counted as actionable or confirmed claimable</b>.`},
+  shipped:{icon:"📦",amt:"Invoice value",title:"Shipped but no payment line",
     why:"These orders are shipments in your MTR with no Order payment in any settlement you loaded. Cancelled and refunded shipments, and anything shipped in the last fortnight of the loaded period, are already excluded — but the payment still most often sits in a statement you haven't loaded. Load every statement covering the period before raising a claim.",
     claim:`First search the Order ID in <b>Payments → Transaction View</b>. If the shipment is over 30 days old and still unpaid: <b>Help → Get Support → Selling on Amazon → Payments</b>, quoting the Order ID and ship date.`},
-  negative:{icon:"🔻",title:"Orders that netted negative",
+  negative:{icon:"🔻",amt:"Net loss",title:"Orders that netted negative",
     why:"Fees exceeded what the buyer paid — you shipped these at a loss. Not a claim, but fix the cause: weight slab, fee category, or a price below the fee floor.",
     claim:`Re-check the maths with the <a href="#/profit">profit calculator</a> and <b>Reports → Fee Preview</b>. If the charged weight or category is wrong: <b>Help → Get Support</b> → ask for a fee correction with the Order ID.`},
 };
@@ -6113,7 +6117,7 @@ function recBody(){
   app.innerHTML=`
     <div class="wrap page">
       <h2>Reconciliation &amp; SAFE-T Finder</h2>
-      <p class="lede">Drop your settlement file(s) — and the matching MTR if you have it — and get a checklist of money worth chasing: missing referral-fee credits, SAFE-T-eligible refunds, unpaid shipments and orders that shipped at a loss, each with the exact Seller Central path to claim it.</p>
+      <p class="lede">Upload your settlement reports — and the matching MTR if you have it — to check for fee discrepancies, seller-fulfilled refunds that may need SAFE-T review, and payments that may need reconciliation. Confirmed discrepancies are kept separate from cases that need more evidence.</p>
       ${helpHtml("reconcile")}
       <label class="sa-drop" id="rec-drop">
         <div class="ico">🕵️</div>
@@ -6273,7 +6277,7 @@ function recRenderResults(){
     h+=`<div class="panel"><h4>${c.icon} ${esc(c.title)} <span class="sa-sub">(${rows.length}${shutN?` · ${shutN} filing window appears closed`:""})</span></h4>
       <p class="sa-sub" style="margin:4px 0 10px">${esc(c.why)}</p>
       <div class="tblwrap"><table class="sa">
-        <thead><tr><th style="width:36px">Done</th><th>Order</th><th>SKU</th><th>Date</th><th class="num">₹ at stake</th><th>Note</th><th style="width:86px"></th></tr></thead>
+        <thead><tr><th style="width:36px">Done</th><th>Order</th><th>SKU</th><th>Date</th><th class="num">${esc(c.amt||"Amount")}</th><th>Note</th><th style="width:86px"></th></tr></thead>
         <tbody>${rows.map(x=>{const key=recKey(x),dn=!!done[key];const ct=recClaimText(x);
           /* A row whose filing window has passed must not carry a button that
              looks like a working claim path — that is the nudge that sends a
@@ -6288,7 +6292,8 @@ function recRenderResults(){
             <td>${shut?`<span class="chip" title="Based on the SAFE-T filing policy configured for this refund date: 60 days">Window likely closed</span>`
               :ct?`<button type="button" class="fbtn rec-copy" data-claim="${esc(ct)}" title="Copy the evidence for this order, then review it in Seller Central before filing">Review &amp; prepare →</button>`:""}</td></tr>`;}).join("")}
         </tbody></table></div>
-      <div class="rec-claim"><b>How to claim:</b> ${c.claim}</div></div>`;
+      ${shutN===rows.length&&c.shutClaim?`<div class="rec-claim">${c.shutClaim}</div>`
+        :`<div class="rec-claim"><b>How to claim:</b> ${c.claim}</div>`}</div>`;
   }
   h+=`<div class="banner info">These are pointers computed from your files, not guarantees — Amazon decides each claim. Payments for recent shipments often arrive in the <b>next</b> settlement, so load consecutive statements before chasing anything. Ticks are saved only in your browser.</div>`;
   out.innerHTML=h; recWire(out,settlements,mtrRows,res);
@@ -6309,9 +6314,9 @@ function recClaimText(x){
     case "notReturned":
       return `Reimbursement request — Order ${oid}${x.sku?" (SKU "+x.sku+")":""}. This FBA order was refunded ${amt}${dt}, and the FBA Customer Returns report contains no return of this unit in the 45 days following the refund, nor does the Reimbursements report show any reimbursement for it. Per FBA policy, when a refunded unit is not returned within 45 days the seller is to be reimbursed. Please review and reimburse. Supporting data: settlement refund line, FBA Customer Returns report and Reimbursements report covering the window.`;
     case "refundFee":
-      return `Fee credit request — Order ${oid}. On the original order a referral fee was charged, but the refund${dt} credited none of it back. Referral fee is normally credited (less the administration portion) when an order is refunded. Please compare the refund's fee lines with the original order and credit the referral fee due. Amount at stake: ${amt}.`;
+      return `Fee credit request — Order ${oid}. On the original order a referral fee was charged, but the refund${dt} credited none of it back. Referral fee is normally credited (less the administration portion) when an order is refunded. Please compare the refund's fee lines with the original order and credit the referral fee due. Amount involved: ${amt}.`;
     case "feeOver":
-      return `Fee correction request — Order ${oid}${x.sku?" (SKU "+x.sku+")":""}. The weight-handling fee charged on this order${dt} corresponds to a heavier weight band than this product's actual packed weight. Please re-check the charged band against the product's verified weight and dimensions and refund the difference. Amount at stake: ${amt}.`;
+      return `Fee correction request — Order ${oid}${x.sku?" (SKU "+x.sku+")":""}. The weight-handling fee charged on this order${dt} corresponds to a heavier weight band than this product's actual packed weight. Please re-check the charged band against the product's verified weight and dimensions and refund the difference. Amount involved: ${amt}.`;
     case "feeDup":
       return `Duplicate fee charge — Order ${oid}. An identical fee line appears twice against the same order item${dt}. This is a single-unit order, so the second charge appears to be a duplicate. Please review and refund the duplicate. Amount: ${amt}.`;
     case "shipped":
