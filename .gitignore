@@ -36,3 +36,6 @@ qa-data/
 # Python bytecode + audit run output
 __pycache__/
 qa/out/
+
+# UI audit screenshots contain real order ids and SKU names — never commit
+qa-data/screenshots/
