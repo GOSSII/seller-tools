@@ -10551,6 +10551,7 @@ let rtoFiles=[];
 const RTO_STATUSES=new Set(["Shipped - Returned to Seller","Shipped - Returning to Seller",
   "Shipped - Undeliverable","Shipped - Rejected by Buyer"]);
 const RTO_MIN_SHIPPED=10;   // below this a rate is noise, not a signal
+const RTO_MATURE_DAYS=21;   // an RTO takes 2-3 weeks to be recorded
 function parseAllOrders(text){
   const lines=String(text||"").replace(/^﻿/,"").split(/\r\n|\r|\n/);
   let hln=-1; for(let i=0;i<lines.length;i++){if(lines[i].trim()!==""){hln=i;break;}}
@@ -10595,7 +10596,10 @@ function rtoCompute(orderRows,mfnReturns){
   for(const m of mfnReturns||[]) refunded.add(m.orderId);
   const mk=()=>({shipped:0,rto:0,rtoValue:0,cancelled:0,orders:0});
   const byState=new Map(),bySku=new Map(),bySvc=new Map(),byPin=new Map();
-  const t={rows:rows.length,shipped:0,rto:0,rtoValue:0,rtoRefunded:0,cancelled:0,pending:0,dates:[null,null]};
+  const t={rows:rows.length,shipped:0,rto:0,rtoValue:0,rtoRefunded:0,cancelled:0,pending:0,
+    distinctOrders:new Set(rows.map(r=>r.orderId).filter(Boolean)).size,
+    shippedMature:0,dates:[null,null]};
+  const matureRows=[];
   for(const r of rows){
     if(r.date){ if(!t.dates[0]||r.date<t.dates[0]) t.dates[0]=r.date; if(!t.dates[1]||r.date>t.dates[1]) t.dates[1]=r.date; }
     const st=byState.get(r.state)||mk(); byState.set(r.state,st);
@@ -10605,6 +10609,7 @@ function rtoCompute(orderRows,mfnReturns){
     if(isCancelled(r)){ t.cancelled++; st.cancelled++; sk.cancelled++; continue; }
     if(!isShipped(r)){ t.pending++; continue; }
     t.shipped++; st.shipped++; sk.shipped++; sv.shipped++;
+    matureRows.push(r);
     if(isRto(r)){
       t.rto++; t.rtoValue+=r.price; st.rto++; st.rtoValue+=r.price; sk.rto++; sk.rtoValue+=r.price; sv.rto++;
       if(refunded.has(r.orderId)) t.rtoRefunded++;
@@ -10623,10 +10628,24 @@ function rtoCompute(orderRows,mfnReturns){
     rate:v.shipped>0?v.rto/v.shipped*100:null})).filter(x=>x.shipped>0)
     .sort((a,b)=>b.shipped-a.shipped);
   const pins=[...byPin.values()].filter(p=>p.rto>=2).sort((a,b)=>b.rto-a.rto);
+  /* Volume alone does not make a cohort measurable. An RTO takes 2-3 weeks to
+     be recorded, so a parcel shipped yesterday has not had its chance to come
+     back — counting it in the denominator manufactures a low rate. Maturity =
+     enough shipped volume AND enough elapsed time, measured against the newest
+     order in the file (the only "as of" the file itself can prove). */
+  if(t.dates[1]){
+    const end=new Date(t.dates[1]).getTime();
+    for(const r of matureRows){
+      if(!r.date) continue;
+      if((end-new Date(r.date).getTime())/86400000>=RTO_MATURE_DAYS) t.shippedMature++;
+    }
+  }
+  t.mature=t.shippedMature>=RTO_MIN_SHIPPED;
   return {states,skus,services,pins,totals:t,haveReturns:(mfnReturns||[]).length>0};
 }
 window.rtoCompute=rtoCompute; // exposed for verification/debugging
-function rtoStatus(e){
+function rtoStatus(e,mature){
+  if(mature===false) return {k:"data",l:"Too early"};
   if(e.thin) return {k:"data",l:"Low volume"};
   if(e.rate>=10) return {k:"loss",l:"RTO hotspot"};
   if(e.rate>=6) return {k:"problem",l:"High RTO"};
@@ -10645,7 +10664,7 @@ function rtoBody(){
   app.innerHTML=`
     <div class="wrap page">
       <h2>RTO Radar</h2>
-      <p class="lede">Every parcel that ships and comes back undelivered costs you two courier journeys and often the product. Amazon records the outcome in the All Orders report — it just never totals it up. This does: <b>by state, by pincode, by SKU</b>.</p>
+      <p class="lede">Returned-to-origin shipments can create forward and return logistics costs and may reduce the value you recover from the order. Amazon records the outcome in the All Orders report but never totals it up. RTO Radar shows where undelivered returns are appearing — <b>by state, by pincode and SKU</b>.</p>
       ${helpHtml("rto")}
       <label class="sa-drop" id="rto-drop">
         <div class="ico">🔁</div>
@@ -10705,26 +10724,33 @@ function rtoRenderResults(){
   const cancelRate=resolved>0?t.cancelled/resolved*100:0;
   const cancelThin=resolved<RTO_MIN_SHIPPED;
   const cancelOfAll=t.rows>0?t.cancelled/t.rows*100:0;
-  h+=`<div class="banner info">Coverage — orders placed ${esc(saFmtDay(t.dates[0]))} → ${esc(saFmtDay(t.dates[1]))} · ${num(t.rows)} order items${t.pending?` · ${num(t.pending)} still pending/unshipped (not judged)`:""}. Recent orders may still be in transit — an RTO can take 2–3 weeks to be recorded.</div>`;
+  h+=`<div class="banner ${t.mature?"info":"warn"}">Coverage — orders placed ${esc(saFmtDay(t.dates[0]))} → ${esc(saFmtDay(t.dates[1]))} · <b>${num(t.rows)} order items</b> across ${num(t.distinctOrders)} order${t.distinctOrders===1?"":"s"}${t.pending?` · ${num(t.pending)} still pending/unshipped (not judged)`:""}. Every count on this page is <b>order items</b>, not orders — one Amazon order can carry several. ${t.mature?`${num(t.shippedMature)} shipped order items are at least ${RTO_MATURE_DAYS} days old, so the RTO rate below is measurable.`:`<b>Only ${num(t.shippedMature)} shipped order item${t.shippedMature===1?" is":"s are"} at least ${RTO_MATURE_DAYS} days old</b>, and an RTO takes 2–3 weeks to be recorded — so this cohort is too young to give an RTO rate yet.`}</div>`;
   h+=`<div class="stats">
-    <div class="stat ${rate>=6?"red":rate>=4?"":"green"}"><div class="k">RTO rate</div><div class="v">${rate.toFixed(1)}%</div><div class="sa-sub" style="margin-top:3px">${num(t.rto)} of ${num(t.shipped)} shipped orders came back</div></div>
-    <div class="stat ${t.rtoValue>0?"red":""}"><div class="k">Order value on RTO parcels</div><div class="v">${inr0(t.rtoValue)}</div><div class="sa-sub" style="margin-top:3px">${r.haveReturns?num(t.rtoRefunded)+" of "+num(t.rto)+" already refunded per the Return Report":"add the seller-fulfilled Return Report to see how many are already refunded"}</div></div>
-    <div class="stat ${!cancelThin&&cancelRate>12?"red":""}"><div class="k">Cancelled before shipping</div>
-      <div class="v">${cancelThin?num(t.cancelled):cancelRate.toFixed(1)+"%"}</div>
-      <div class="sa-sub" style="margin-top:3px">${cancelThin
-        ?`${num(t.cancelled)} of ${num(t.rows)} order items — too few have resolved yet for a rate`
-        :`${num(t.cancelled)} of the ${num(resolved)} orders that have shipped or been cancelled${t.pending?` (${num(t.pending)} still pending — ${cancelOfAll.toFixed(1)}% of all ${num(t.rows)} order items)`:""}`} — cancellations, not RTO</div></div>
-    <div class="stat"><div class="k">Worst state (enough data)</div><div class="v">${(()=>{const w=r.states.find(s=>!s.thin&&s.rate!==null);return w?esc(w.state):"—";})()}</div><div class="sa-sub" style="margin-top:3px">${(()=>{const w=r.states.find(s=>!s.thin&&s.rate!==null);return w?w.rate.toFixed(1)+"% of "+num(w.shipped)+" shipped":"—";})()}</div></div>
+    ${t.mature
+      ?`<div class="stat ${rate>=6?"red":rate>=4?"":"green"}"><div class="k">RTO rate</div><div class="v">${rate.toFixed(1)}%</div><div class="sa-sub" style="margin-top:3px">${num(t.rto)} of ${num(t.shipped)} shipped order items came back</div></div>`
+      /* A green 0.0% on a cohort this young reads as "my RTO is excellent".
+         The tool knows 0 RTOs were OBSERVED; it does not know the rate. */
+      :`<div class="stat warn"><div class="k">RTO outcome</div><div class="v">Too early to measure</div>
+        <div class="sa-sub" style="margin-top:3px">${num(t.rto)} RTO${t.rto===1?"":"s"} observed among ${num(t.shipped)} shipped order items so far · ${num(t.pending)} of ${num(t.rows)} order items are still pending/unshipped</div>
+        <div class="sa-sub" style="margin-top:3px">Current observed rate: ${rate.toFixed(1)}% — <b>not yet a mature RTO rate</b></div></div>`}
+    <div class="stat ${t.rtoValue>0?"red":""}"><div class="k">${t.mature?"Order value on RTO parcels":"Observed RTO value"}</div>
+      <div class="v">${inr0(t.rtoValue)}${t.mature?"":" so far"}</div>
+      <div class="sa-sub" style="margin-top:3px">${t.mature?"":"Cohort is still immature — most order items have not reached a final delivery outcome. "}${r.haveReturns?num(t.rtoRefunded)+" of "+num(t.rto)+" already refunded per the Return Report":"add the seller-fulfilled Return Report to see how many are already refunded"}</div></div>
+    <div class="stat"><div class="k">Cancelled before shipping</div>
+      <div class="v">${num(t.cancelled)} order items</div>
+      <div class="sa-sub" style="margin-top:3px">${cancelOfAll.toFixed(1)}% of the ${num(t.rows)} loaded order items${t.pending?` · ${num(t.pending)} are still pending/unshipped`:""}</div>
+      ${cancelThin?"":`<div class="sa-sub" style="margin-top:3px">Among the ${num(resolved)} order items already resolved as shipped or cancelled, ${cancelRate.toFixed(1)}% were cancelled.</div>`}</div>
+    <div class="stat"><div class="k">Worst state (enough data)</div><div class="v">${(()=>{const w=r.states.find(s=>!s.thin&&s.rate!==null);return w?esc(w.state):"Not yet";})()}</div><div class="sa-sub" style="margin-top:3px">${(()=>{const w=r.states.find(s=>!s.thin&&s.rate!==null);return w?w.rate.toFixed(1)+"% of "+num(w.shipped)+" shipped order items":`no state has reached ${RTO_MIN_SHIPPED} shipped order items yet, so none can be ranked`;})()}</div></div>
   </div>`;
   const visStates=r.states.filter(s=>s.shipped>0).slice(0,25);
   h+=`<div style="display:flex;justify-content:flex-end;gap:8px;margin:14px 0 2px"><button type="button" class="fbtn" id="rto-csv">⬇ Export CSV</button><button type="button" class="fbtn" id="rto-pdf">📄 Print / Save PDF</button><button type="button" class="fbtn" id="rto-share">📤 Share PDF</button></div>
-    <div class="panel"><h4>RTO by state <span class="sa-sub">(rates only shown at ${RTO_MIN_SHIPPED}+ shipped orders — below that it's noise)</span></h4>
+    <div class="panel"><h4>RTO by state <span class="sa-sub">(rates only shown at ${RTO_MIN_SHIPPED}+ shipped order items that have had time to come back — below that it's noise)</span></h4>
     <div class="tblwrap"><table class="sa">
-      <thead><tr><th>State</th><th>Status</th><th class="num">Shipped</th><th class="num">Came back</th><th class="num">RTO rate</th><th class="num">Value</th><th class="num" title="Orders cancelled before shipping — a different problem from RTO">Cancelled</th></tr></thead>
+      <thead><tr><th>State</th><th>Status</th><th class="num">Shipped</th><th class="num">Came back</th><th class="num">RTO rate</th><th class="num">Value</th><th class="num" title="Order items cancelled before shipping — a different problem from RTO">Cancelled</th></tr></thead>
       <tbody>${visStates.map(e=>`<tr>
-        <td>${esc(e.state)}</td><td>${stChip(rtoStatus(e))}</td>
+        <td>${esc(e.state)}</td><td>${stChip(rtoStatus(e,t.mature))}</td>
         <td class="num">${num(e.shipped)}</td><td class="num"><b>${num(e.rto)}</b></td>
-        <td class="num">${e.thin?'<span class="sa-sub">—</span>':e.rate.toFixed(1)+"%"}</td>
+        <td class="num">${(e.thin||!t.mature)?`<span class="sa-sub">${t.mature?"—":"too early"}</span>`:e.rate.toFixed(1)+"%"}</td>
         <td class="num">${e.rtoValue?inr(e.rtoValue):"—"}</td>
         <td class="num">${num(e.cancelled)}</td></tr>`).join("")}
       </tbody></table></div></div>`;
@@ -10740,35 +10766,44 @@ function rtoRenderResults(){
     ${visSkus.length?`<div class="tblwrap"><table class="sa">
       <thead><tr><th>SKU</th><th>Status</th><th class="num">Shipped</th><th class="num">Came back</th><th class="num">RTO rate</th><th class="num">Value</th></tr></thead>
       <tbody>${visSkus.map(e=>`<tr>
-        <td class="wrap">${esc(e.sku)}</td><td>${stChip(rtoStatus(e))}</td>
+        <td class="wrap">${esc(e.sku)}</td><td>${stChip(rtoStatus(e,t.mature))}</td>
         <td class="num">${num(e.shipped)}</td><td class="num"><b>${num(e.rto)}</b></td>
-        <td class="num">${e.thin?'<span class="sa-sub">—</span>':e.rate.toFixed(1)+"%"}</td>
+        <td class="num">${(e.thin||!t.mature)?`<span class="sa-sub">${t.mature?"—":"too early"}</span>`:e.rate.toFixed(1)+"%"}</td>
         <td class="num">${e.rtoValue?inr(e.rtoValue):"—"}</td></tr>`).join("")}
       </tbody></table></div>`
-      :`<div class="banner info">No SKU has ${RTO_MIN_SHIPPED}+ shipped orders in this file yet, and none has had a parcel come back — so there is nothing here to judge. Load a longer period, or come back once more of these orders have been delivered.</div>`}</div>`;
+      :`<div class="banner info">No SKU has ${RTO_MIN_SHIPPED}+ shipped order items in this file yet, and none has had a parcel come back — so there is nothing here to judge. Load a longer period, or come back once more of these order items have been delivered.</div>`}</div>`;
   if(r.services.length>1){
     h+=`<div class="panel"><h4>By delivery speed</h4>
       <div class="tblwrap"><table class="sa"><thead><tr><th>Ship service</th><th class="num">Shipped</th><th class="num">Came back</th><th class="num">RTO rate</th></tr></thead>
-      <tbody>${r.services.map(s=>`<tr><td>${esc(s.service)}</td><td class="num">${num(s.shipped)}</td><td class="num">${num(s.rto)}</td><td class="num">${s.shipped>=RTO_MIN_SHIPPED?s.rate.toFixed(1)+"%":'<span class="sa-sub">low volume</span>'}</td></tr>`).join("")}</tbody></table></div>
-      <div class="sa-sub" style="margin-top:6px">Faster deliveries get refused less — the buyer is still expecting the parcel when it arrives.</div></div>`;
+      <tbody>${r.services.map(s=>`<tr><td>${esc(s.service)}</td><td class="num">${num(s.shipped)}</td><td class="num">${num(s.rto)}</td><td class="num">${!t.mature?'<span class="sa-sub">too early</span>':s.shipped>=RTO_MIN_SHIPPED?s.rate.toFixed(1)+"%":'<span class="sa-sub">low volume</span>'}</td></tr>`).join("")}</tbody></table></div>
+      <div class="sa-sub" style="margin-top:6px">${(()=>{
+        const judged=r.services.filter(x=>x.shipped>=RTO_MIN_SHIPPED);
+        const anyRto=r.services.some(x=>x.rto>0);
+        /* Two service levels with 13 and 4 shipments and zero RTOs between
+           them is not evidence that speed changes RTO, and "the buyer is
+           still expecting the parcel" is a cause the report cannot show. */
+        if(judged.length<2||!anyRto)
+          return `<b>No delivery-speed pattern yet.</b> ${anyRto?"":"No RTO has been observed in any service level"}${anyRto?"":", and "}${r.services.filter(x=>x.shipped<RTO_MIN_SHIPPED).map(x=>esc(x.service)+" has only "+num(x.shipped)+" shipped order item"+(x.shipped===1?"":"s")).join(", ")||"the samples are small"}. More completed deliveries are needed before comparing RTO rates.`;
+        return `Compare these rates only between service levels that both cleared ${RTO_MIN_SHIPPED} shipped order items. A difference here is an observation, not a cause — this report cannot show <i>why</i> a parcel was refused.`;
+      })()}</div></div>`;
   }
   h+=`<details class="howto"><summary>How every number here is computed</summary><div class="hbody">
     <span class="htag">Formulas &amp; sources</span>
     <ol>
       <li>Everything is read from the All Orders report's own <b>order-status</b> column: "Returned to Seller", "Returning to Seller", "Undeliverable" and "Rejected by Buyer" count as RTO; "Cancelled" is counted separately (never shipped, so it is not RTO); pending orders are excluded from every rate.</li>
-      <li><b>RTO rate</b> = RTO orders ÷ shipped orders. A state or SKU under ${RTO_MIN_SHIPPED} shipped orders shows no rate — a small sample proves nothing.</li>
-      <li><b>Value</b> is the item price of RTO orders — the revenue that travelled and came back. What you actually lose per RTO is the two-way shipping plus any damage; this report cannot price that, so it is not guessed.</li>
+      <li><b>RTO rate</b> = RTO order items ÷ shipped order items. Rows are deduplicated by order-item, so every count on this page is an <b>order item</b> — one Amazon order can carry several. A state or SKU under ${RTO_MIN_SHIPPED} shipped order items shows no rate, and the headline rate is withheld entirely until ${RTO_MIN_SHIPPED}+ shipped order items are at least ${RTO_MATURE_DAYS} days old — volume alone is not maturity.</li>
+      <li><b>Value</b> is the item price of RTO order items — the revenue that travelled and came back. What you actually lose per RTO is the two-way shipping plus any damage; this report cannot price that, so it is not guessed.</li>
       <li>This report does not say COD vs prepaid — Amazon doesn't export it here. Indian RTO is overwhelmingly a COD phenomenon, but that is context, not a number from your data.</li>
       <li>With the seller-fulfilled Return Report added, RTO orders are matched by order ID to show how many were <b>already refunded</b> — those may be SAFE-T material in <a href="#/reconcile">Reconciliation</a>.</li>
-      <li>Status: <span class="st st-loss">RTO hotspot</span> ≥10% · <span class="st st-problem">High RTO</span> ≥6% · <span class="st st-watch">Watch</span> ≥4% · <span class="st st-good">OK</span> otherwise · <span class="st st-data">Low volume</span> under ${RTO_MIN_SHIPPED} shipped.</li>
+      <li>Status: <span class="st st-loss">RTO hotspot</span> ≥10% · <span class="st st-problem">High RTO</span> ≥6% · <span class="st st-watch">Watch</span> ≥4% · <span class="st st-good">OK</span> otherwise · <span class="st st-data">Low volume</span> under ${RTO_MIN_SHIPPED} shipped order items.</li>
     </ol>
   </div></details>`;
-  const hot=r.states.find(s=>!s.thin&&s.rate>=6);
+  const hot=t.mature?r.states.find(s=>!s.thin&&s.rate>=6):null;
   h+=`<div class="panel"><h4>What should I do next?</h4><ul style="margin:8px 0 0 18px;line-height:1.9;font-size:13.5px">
-    ${hot?`<li><b>${esc(hot.state)}</b> ships back ${hot.rate.toFixed(0)}% of what you send it. Options that work in practice: prepaid-only or partial-advance offers for high-RTO regions, address/phone verification on COD orders, and keeping heavier/costlier SKUs off COD there.</li>`:""}
+    ${hot?`<li><b>${esc(hot.state)}</b> has returned ${hot.rate.toFixed(0)}% of the order items shipped to it. Options that work in practice: prepaid-only or partial-advance offers for high-RTO regions, address/phone verification on COD orders, and keeping heavier/costlier SKUs off COD there.</li>`:""}
     ${r.pins.length?`<li>The repeat-RTO pincodes above are your blocklist candidates — a pincode that has returned ${r.pins[0].rto} parcels is telling you something no average can.</li>`:""}
-    <li>An RTO that was <b>refunded</b> deserves a second look in <a href="#/reconcile">Reconciliation</a> — if the item never made it back to you, that's the strongest SAFE-T case there is.</li>
-    <li>RTO costs are invisible in per-order P&amp;L — the two-way freight lands as Easy Ship fees on OTHER orders' statements. Watch your fee share in <a href="#/trends">Trends</a> alongside this rate.</li>
+    <li>If a seller-fulfilled RTO was refunded to the buyer and the item was not returned to you, review it in <a href="#/reconcile">Reconciliation &amp; SAFE-T Finder</a>. Eligibility depends on the return status, evidence, policy and filing window.</li>
+    <li>RTO logistics charges may not be visible on the same order row. Use the <a href="#/settlement-analyzer">Settlement Analyzer</a> or <a href="#/trends">Trends</a> to review the associated Amazon logistics charges over the same period.</li>
   </ul></div>`;
   out.innerHTML=h; rtoWire(out,r);
 }
@@ -10784,8 +10819,8 @@ function rtoWire(out,r){
   if(csv&&r) csv.addEventListener("click",()=>{
     saCsvDownload("rto-radar.csv",
       ["Type","Name","Status","Shipped","RTO","RTO rate %","RTO value (INR)","Cancelled"],
-      r.states.map(e=>["State",e.state,rtoStatus(e).l,e.shipped,e.rto,e.thin?"":(e.rate??0).toFixed(1),e.rtoValue.toFixed(2),e.cancelled])
-      .concat(r.skus.map(e=>["SKU",e.sku,rtoStatus(e).l,e.shipped,e.rto,e.thin?"":(e.rate??0).toFixed(1),e.rtoValue.toFixed(2),e.cancelled]))
+      r.states.map(e=>["State",e.state,rtoStatus(e,r.totals.mature).l,e.shipped,e.rto,e.thin?"":(e.rate??0).toFixed(1),e.rtoValue.toFixed(2),e.cancelled])
+      .concat(r.skus.map(e=>["SKU",e.sku,rtoStatus(e,r.totals.mature).l,e.shipped,e.rto,e.thin?"":(e.rate??0).toFixed(1),e.rtoValue.toFixed(2),e.cancelled]))
       .concat(r.pins.map(p=>["Pincode",p.pin+" "+p.city,"Repeat RTO","",p.rto,"",p.value.toFixed(2),""])));
   });
 }
