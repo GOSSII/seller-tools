@@ -1553,15 +1553,15 @@ const CALCS = [
       stats:[
         {k:allLoss?"Least-loss price in range (≤ planned)":"Best price (≤ planned)",v:"₹"+best.toLocaleString("en-IN"),t:"blue"},
         {k:allLoss?"Loss at that price":"Net at best",v:inr(bestNet),t:bestNet<0?"red":"green"},
-        {k:"Net at planned price",v:inr(plannedNet),t:plannedNet<0?"red":""},
+        {k:plannedNet<0?"Loss at planned price":"Net at planned price",v:inr(plannedNet),t:plannedNet<0?"red":""},
         {k:allLoss?"Loss reduced by":"Uplift vs planned",v:inr(uplift)},
       ],
       banner: uplift>1
         ? {t:"warn",x:allLoss
-            ? `Dropping to ₹${best.toLocaleString("en-IN")} would reduce the estimated loss by ${inr(uplift)} per unit. Both tested prices remain loss-making at these inputs, so this identifies the least-bad price rather than a profitable one. ${bandNote(v.cat)}`
+            ? `Dropping to ₹${best.toLocaleString("en-IN")} would reduce the estimated loss by ${inr(uplift)} per unit. Both tested prices remain loss-making at these inputs, so this identifies the least-loss price rather than a profitable one. ${bandNote(v.cat)}`
             : `Dropping to ₹${best.toLocaleString("en-IN")} would give ${inr(uplift)} MORE contribution per unit than ₹${sp.toLocaleString("en-IN")} — your planned price sits just above a fee band. ${bandNote(v.cat)} Crossing one can cost more than the extra price collects.`}
         : {t:allLoss?"warn":"good",x:allLoss
-            ? `Every price tested at or below ₹${sp.toLocaleString("en-IN")} loses money at these inputs — ₹${sp.toLocaleString("en-IN")} is simply the least-bad of them. Product cost, fees or ad spend would have to change before any price in this range makes money.`
+            ? `Every price tested at or below ₹${sp.toLocaleString("en-IN")} loses money at these inputs — ₹${sp.toLocaleString("en-IN")} is simply the least-loss of them. Product cost, fees or ad spend would have to change before any price in this range makes money.`
             : `Your planned price gives the highest estimated contribution among the tested prices at or below it. Only prices at or below your planned price are searched — whether the market bears a higher one is your call, not this tool's. The rows below show what each nearby fee-band jump would cost or save.`},
       rows,
       note:"Closing fee steps at ₹300 / ₹500 / ₹1,000; referral steps come from your category's own schedule. Same fee maths as the profit calculator, on Amazon's 10 June 2026 rate card.",
