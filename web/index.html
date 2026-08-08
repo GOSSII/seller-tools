@@ -1429,7 +1429,7 @@ const CALCS = [
         {k:"Launch Window",v:num(v.days)+" days"},
       ],
       banner:{t:"info",
-        x:`Ads are ${total>0?(ppcTotal/total*100).toFixed(0):0}% of this launch budget. A typical launch leans heaviest on PPC early, then shifts toward coupons once reviews start landing.`},
+        x:`Ads are ${total>0?(ppcTotal/total*100).toFixed(0):0}% of this launch budget, which totals ${inr(total)} over ${num(v.days)} days — about ${inr(v.days>0?total/v.days:0)} a day. This is a sum of the figures you entered, not a forecast of what the launch will return.`},
       rows:[
         ...items.map(i=>({l:i.nm,v:inr(i.val)+"   "+(total>0?(i.val/total*100).toFixed(0):0)+"%",mut:1})),
         {l:"Total launch investment",v:inr(total),fin:1},
@@ -1508,10 +1508,16 @@ const CALCS = [
     {k:"zone",label:"Zone",t:"seg",o:[{v:"local",l:"Local"},{v:"national",l:"National"}],d:"local",full:1},
     {k:"pack",label:"Packaging (₹)",t:"num",d:15},
     {k:"acos",label:"Expected ACOS (%)",t:"num",dec:1,d:10},
-    {k:"ret",label:"Returns (%)",t:"num",dec:1,d:3},
+    {k:"retcost",label:"Expected return cost per sold unit (₹)",t:"num",dec:2,d:0,full:1,
+      hint:"Optional. Your average expected loss from returns per unit sold. A return rate alone cannot tell this calculator the financial loss."},
   ],
   compute(v){
-    // Net profit at price p — identical maths to the profit calculator.
+    /* One model across the Profit, Target Price and Price Band calculators:
+       advertising is ACOS x SELLING PRICE, returns are a rupee cost the seller
+       supplies. Charging ads against residual contribution understated them and
+       — because the distortion varies with price — could change which price
+       this tool recommends. */
+    const retC=Math.max(0,Number(v.retcost)||0);
     const netAt=p=>{
       if(p<=0) return -(v.cost+v.pack);
       const rate=refRate(v.cat,p);
@@ -1520,8 +1526,7 @@ const CALCS = [
       const shipping=shipFee(p,v.ful,v.zone,v.kg||0.5);
       const pp=v.ful==="fba"?pickPack(v.kg||0.5):0;
       const fees=(referral+closing+shipping+pp)*(1+GST);   // storage is monthly, not per order
-      const remain=p-fees-(v.cost+v.pack);
-      return remain>0?remain*(1-(v.acos+v.ret)/100):remain;
+      return p-fees-(v.cost+v.pack)-p*v.acos/100-retC;
     };
     const sp=Math.max(1,Math.round(v.sp||1));
     const lo=Math.max(1,Math.round(sp*0.7)),hi=Math.round(sp*1.3);
@@ -1636,7 +1641,8 @@ const CALCS = [
   desc:"When to reorder and how much, so you never stock out — from your sales rate, lead time and safety buffer.",
   fields:[
     {k:"stock",label:"Current Stock (units)",t:"num",d:90},
-    {k:"daily",label:"Avg Daily Sales (units)",t:"num",dec:1,d:3},
+    {k:"daily",label:"Avg Daily Sales (units)",t:"num",dec:1,d:3,
+      hint:"A steady average. Real demand moves with season, price and ad spend, so treat every date below as a projection from this one figure."},
     {k:"lead",label:"Supplier Lead Time (days)",t:"num",d:10},
     {k:"safety",label:"Safety Buffer (days)",t:"num",d:5},
     {k:"cover",label:"Days of Stock to Order",t:"num",d:30,full:1},
@@ -1661,13 +1667,14 @@ const CALCS = [
         {k:"Days of Cover",v:Math.floor(coverDays)+" days",t:late?"red":(soon?"blue":"green")},
         {k:"Stockout Date",v:fmt(stockout)},
         {k:"Order By",v:late?"OVERDUE":fmt(orderBy),t:late?"red":(soon?"blue":undefined)},
-        {k:"Suggested Order Qty",v:qty.toLocaleString("en-IN")+" units",t:"blue"},
+        {k:"Reorder at",v:reorderPoint.toLocaleString("en-IN")+" units left",t:"blue"},
+        {k:"Suggested order qty",v:qty.toLocaleString("en-IN")+" units"},
       ],
       banner: late
         ? {t:"warn",x:`You are past the safe reorder date. At ${v.daily} units/day, stock runs out around ${fmt(stockout)}, and a new order needs ${v.lead+v.safety} days (lead + buffer) to land. Order ${qty.toLocaleString("en-IN")} units now.`}
         : soon
           ? {t:"info",x:`Order within ${Math.floor(orderByDays)} day(s). Place the PO by ${fmt(orderBy)} so the new stock lands before the buffer is eaten.`}
-          : {t:"good",x:`You're covered. Next PO by ${fmt(orderBy)} — that leaves ${v.lead} days for the supplier plus a ${v.safety}-day buffer before the projected stockout on ${fmt(stockout)}.`},
+          : {t:"good",x:`At ${v.daily} units a day, stock reaches the reorder point of ${reorderPoint.toLocaleString("en-IN")} units around ${fmt(orderBy)} — that leaves ${v.lead} days for the supplier plus a ${v.safety}-day buffer before the projected stockout on ${fmt(stockout)}. All dates assume the sales rate holds.`},
       rows:[
         {l:"Current stock",v:v.stock.toLocaleString("en-IN")+" units"},
         {l:"Daily sales rate",v:v.daily+" units/day",mut:1},
