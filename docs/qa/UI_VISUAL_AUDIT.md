@@ -19,9 +19,9 @@ transaction table shows real order ids and SKU names and this repository is publ
 | 23 · SKU Profitability | ✅ | ✅ | shares 21's | ✅ ×2 rounds | 14.5/20 · 86 | **17.5/20 · 94** | 8 | 8 |
 | 24 · Multi-Month Trends | ✅ | ✅ | ✅ duplicate-file | ✅ ×2 rounds | 15.5/20 · 91 | **18/20 · 95** | 9 | 9 |
 | 25 · Reconciliation & SAFE-T | ✅ | ✅ | shares 21's | ✅ ×2 rounds | 13.5/20 · 84 | **17/20 · 93** | 10 | 10 |
-| 28 · Ad Profitability | ✅ | ✅ | ⚠ **partial** | ✅ ×1 round | 14/20 · 79 | *awaiting re-score* | 17 | 15 |
-| 31 · RTO Radar | ✅ | ✅ | shares 21's | ✅ ×1 round | 15/20 · 82 | *awaiting re-score* | 11 | 11 |
-| 33 · Traffic Doctor | — | — | — | pending | — | — | — | — |
+| 28 · Ad Profitability | ✅ | ✅ | ⚠ **partial** | ✅ ×2 rounds | 14/20 · 79 | **17.5/20 · 94** | 17 | 15 |
+| 31 · RTO Radar | ✅ | ✅ | shares 21's | ✅ ×2 rounds | 15/20 · 82 | **19/20 · 94** | 11 | 11 |
+| 33 · Traffic Doctor | ✅ | ✅ | ✅ wrong-file | in review | — | — | — | — |
 | Landing page | — | — | — | pending | — | — | — | — |
 | 12 free calculators | — | — | — | pending | — | — | — | — |
 
