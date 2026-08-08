@@ -1,0 +1,96 @@
+# UI Visual Audit — Seller Tools India
+
+Screens captured at **real viewports** (Chrome, deviceScaleFactor 2) driven through each
+tool's own file input with the same Amazon reports the accuracy audit used, then reviewed
+by an independent party that had, until this round, only ever seen numbers.
+
+```
+node qa/ui-capture.mjs            # all three audited tools + error states
+node qa/ui-capture.mjs settlement # one tool
+node qa/local-preview.mjs         # click through the same build by hand
+```
+
+Screenshots are written to `qa-data/screenshots/`, which is **gitignored** — the
+transaction table shows real order ids and SKU names and this repository is public.
+
+| Tool | Desktop | Mobile | Error states | Reviewed | UX before | UX after | Issues | Fixed |
+|---|---|---|---|---|---:|---:|---:|---|
+| 21 · Settlement Analyzer | ✅ 1440×900 | ✅ 390×844 | ✅ 6 | ✅ ×2 rounds | 16/20 · 92 | **18.5/20 · 96** | 13 | 13 |
+| 23 · SKU Profitability | ✅ | ✅ | shares 21's | ✅ ×2 rounds | 14.5/20 · 86 | **17.5/20 · 94** | 8 | 8 |
+| 24 · Multi-Month Trends | ✅ | ✅ | ✅ duplicate-file | ✅ ×2 rounds | 15.5/20 · 91 | **18/20 · 95** | 9 | 9 |
+| 25 · Reconciliation & SAFE-T | — | — | — | pending | — | — | — | — |
+| 28 · Ad Profitability | — | — | — | pending | — | — | — | — |
+| 31 · RTO Radar | — | — | — | pending | — | — | — | — |
+| 33 · Traffic Doctor | — | — | — | pending | — | — | — | — |
+| Landing page | — | — | — | pending | — | — | — | — |
+| 12 free calculators | — | — | — | pending | — | — | — | — |
+
+## Error and edge states captured
+
+| State | How it was produced |
+|---|---|
+| Wrong report — Business Report into the Settlement Analyzer | real `SELLER-A-BUSINESS-REPORT-01` |
+| Wrong report — All Orders into the Settlement Analyzer | real `SELLER-B-ALLORDERS-01` |
+| Header row, no data rows | `qa/fixtures/settlement-header-only.txt` |
+| **Unrecognised Amazon transaction type** | `qa/fixtures/settlement-unknown-row.txt` |
+| Same settlement uploaded twice | real file passed twice to Trends |
+| Settlement dropped into Traffic Doctor | real settlement into the wrong tool |
+
+## What the screenshots caught that the numeric audit had not
+
+**1 · A negative payout described as a deposit.** The card read *"DEPOSIT TOTAL −₹1,418.73"*
+and the ledger closed with *"Deposited to your bank −₹1,418.73"* — on a green background.
+Nothing was deposited. Every figure was arithmetically correct; the defect lived entirely in
+the words and the colour attached to them, which is precisely what a numbers-only audit
+cannot see. Negative settlements now read *"Net settlement balance / ⚠ no payout this
+statement — carried forward against your balance"* in amber, and the closing ledger row
+changes with it. Green is reserved for money that actually arrived.
+
+**2 · A headline that contradicted the panel beneath it.** *"Net across all SKUs −₹1,418.73"*
+sat directly above *"account-level lines … excluded from every per-SKU figure above"*. The
+four product rows sum to **₹727.36**; ₹727.36 − ₹2,146.09 = −₹1,418.73. The total was
+silently including the bucket the page promised to keep out. Totals now cover products only.
+
+**3 · "Profit" claimed without cost of goods.** A SKU contributing ₹308 on a ₹399 sale is a
+loss if the unit cost ₹350. The tool cannot know until COGS is entered, so it no longer says
+"Good"; it says "Positive contribution", carries a standing *"Product cost not added"*
+warning, and reserves "Profitable"/"Loss-making" for advanced mode where the cost is known.
+
+**4 · A recommendation that did not match the cause.** A SKU whose entire sale was refunded
+was met with *"check its price and weight band"* — neither caused it. When refunds explain
+the loss the tool now says so.
+
+**5 · The most important number was not the most prominent one.** Sponsored Ads at 44.3% of
+gross sales cost **2.15×** every Amazon fee combined, and it was one KPI among six and one
+chart among four. It is now a callout under the KPI row, KPI cards lead with rupees rather
+than percentages, and the charts run product sales → ads % → fees % → refunds %.
+
+**6 · Unknown must mean unknown everywhere.** The first fix left an unrecognised row badged
+"Fee" in the breakdown table while the banner above called it unrecognised. A row's category
+now comes from its *classification*, not Amazon's transaction-type, so it reads
+"⚠ Not recognised" in the table, the chips and the filters — and can never be badged a fee.
+
+## Copy changes made
+
+| Before | After |
+|---|---|
+| Deposit total / Deposited to your bank *(on a negative)* | Net settlement balance / no payout this statement — carried forward |
+| Avg order value | Gross avg order value — before refunds |
+| GST on fees — claim as ITC | GST charged on Amazon fees — may be claimable, check with your CA |
+| Referral & closing fees *(with no referral fee present)* | Closing fees · Refund commission — Amazon's charge for processing the refund |
+| Net across all SKUs | SKU settlement contribution |
+| Good / Loss | Positive contribution / Negative contribution *(Profitable / Loss-making only with COGS)* |
+| Best earner / Weakest | Strongest in this settlement / Needs attention — before product cost |
+| Account-level lines | Costs and adjustments not tied to a product |
+| Which days sell | Sales by weekday |
+| `other-transaction` / `Debt Adjustment` | Other Amazon charges / Account balance transfer *(raw token kept in the tooltip)* |
+| `TransactionTotalAmount` | Sponsored Ads spend (billed as a service fee) |
+| "…the net that actually reached your bank — per SKU" | "…each SKU's settlement contribution — before product cost" |
+
+## Method note
+
+Playwright drives the capture because a true 390 px viewport is required and window
+resizing does not reflow the browser-extension tab in this environment. It is a real Chrome
+rendering the real file — not a source-code view. The paywall check is bypassed in a
+temporary copy, because the capture is automated and has no login session; nothing else
+differs from what a paying seller sees, and that was disclosed to the reviewer each time.
