@@ -7187,6 +7187,12 @@ function trRenderResults(){
         totFees=M.reduce((s,e)=>s+e.fees,0), totRef=M.reduce((s,e)=>s+e.refunded,0),
         totAds=M.reduce((s,e)=>s+(e.ads||0),0), totBal=M.reduce((s,e)=>s+(e.balance||0),0);
   const monthsWithSales=M.filter(e=>e.gross>0).length;
+  /* Only the paired Debt Adjustment rows are genuinely cross-account transfers;
+     a balance carried forward is a different thing and must not be described
+     as one. Naming the subset keeps the claim exactly as strong as the data. */
+  let trXferTotal=0;
+  for(const p of settlements) for(const rec of p.records) for(const l of rec.amounts)
+    if(saLineKind(l,rec.transactionType)==="balance"&&/^debt adjustment/i.test((l.amountDescription||"").trim())) trXferTotal+=l.amount;
   const sv=n=>`<span class="${n<0?'amt-neg':(n>0?'amt-pos':'')}">${inr(n)}</span>`;
   const mo={lbl:m=>trFmtMonth(m),unit:`monthly · ${M.length} month${M.length===1?"":"s"}`,x:"m"};
   /* Rupees lead, percentages qualify. A seller feels "-4,491.98"; "44.3%"
@@ -7210,7 +7216,7 @@ function trRenderResults(){
     <h5>Sponsored Ads are your largest operating cost</h5>
     <p>You spent <b>${inr(Math.abs(totAds))}</b> on Sponsored Ads — <b>${totGross?(Math.abs(totAds)/totGross*100).toFixed(1):"—"}% of gross sales</b>, and <b>${(Math.abs(totAds)/Math.abs(totFees)).toFixed(2)}×</b> your ${inr(Math.abs(totFees))} of Amazon selling &amp; fulfilment fees. Whether that is worth it depends on what the ads actually sold — the settlement cannot say. Check ACOS per SKU before spending more.</p>
     <a href="#/ad-profit">Analyse advertising →</a></div>`:""}
-  ${totBal?`<div class="banner info" style="text-align:left">${inr(Math.abs(totBal))} of these statements is your own balance moving between weeks and between the Electronic and COD account series — it changes the payout but is not a fee, so it is excluded from the fee share above.</div>`:""}`;
+  ${totBal?`<div class="banner info" style="text-align:left"><b>Account-level balance adjustments: ${inr(Math.abs(totBal))}.</b> These affect what reached your bank but are excluded from the selling-fee rate, the advertising rate and every per-product figure. ${trXferTotal?`Of that, ${inr(Math.abs(trXferTotal))} is a transfer between your two Amazon payment accounts — one movement shown from two sides, which nets to ₹0 when both Account Types are loaded. ${Math.abs(totBal)-Math.abs(trXferTotal)>0.005?`The rest is balances carried forward from earlier weeks.`:""}`:`They are balances carried forward between statements, not charges from these periods' sales.`}</div>`:""}`;
   if(settlements.length===1)
     h+=`<div class="banner info">Only one settlement loaded — drop more statements to see a real trend.</div>`;
   if(partials.length)
