@@ -3117,6 +3117,18 @@ async function renderAdmin(){
             :'<p style="font-size:13px;margin:2px 0"><span class="pchip g">0 in 24h</span> <span class="sa-sub">· nothing thrown in the last 30 days ✅</span></p>'}</div>
       </div>
     </div>
+    <div class="card acct-card" style="margin-bottom:16px">
+      <h3 style="margin-bottom:2px">✉️ Invite someone — free access</h3>
+      <p class="sa-sub" style="margin:0 0 10px">They get an email invite and the plan is waiting when they sign in. Already have an account? They just get the plan.</p>
+      <div class="adm-row-inline">
+        <input id="adm-inv-email" type="email" inputmode="email" autocomplete="off" placeholder="seller@example.com" style="max-width:280px" aria-label="Email to invite">
+        <select id="adm-inv-plan" aria-label="Plan"><option value="pro">Pro — all tools</option><option value="starter">Starter</option></select>
+        <input id="adm-inv-days" type="number" min="1" max="400" value="90" style="max-width:90px" aria-label="Days">
+        <span class="sa-sub">days</span>
+        <button type="button" class="lp-btn" id="adm-inv-btn">Send invite</button>
+      </div>
+      <div id="adm-inv-msg" class="auth-msg" hidden style="margin-top:10px"></div>
+    </div>
     <div class="card acct-card">
       <h3>Users</h3>
       <div class="adm-userbar">
@@ -3132,6 +3144,29 @@ async function renderAdmin(){
     adminShowUser(b.dataset.uid);
     setTimeout(()=>{const d=document.getElementById("adm-detail"); if(d) d.scrollIntoView({behavior:"smooth",block:"start"});},150);
   }));
+  const invBtn=document.getElementById("adm-inv-btn");
+  if(invBtn) invBtn.addEventListener("click",async()=>{
+    const msg=document.getElementById("adm-inv-msg");
+    const email=document.getElementById("adm-inv-email").value.trim();
+    const plan=document.getElementById("adm-inv-plan").value;
+    const days=parseInt(document.getElementById("adm-inv-days").value,10);
+    if(!email||email.indexOf("@")<1){ authMsg(msg,"err","Enter the person's email."); return; }
+    if(!(days>0&&days<=400)){ authMsg(msg,"err","Days must be between 1 and 400."); return; }
+    invBtn.disabled=true; invBtn.textContent="Sending…";
+    try{
+      const r=await adminCall({action:"invite",email,plan,days});
+      const j=await r.json().catch(()=>null);
+      if(r.ok&&j&&j.ok){
+        authMsg(msg,"ok",(j.created?`Invite sent to ${email}. `:`${email} already had an account. `)
+          +`${planNice(j.plan)} is active until ${fmtDate(j.expires_at)}.`);
+        document.getElementById("adm-inv-email").value="";
+        adminLoadUsers("");
+      }else{
+        authMsg(msg,"err",(j&&j.detail)||"Could not send the invite. If this keeps happening, ask them to sign up first, then grant the plan from their row below.");
+      }
+    }catch(e){ authMsg(msg,"err","Network issue — please try again."); }
+    finally{ invBtn.disabled=false; invBtn.textContent="Send invite"; }
+  });
   const search=document.getElementById("adm-search");
   let t=null;
   search.addEventListener("input",()=>{ clearTimeout(t); t=setTimeout(()=>adminLoadUsers(search.value.trim()),250); });

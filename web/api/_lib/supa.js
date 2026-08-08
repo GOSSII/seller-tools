@@ -33,4 +33,16 @@ function bearer(req) {
   return a.startsWith('Bearer ') ? a.slice(7).trim() : '';
 }
 
-module.exports = { base, service, userFromToken, rest, bearer };
+// GoTrue admin call (service role) — e.g. inviting a user by email.
+// pathAndQuery starts with '/', relative to /auth/v1.
+async function auth(method, pathAndQuery, body) {
+  return fetch(base() + '/auth/v1' + pathAndQuery, {
+    method,
+    headers: {
+      apikey: service(), Authorization: 'Bearer ' + service(), 'Content-Type': 'application/json'
+    },
+    body: body ? JSON.stringify(body) : undefined
+  });
+}
+
+module.exports = { base, service, userFromToken, rest, bearer, auth };

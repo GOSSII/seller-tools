@@ -8,10 +8,17 @@
 //   list_users { q }                             → users (plan/expiry/devices/last login)
 //   user_detail { user_id }                      → entitlements/payments/logins/devices
 //   grant { user_id, plan, days }                → insert entitlement (source 'admin')
+//   invite { email, plan, days }                 → invite by email (or grant if they
+//                                                  already have an account) + entitle
 //   revoke { user_id }                           → expire active entitlements now
 //   reset_devices { user_id }                    → delete devices + clear active session
 //   set_device_limit { user_id, limit }          → update profiles.device_limit
-const { userFromToken, rest, bearer } = require('./_lib/supa');
+const { userFromToken, rest, bearer, auth } = require('./_lib/supa');
+
+// Basic shape check — GoTrue does the real validation on invite.
+function looksLikeEmail(e) {
+  return typeof e === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e.trim()) && e.length <= 254;
+}
 
 // ---- pure, unit-tested helpers --------------------------------------------
 function grantDates(days, nowMs) {
@@ -326,6 +333,47 @@ module.exports = async (req, res) => {
       await audit('grant:' + plan + ':' + days + ':' + uid + (r.ok ? '' : ':FAILED'));
       if (!r.ok) return res.status(502).json({ error: 'db_error' });
       return res.status(200).json({ ok: true, expires_at: dt.expires_at });
+    }
+
+    // Invite someone to use the paid tools free: give an existing account the
+    // plan, or send a Supabase invite email to a new one and entitle it the
+    // moment the account exists. Same grant machinery, keyed by email so the
+    // owner never has to look up a user id.
+    if (action === 'invite') {
+      const email = String(body.email || '').trim().toLowerCase();
+      const plan = body.plan === 'starter' ? 'starter' : 'pro';   // default: everything
+      const days = parseInt(body.days, 10);
+      if (!looksLikeEmail(email) || !(days > 0 && days <= 400)) return res.status(400).json({ error: 'bad_input' });
+
+      // Already a user? Then this is just a grant.
+      let uid = null, created = false;
+      const exRes = await rest('GET', '/profiles?select=id&email=eq.' + encodeURIComponent(email) + '&limit=1');
+      if (!exRes.ok) return res.status(502).json({ error: 'db_error' });
+      const ex = (await exRes.json()) || [];
+      if (ex[0] && ex[0].id) uid = ex[0].id;
+
+      if (!uid) {
+        const inv = await auth('POST', '/invite', { email });
+        const j = await jsonOf(inv);
+        if (!inv.ok || !j || !j.id) {
+          await audit('invite:' + email + ':FAILED');
+          // Most common cause is Supabase's default SMTP rate limit; say so
+          // rather than making the owner guess.
+          return res.status(502).json({
+            error: 'invite_failed',
+            detail: (j && (j.msg || j.message || j.error_description)) || 'Could not send the invite email.'
+          });
+        }
+        uid = j.id; created = true;
+      }
+
+      const dt = grantDates(days, now);
+      const g = await rest('POST', '/entitlements', {
+        user_id: uid, plan, source: 'admin', starts_at: dt.starts_at, expires_at: dt.expires_at
+      });
+      await audit('invite:' + email + ':' + plan + ':' + days + (g.ok ? (created ? ':NEW' : ':EXISTING') : ':GRANT_FAILED'));
+      if (!g.ok) return res.status(502).json({ error: 'db_error' });
+      return res.status(200).json({ ok: true, created, plan, expires_at: dt.expires_at, email });
     }
 
     if (action === 'revoke') {
