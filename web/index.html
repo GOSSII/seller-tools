@@ -9554,7 +9554,7 @@ function adpBody(){
   app.innerHTML=`
     <div class="wrap page">
       <h2>Ad Profitability by SKU</h2>
-      <p class="lede">Your settlement says what each SKU earned. Your advertising report says what each SKU cost to promote. Neither file alone answers <b>which SKUs still make money once the ads are paid for</b> — so this one joins them. It needs <b>both</b> files, plus your product cost, before it will call anything profitable; with fewer inputs it says exactly what it cannot yet know.</p>
+      <p class="lede">Your settlement says what each SKU earned. Your advertising report says what each SKU cost to promote. Combine both, then add your product cost, to see <b>which SKUs remain profitable after Amazon's charges, advertising and COGS</b>. It needs all three before it will call anything profitable; with fewer inputs it says exactly what it cannot yet know.</p>
       ${helpHtml("ad-profit")}
       <label class="sa-drop" id="adp-drop">
         <div class="ico">📉</div>
@@ -9626,6 +9626,8 @@ function adpCompute(){
     return {sku:s.sku,units:s.units,orders:s.orders,sales,payout,spend,afterAds,
       cost,cogs,profit,beforeAdsProfit,hasCost,
       account:s.sku==="(no SKU)",
+      parts:{ads:s.ads||0,balance:s.balance||0,fees:s.fees||0,taxes:s.taxes||0,
+        unknown:s.unknown||0,other:s.other||0},
       adSales:a?a.adSales:0,adOrders,clicks,impressions,
       /* Click metrics come straight off the ad report's own counts — never
          derived from settlement figures. A zero denominator reads "—". */
@@ -9742,9 +9744,20 @@ function adpRender(){
      SKU Profitability Report. */
   const acct=r.rows.find(x=>x.account)||null;
   const products=r.rows.filter(x=>!x.account);
-  if(acct)
-    h+=`<div class="panel"><h4>🧾 Account-level amounts not attributable to a SKU <b class="${acct.payout<0?"red":""}">${inr0(acct.payout)}</b></h4>
-      <p class="sa-sub">Advertising billed without SKU attribution, balance movements carried between statements, and other account-level charges. <b>Excluded from the SKU rankings and per-SKU verdicts below</b> — judge it separately.</p></div>`;
+  if(acct){
+    const pr=acct.parts||{};
+    const lines=[["Sponsored Ads billed without SKU attribution",pr.ads],
+      ["Account balance movements carried between statements",pr.balance],
+      ["Other account-level Amazon charges",pr.fees],
+      ["Tax on account-level charges",pr.taxes],
+      ["Not recognised — see the Settlement Analyzer",pr.unknown],
+      ["Other account-level activity",pr.other]].filter(([,v])=>Math.abs(v||0)>=0.005);
+    h+=`<details class="panel"><summary><h4 style="display:inline">🧾 Account-level amounts not attributable to a SKU <b class="${acct.payout<0?"red":""}">${inr0(acct.payout)}</b></h4> <span class="sa-sub">— view breakdown</span></summary>
+      <p class="sa-sub" style="margin:8px 0 10px">Advertising billed without SKU attribution, balance movements carried between statements, and other account-level charges. <b>Excluded from the SKU rankings and per-SKU verdicts below</b> — judge it separately.</p>
+      <div class="tblwrap"><table class="sa"><tbody>${lines.map(([k,v])=>
+        `<tr><td>${esc(k)}</td><td class="num">${inr(v)}</td></tr>`).join("")}
+        <tr><td><b>Total</b></td><td class="num"><b>${inr(acct.payout)}</b></td></tr></tbody></table></div></details>`;
+  }
   /* Every ad-derived sort is meaningless until the ad report exists. Offering
      "Worst after ads" with no ad data silently sorts by something else. */
   const adSorts={damage:1,spend:1,acos:1};
@@ -9758,7 +9771,7 @@ function adpRender(){
       ${[["payout","Settlement contribution",true],["sales","Sales",true],
          ["damage","Worst after ads",r.haveAds],["spend","Ad spend",r.haveAds],["acos","ACOS",r.haveAds]]
         .map(([k,t2,on])=>`<button type="button" class="fbtn${adpSort===k?" on":""}"${on?"":' disabled title="Upload an advertising report to use this sort"'} data-adpsort="${k}">${t2}</button>`).join("")}
-      <button type="button" class="fbtn${adpAdv?" on":""}" id="adp-adv" aria-pressed="${adpAdv?"true":"false"}">${adpAdv?"Hide":"Show"} ad metrics</button>
+      <button type="button" class="fbtn${adpAdv?" on":""}" id="adp-adv"${r.haveAds?"":' disabled title="Upload the Advertised Product report to view ad metrics"'} aria-pressed="${adpAdv&&r.haveAds?"true":"false"}">${adpAdv&&r.haveAds?"Hide":"Show"} ad metrics</button>
       <button type="button" class="fbtn" id="adp-csv">⬇ Export CSV</button>
     </div>
     <div class="sku-costall">
@@ -9772,7 +9785,7 @@ function adpRender(){
         <th class="num" title="What this SKU's own settlement lines net to — sales less Amazon's fees, taxes and refunds. Not profit: product cost is not in it.">Settlement contribution</th>
         <th class="num">Ad spend</th>
         <th class="num" title="Your cost per unit. Type it here — it saves in this browser and the SKU Profitability Report picks it up too.">Product cost</th>
-        ${adpAdv?`<th class="num" title="Clicks ÷ impressions, from the ad report's own counts">CTR</th>
+        ${adpAdv&&r.haveAds?`<th class="num" title="Clicks ÷ impressions, from the ad report's own counts">CTR</th>
         <th class="num" title="Ad spend ÷ clicks">CPC</th>
         <th class="num" title="Ad orders ÷ clicks">CVR</th>
         <th class="num" title="Ad spend ÷ TOTAL settlement sales — what advertising costs the whole SKU, not just its ad-attributed sales">TACOS</th>
@@ -9800,7 +9813,7 @@ function adpRender(){
           <td class="num">${x.payout?inr0(x.payout):"—"}</td>
           <td class="num">${r.haveAds?(x.spend?inr0(-x.spend):"—"):'<span class="sa-sub" title="The settlement bills advertising as one account-level service fee. Upload the Advertised Product report to split it by SKU.">Not attributed</span>'}</td>
           <td class="num"><input type="number" min="0" inputmode="decimal" class="sku-cost-in" data-cost-sku="${esc(x.sku)}" value="${x.cost?x.cost:""}" placeholder="Enter cost" aria-label="Product cost per unit for ${esc(x.sku)}"></td>
-          ${adpAdv?`<td class="num">${x.ctr===null?"—":x.ctr.toFixed(2)+"%"}</td>
+          ${adpAdv&&r.haveAds?`<td class="num">${x.ctr===null?"—":x.ctr.toFixed(2)+"%"}</td>
           <td class="num">${x.cpc===null?"—":inr(x.cpc)}</td>
           <td class="num">${x.cvr===null?"—":x.cvr.toFixed(1)+"%"}</td>
           <td class="num">${x.tacos===null?"—":x.tacos.toFixed(1)+"%"}</td>
