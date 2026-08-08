@@ -7189,17 +7189,27 @@ function trRenderResults(){
   const monthsWithSales=M.filter(e=>e.gross>0).length;
   const sv=n=>`<span class="${n<0?'amt-neg':(n>0?'amt-pos':'')}">${inr(n)}</span>`;
   const mo={lbl:m=>trFmtMonth(m),unit:`monthly · ${M.length} month${M.length===1?"":"s"}`,x:"m"};
+  /* Rupees lead, percentages qualify. A seller feels "-4,491.98"; "44.3%"
+     is an abstraction, and putting the percent in the big slot also let a
+     ratio be mistaken for a currency figure. "Months covered" is metadata,
+     not a headline business number, so it moves out of the first slot. */
+  const pctOf=v=>totGross?(Math.abs(v)/totGross*100).toFixed(1)+"% of "+inr0(totGross)+" gross sales":"—";
   h+=`<div class="stats">
-    <div class="stat blue"><div class="k">Months covered</div><div class="v">${M.length}</div>
-      ${monthsWithSales<M.length?`<div class="sa-sub" style="margin-top:3px">${monthsWithSales} with sales</div>`:""}</div>
-    <div class="stat green"><div class="k">Gross sales</div><div class="v">${inr(totGross)}</div></div>
-    <div class="stat"><div class="k">Fees as % of sales</div><div class="v">${totGross?(Math.abs(totFees)/totGross*100).toFixed(1)+"%":"—"}</div>
-      <div class="sa-sub" style="margin-top:3px">Amazon's selling &amp; fulfilment fees only</div></div>
-    ${totAds?`<div class="stat ${totGross&&Math.abs(totAds)/totGross>0.2?"red":""}"><div class="k">Advertising as % of sales</div><div class="v">${totGross?(Math.abs(totAds)/totGross*100).toFixed(1)+"%":"—"}</div>
-      <div class="sa-sub" style="margin-top:3px">${inr(Math.abs(totAds))} of Sponsored Ads in these statements</div></div>`:""}
-    <div class="stat ${totGross&&Math.abs(totRef)/totGross>0.1?"red":""}"><div class="k">Refund rate (by value)</div><div class="v">${totGross?(Math.abs(totRef)/totGross*100).toFixed(1)+"%":"—"}</div></div>
-    <div class="stat ${totNet<0?"red":"green"}"><div class="k">Net payout</div><div class="v">${inr(totNet)}</div></div>
+    <div class="stat green"><div class="k">Gross sales</div><div class="v">${inr(totGross)}</div>
+      <div class="sa-sub" style="margin-top:3px">${M.length} month${M.length===1?"":"s"} covered${monthsWithSales<M.length?` · ${monthsWithSales} with sales`:""}</div></div>
+    ${totAds?`<div class="stat ${totGross&&Math.abs(totAds)/totGross>0.2?"red":""}"><div class="k">Sponsored Ads</div><div class="v">${inr(totAds)}</div>
+      <div class="sa-sub" style="margin-top:3px">${pctOf(totAds)}</div></div>`:""}
+    <div class="stat red"><div class="k">Selling &amp; fulfilment fees</div><div class="v">${inr(totFees)}</div>
+      <div class="sa-sub" style="margin-top:3px">${pctOf(totFees)}</div></div>
+    <div class="stat ${totGross&&Math.abs(totRef)/totGross>0.1?"red":""}"><div class="k">Refunded sales</div><div class="v">${inr(totRef)}</div>
+      <div class="sa-sub" style="margin-top:3px">${pctOf(totRef)}</div></div>
+    <div class="stat ${totNet<0?"warn":"green"}"><div class="k">${totNet<0?"Net settlement balance":"Net payout"}</div><div class="v">${inr(totNet)}</div>
+      <div class="sa-sub" style="margin-top:3px">${totNet<0?"⚠ these statements paid out nothing overall":"across these statements"}</div></div>
   </div>
+  ${(totAds&&Math.abs(totAds)>Math.abs(totFees))?`<div class="act hot" style="margin-top:12px">
+    <h5>Sponsored Ads are your largest operating cost</h5>
+    <p>You spent <b>${inr(Math.abs(totAds))}</b> on Sponsored Ads — <b>${totGross?(Math.abs(totAds)/totGross*100).toFixed(1):"—"}% of gross sales</b>, and <b>${(Math.abs(totAds)/Math.abs(totFees)).toFixed(2)}×</b> your ${inr(Math.abs(totFees))} of Amazon selling &amp; fulfilment fees. Whether that is worth it depends on what the ads actually sold — the settlement cannot say. Check ACOS per SKU before spending more.</p>
+    <a href="#/ad-profit">Analyse advertising →</a></div>`:""}
   ${totBal?`<div class="banner info" style="text-align:left">${inr(Math.abs(totBal))} of these statements is your own balance moving between weeks and between the Electronic and COD account series — it changes the payout but is not a fee, so it is excluded from the fee share above.</div>`:""}`;
   if(settlements.length===1)
     h+=`<div class="banner info">Only one settlement loaded — drop more statements to see a real trend.</div>`;
@@ -7215,18 +7225,18 @@ function trRenderResults(){
     }${
       saBarChart("Net payout",M,"net","#2f5af0",v=>inr(v),mo)
     }${
-      saBarChart("Fees as % of sales",Mr,"feePct","#e5484d",v=>v.toFixed(1)+"%",mo)
+      totAds?saBarChart("Sponsored Ads as % of sales",Mr,"adPct","#8b5cf6",v=>v.toFixed(1)+"%",mo):""
     }${
-      saBarChart("Refund rate (by value)",Mr,"refundPct","#f5872b",v=>v.toFixed(1)+"%",mo)
+      saBarChart("Amazon fees as % of sales",Mr,"feePct","#e5484d",v=>v.toFixed(1)+"%",mo)
     }${
-      totAds?saBarChart("Advertising as % of sales",Mr,"adPct","#8b5cf6",v=>v.toFixed(1)+"%",mo):""
+      saBarChart("Refund value as % of sales",Mr,"refundPct","#f5872b",v=>v.toFixed(1)+"%",mo)
     }</div>
     <div class="tblwrap" style="margin-top:12px"><table class="sa">
-      <thead><tr><th>Month</th><th class="num">Orders</th><th class="num" title="Units whose settlement landed in this month">Units settled</th>${t.haveOrdered?`<th class="num" title="Units ordered in this month, from the MTR — this is the basis Amazon's own reports use">Units ordered</th>`:""}<th class="num">Gross sales</th><th class="num">Refunds</th><th class="num">Fees</th><th class="num">Fee %</th><th class="num">Refund %</th><th class="num">Net payout</th></tr></thead>
+      <thead><tr><th>Month</th><th class="num">Orders</th><th class="num" title="Units whose settlement landed in this month">Units settled</th>${t.haveOrdered?`<th class="num" title="Units ordered in this month, from the MTR — this is the basis Amazon's own reports use">Units ordered</th>`:""}<th class="num">Gross sales</th><th class="num">Refunds</th><th class="num">Fees</th><th class="num">Fee %</th>${totAds?`<th class="num" title="Sponsored Ads billed in the statements that settled in this month">Sponsored Ads</th><th class="num">Ads %</th>`:""}<th class="num">Refund %</th><th class="num">Net payout</th></tr></thead>
       <tbody>${M.map(e=>`<tr>
         <td>${esc(trFmtMonth(e.m))}${e.partial?` <span class="sa-sub" title="Statements cover only ${e.coverDays} of ${e.monthDays} days of this month">· ${e.coverDays}/${e.monthDays} days</span>`:""}</td><td class="num">${e.orders}</td><td class="num">${e.units}</td>${t.haveOrdered?`<td class="num"${e.orderedPartial?' title="Your MTR does not cover this whole month"':""}><b>${e.orderedUnits||"—"}</b>${e.orderedPartial?'<span class="sa-sub"> ·part</span>':""}</td>`:""}
         <td class="num">${inr(e.gross)}</td><td class="num">${sv(e.refunded)}</td><td class="num">${sv(e.fees)}</td>
-        <td class="num">${e.feePct===null?'<span class="sa-sub" title="No sales settled in this month, so there is no ratio to show">—</span>':e.feePct.toFixed(1)+"%"}</td><td class="num ${e.refundPct!==null&&e.refundPct>10?'amt-neg':''}">${e.refundPct===null?'<span class="sa-sub">—</span>':e.refundPct.toFixed(1)+"%"}</td>
+        <td class="num">${e.feePct===null?'<span class="sa-sub" title="No sales settled in this month, so there is no ratio to show">—</span>':e.feePct.toFixed(1)+"%"}</td>${totAds?`<td class="num">${e.ads?sv(e.ads):"—"}</td><td class="num">${e.adPct===null?'<span class="sa-sub">—</span>':e.adPct.toFixed(1)+"%"}</td>`:""}<td class="num ${e.refundPct!==null&&e.refundPct>10?'amt-neg':''}">${e.refundPct===null?'<span class="sa-sub">—</span>':e.refundPct.toFixed(1)+"%"}</td>
         <td class="num"><b>${sv(e.net)}</b></td></tr>`).join("")}
       </tbody></table></div></div>`;
   // Month-over-month reading, full months only.
@@ -7269,7 +7279,10 @@ function trRenderResults(){
     const avg=a=>a.length?a.reduce((s,x)=>s+x.avgGross,0)/a.length:0;
     const wkAvg=avg(wk), wdAvg=avg(wd);
     const gap=wdAvg?((wkAvg-wdAvg)/wdAvg*100):0;
-    h+=`<div class="panel"><h4>Which days sell <span class="sa-sub">— average per ${esc("weekday")}, not totals</span></h4>
+    const dowThin=(function(){const w=Math.min(...D.map(d=>d.days)),o=D.reduce((a,d)=>a+d.orders,0);return w<4||o<30;})();
+    h+=`<${dowThin?"details":"div"} class="panel">${dowThin
+      ?`<summary style="cursor:pointer;font-weight:700;font-size:15px">Sales by weekday <span class="sa-sub" style="font-weight:400">— not enough weeks yet to call a pattern; open to see what happened</span></summary>`
+      :`<h4>Sales by weekday <span class="sa-sub">— average per weekday, not totals</span></h4>`}
       <p class="sa-sub" style="margin:4px 0 10px">Averaged over each time that weekday occurred in the period, so a month with five Saturdays doesn't flatter the weekend. Dates are Amazon's posted date — when it booked the transaction, which tracks dispatch rather than when the buyer ordered.</p>
       <div class="vizgrid">${
         saBarChart("Average sales per day",D,"avgGross","#16a34a",v=>inr(v),{lbl:d=>d,unit:"by weekday",x:"short"})
@@ -7291,10 +7304,10 @@ function trRenderResults(){
       })()}
       <div class="tblwrap" style="margin-top:12px"><table class="sa">
         <thead><tr><th>Day</th><th class="num">Times in period</th><th class="num">Orders</th><th class="num">Units</th><th class="num">Gross sales</th><th class="num">Avg per day</th></tr></thead>
-        <tbody>${D.map(d=>`<tr${d.name===best.name?' class="rec-done"':""}>
-          <td>${esc(d.name)}</td><td class="num">${d.days}</td><td class="num">${d.orders}</td>
+        <tbody>${D.map(d=>`<tr${(!dowThin&&d.name===best.name)?' class="rec-done"':""}>
+          <td>${esc(d.name)}${d.days<4?' <span class="chip" style="font-size:11px;padding:1px 6px">Low sample</span>':""}</td><td class="num">${d.days}</td><td class="num">${d.orders}</td>
           <td class="num">${d.units}</td><td class="num">${inr(d.gross)}</td><td class="num"><b>${inr(d.avgGross)}</b></td></tr>`).join("")}
-        </tbody></table></div></div>`;
+        </tbody></table></div></${dowThin?"details":"div"}>`;
   }
   // Per-SKU trend picker.
   if(t.skus.length){
