@@ -5064,12 +5064,23 @@ window.skuCompute=skuCompute; // exposed for verification/debugging
    cost outranks everything, because without it "profit" is only payout. */
 function skuStatus(s,adv,cpuKnown){
   if(s.sku==="(no SKU)") return {k:"info",l:"Account-level"};
-  if(adv&&!cpuKnown) return {k:"data",l:"Needs data"};
+  if(adv&&!cpuKnown) return {k:"data",l:"Needs cost"};
   const rp=s.sales?Math.abs(s.refundValue)/s.sales*100:0;
-  if(adv?s.truePL<0:s.net<0) return {k:"loss",l:"Loss"};
-  if(rp>15) return {k:"problem",l:"Problem"};
-  if(rp>8) return {k:"watch",l:"Watch"};
-  return {k:"good",l:"Good"};
+  /* Without a product cost this is CONTRIBUTION, not profit. "Good" on a
+     positive contribution reads as "this SKU makes money", which cannot be
+     known until COGS is entered — a SKU contributing Rs 308 on a Rs 399 sale
+     is a loss if the unit cost Rs 350. Only advanced mode, where the cost IS
+     known, is allowed to say profitable or loss-making. */
+  if(adv&&cpuKnown){
+    if(s.truePL<0) return {k:"loss",l:"Loss-making"};
+    if(rp>15) return {k:"problem",l:"Profitable · high refunds"};
+    if(rp>8) return {k:"watch",l:"Profitable · watch refunds"};
+    return {k:"good",l:"Profitable"};
+  }
+  if(s.net<0) return {k:"loss",l:"Negative contribution"};
+  if(rp>15) return {k:"problem",l:"High refunds"};
+  if(rp>8) return {k:"watch",l:"Watch refunds"};
+  return {k:"good",l:"Positive contribution"};
 }
 window.skuStatus=skuStatus; // exposed for verification/debugging
 const stChip=st=>`<span class="st st-${st.k}">${esc(st.l)}</span>`;
@@ -5132,7 +5143,10 @@ function skuRenderResults(){
   const r=saParsed,out=document.getElementById("sku-out"); if(!out)return;
   const skus=skuCompute(r);
   const sv=n=>`<span class="${n<0?'amt-neg':(n>0?'amt-pos':'')}">${inr(n)}</span>`;
-  const totals=skus.reduce((t,s)=>({sales:t.sales+s.sales,fees:t.fees+s.fees,refund:t.refund+s.refundValue,net:t.net+s.net,units:t.units+s.units,ads:t.ads+(s.ads||0),balance:t.balance+(s.balance||0)}),{sales:0,fees:0,refund:0,net:0,units:0,ads:0,balance:0});
+  /* Totals cover PRODUCTS only. Summing the "(no SKU)" bucket in here made the
+     headline equal the whole deposit, which flatly contradicted the panel below
+     saying account-level lines are excluded from every per-SKU figure. */
+  const sumOf=list=>list.reduce((t,s)=>({sales:t.sales+s.sales,fees:t.fees+s.fees,refund:t.refund+s.refundValue,net:t.net+s.net,units:t.units+s.units,ads:t.ads+(s.ads||0),balance:t.balance+(s.balance||0)}),{sales:0,fees:0,refund:0,net:0,units:0,ads:0,balance:0});
   /* "(no SKU)" is not a product — it is the account-level bucket for lines
      Amazon never ties to one (advertising, balance movements, subscription).
      Counting it as a SKU, ranking it as the weakest earner and then advising
@@ -5140,6 +5154,9 @@ function skuRenderResults(){
      of advice in the product. It gets its own section instead. */
   const realSkus=skus.filter(s=>s.sku!=="(no SKU)");
   const acct=skus.find(s=>s.sku==="(no SKU)")||null;
+  const totals=sumOf(realSkus);
+  const acctNet=acct?acct.net:0;
+  const settlementTotal=totals.net+acctNet;
   const sorted=[...realSkus].sort((a,b)=>{
     if(skuSort==="sales")return b.sales-a.sales;
     if(skuSort==="refund")return (b.sales?Math.abs(b.refundValue)/b.sales:0)-(a.sales?Math.abs(a.refundValue)/a.sales:0);
@@ -5172,15 +5189,23 @@ function skuRenderResults(){
 
   let h=`<div class="stats">
     <div class="stat blue"><div class="k">SKUs · Units</div><div class="v">${realSkus.length} · ${totals.units}</div></div>
-    <div class="stat green"><div class="k">Net across all SKUs</div><div class="v">${inr(totals.net)}</div></div>
-    <div class="stat"><div class="k">Fees as % of sales</div><div class="v">${feePct.toFixed(1)}%</div>
+    <div class="stat ${totals.net<0?"red":"green"}"><div class="k">SKU settlement contribution</div><div class="v">${inr(totals.net)}</div>
+      <div class="sa-sub" style="margin-top:3px">what the products themselves earned${Math.abs(acctNet)>=0.005?` · ${inr(acctNet)} of account-level costs is separate, below`:""}</div></div>
+    <div class="stat"><div class="k">Amazon fee rate</div><div class="v">${feePct.toFixed(1)}%</div>
       <div class="sa-sub" style="margin-top:3px">${inr(Math.abs(totals.fees))} of ${inr(totals.sales)} gross${totals.ads?` · ads ${inr(Math.abs(totals.ads))} counted separately`:""}</div></div>
-    <div class="stat ${refundPct>10?'red':''}"><div class="k">Refunds as % of sales</div><div class="v">${refundPct.toFixed(1)}%</div></div>
+    <div class="stat ${refundPct>10?'red':''}"><div class="k">Refund value rate</div><div class="v">${refundPct.toFixed(1)}%</div>
+      <div class="sa-sub" style="margin-top:3px">${inr(Math.abs(totals.refund))} refunded of ${inr(totals.sales)}</div></div>
     ${advOn?`<div class="stat ${trueProfit<0?'red':'green'}"><div class="k">True profit after product cost</div><div class="v">${costed.length?inr(trueProfit):"—"}</div><div class="sa-sub" style="margin-top:3px">${costed.length?`across ${costed.length} costed SKU${costed.length===1?"":"s"} · ${lossCount} loss-making`:"enter product costs below"}${needCost?` · <b>${needCost} still need a cost</b>`:""}</div></div>`:""}
-  </div>`;
+  </div>
+  ${(!advOn||!costed.length)?`<div class="banner warn" style="text-align:left"><b>Product cost not added.</b> Every figure here is what Amazon settled — <b>contribution</b>, not profit. Your purchase or manufacturing cost is not in it, so a SKU showing a positive number can still be losing money. ${skuIsPro?`<a href="#/sku-report/advanced">Add product costs</a> to turn this into real profit and margin.`:`Adding product costs is a Pro feature — <a href="#/pricing">see plans</a>.`}</div>`:""}`;
 
   if(realSkus.length>1)
-    h+=`<div class="banner info">Best earner: <b>${esc(best.sku)}</b> (${inr(best.net)} net). Weakest: <b>${esc(worst.sku)}</b> (${inr(worst.net)} net).${worst.net<0?" A negative net means this SKU took money out of your settlement — check its price, weight slab and return rate.":""}</div>`;
+  {
+    const wRef=worst.sales?Math.abs(worst.refundValue)/worst.sales*100:0;
+    h+=`<div class="banner info">Strongest in this settlement: <b>${esc(best.sku)}</b> — ${inr(best.net)} contribution, before product cost. Needs attention: <b>${esc(worst.sku)}</b> — ${inr(worst.net)}${worst.net<0?", i.e. it took money out of this settlement":""}.${
+      worst.net<0&&wRef>=80?` Its sales were <b>${wRef.toFixed(0)}% refunded</b>, so the fees and GST were charged on a sale that was given back — check the refund reason before spending anything more on this SKU.`
+      :worst.net<0?" Check its price against the fee steps, its weight band, and its return rate.":""}</div>`;
+  }
 
   /* Account-level lines shown as what they are, next to the products but never
      ranked among them. Advertising and balance movements get named explicitly:
@@ -5191,7 +5216,7 @@ function skuRenderResults(){
       ["fulfil","Fulfilment & shipping charged to the account"],["otherFees","Other account-level fees"],
       ["credits","Credits & reimbursements"],["gstFees","GST charged on those fees"]]
       .map(([k,nm])=>[nm,b[k]||0]).filter(x=>Math.abs(x[1])>=0.005);
-    h+=`<div class="panel"><h4>Account-level lines <span class="sa-sub">— real money, but Amazon never ties these to a product</span></h4>
+    h+=`<div class="panel"><h4>Costs and adjustments not tied to a product <span class="sa-sub">— real money, but Amazon never attaches these to a SKU</span></h4>
       <div class="rows">${parts.map(([nm,v])=>`<div class="r mut"><span class="rl">${esc(nm)}</span><span class="rv ${v<0?"neg":""}">${v<0?"−":"+"}${inr(Math.abs(v))}</span></div>`).join("")}
       <div class="r fin"><span class="rl">Total not attributable to any SKU</span><span class="rv ${acct.net<0?"neg":""}">${inr(acct.net)}</span></div></div>
       <div class="banner info" style="margin-top:10px">These are <b>not</b> a product's problem and are excluded from every per-SKU figure above. ${b.ads?`The advertising here is per-account; for spend broken down by SKU use the <a href="#/ad-profit">Ad Profitability</a> report with your Sponsored Products advertised-product export. `:""}${b.balance?`The balance movement is Amazon carrying your own money forward or squaring your two account series — load the same period's other Account Type and it cancels out. `:""}</div></div>`;
@@ -5256,7 +5281,7 @@ function skuRenderResults(){
           <td class="num">${s.units?inr(s.net/s.units):"—"}</td>
           <td class="num ${rp>10?'amt-neg':''}">${rp.toFixed(1)}%</td></tr>`;}).join("")}
       </tbody></table></div>
-    <div class="banner info">"Net" is the sum of every settlement line for that SKU — principal, fees, taxes and refunds — i.e. what actually reached your bank for it this settlement. Shipping charges billed against an order rather than a SKU (Easy Ship, postage, base fee) are traced back through the order id, except on mixed-SKU orders. What stays under <b>"(no SKU)"</b> is the account-level spend Amazon never ties to a product — advertising, FBA inbound transportation, storage, subscription — so it is <b>not</b> reflected in any single SKU's net. Judge a SKU on its own row, then check that this row isn't eating the profit.</div></div>`;
+    <div class="banner info"><b>What "Net" means:</b> sales − refunds − the Amazon fees and taxes attributable to that SKU. It does <b>not</b> include your product cost, and it does not include account-level costs like advertising. Full attribution rules are in <b>“How every number here is computed”</b> below.</div></div>`;
   }
 
   if(r.errors.length) h+=`<div class="banner warn"><b>${r.errors.length} row(s) could not be parsed</b> and are excluded — open the Settlement Analyzer for details.</div>`;
@@ -5272,13 +5297,28 @@ function skuRenderResults(){
     </ol>
   </div></details>`;
   const worstRefund=[...withPL].filter(s=>s.sku!=="(no SKU)"&&s.sales>0).sort((a,b)=>(Math.abs(b.refundValue)/b.sales)-(Math.abs(a.refundValue)/a.sales))[0];
-  h+=`<div class="panel"><h4>What should I do next?</h4><ul style="margin:8px 0 0 18px;line-height:1.9;font-size:13.5px">
-    ${advOn&&needCost?`<li><b>${needCost} SKU${needCost>1?"s":""} still ${needCost>1?"have":"has"} no product cost</b> — their profit is unknowable until you enter one. Start with your biggest sellers.</li>`:""}
-    ${worst&&worst.net<0?`<li><b>${esc(worst.sku)}</b> took ${inr(Math.abs(worst.net))} out of your settlement. Check its price against the fee steps in the <a href="#/fee-bands">Fee Band Optimizer</a> and its weight band in the <a href="#/fba-fee">FBA fee calculator</a>.</li>`:""}
-    ${worstRefund&&worstRefund.sales&&Math.abs(worstRefund.refundValue)/worstRefund.sales>0.15?`<li><b>${esc(worstRefund.sku)}</b> refunds ${(Math.abs(worstRefund.refundValue)/worstRefund.sales*100).toFixed(0)}% of its sales by value — read its recent reviews for a size/quality/expectation mismatch before spending another rupee advertising it.</li>`:""}
-    <li>Drop the same file into <a href="#/reconcile">Reconciliation</a> to check every fee behind these numbers against Amazon's rate card.</li>
-    <li>Units ÷ days in the period gives each SKU's daily sales rate for the <a href="#/restock-planner">Restock Planner</a>.</li>
-  </ul></div>`;
+  {
+    const acts=[];
+    const wr=worstRefund&&worstRefund.sales?Math.abs(worstRefund.refundValue)/worstRefund.sales*100:0;
+    if(worstRefund&&wr>=50) acts.push(["hot",wr>=99?"A full refund drove the loss":"Refunds are eating this SKU",
+      `<b>${esc(worstRefund.sku)}</b> had <b>${wr.toFixed(0)}%</b> of its ${inr(worstRefund.sales)} of sales refunded and still carried ${inr(Math.abs(worstRefund.fees+worstRefund.taxes))} of Amazon charges — the fees stayed even though the sale did not.`,
+      "#/returns","Check the refund reason →"]);
+    else if(worst&&worst.net<0) acts.push(["hot","One SKU took money out of this settlement",
+      `<b>${esc(worst.sku)}</b> contributed <b>${inr(worst.net)}</b>. Check its price against the fee steps and its weight band before advertising it further.`,
+      "#/fee-bands","Check its fee bands →"]);
+    if(!advOn||!costed.length) acts.push(["","Product cost missing",
+      "These figures are Amazon settlement contribution, not profit. Adding what each unit costs you turns them into real profit and margin, and shows which SKUs only look healthy.",
+      skuIsPro?"#/sku-report/advanced":"#/pricing",skuIsPro?"Add product costs →":"See Pro plans →"]);
+    if(Math.abs(acctNet)>=0.005) acts.push(["","Costs not tied to any product",
+      `<b>${inr(acctNet)}</b> of this settlement belongs to no SKU — advertising, balances carried forward, account fees. It is excluded from every per-SKU figure above, so judge a SKU on its own row and this total separately.`,
+      "#/settlement-analyzer","See the full settlement →"]);
+    acts.push(["","Check Amazon charged correctly",
+      "Every fee behind these SKU numbers can be audited against Amazon's published rate card, and refunds sometimes owe you a fee credit that never arrived.",
+      "#/reconcile","Run the fee audit →"]);
+    h+=`<div class="panel"><h4>What should I do next?</h4>
+      <div class="acts">${acts.slice(0,4).map(([k,t,b,href,cta])=>
+        `<div class="act ${k}"><h5>${t}</h5><p>${b}</p><a href="${href}">${cta}</a></div>`).join("")}</div></div>`;
+  }
 
   out.innerHTML=h;
   const skq=out.querySelector("#sku-q");
