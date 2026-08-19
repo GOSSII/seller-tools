@@ -355,11 +355,11 @@
 
   /* ---- Label cropper / order printer ---- */
   .pdfprev{width:100%;height:480px;border:1px solid var(--line);border-radius:12px;background:#f7f9fc}
-  .thumbrow{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start;margin-top:4px}
-  .thumb canvas{display:block;border:1px solid var(--line);border-radius:8px;background:#fff;max-width:100%}
-  .tcap{font-size:11.5px;color:var(--muted);text-align:center;margin-top:4px}
-  .tmore{display:flex;align-items:center;justify-content:center;width:150px;min-height:200px;
-    border:1px dashed var(--line);border-radius:8px;color:var(--muted);font-size:12px;text-align:center}
+  .prevscroll{height:540px;overflow:auto;border:1px solid var(--line);border-radius:12px;background:#eef1f6}
+  .pv-page{margin:14px auto;max-width:calc(100% - 28px)}
+  .pv-slot{background:#fff;border:1px solid var(--line);border-radius:4px;box-shadow:0 1px 4px rgba(15,26,43,.08);overflow:hidden}
+  .pv-slot canvas{display:block;width:100%}
+  .pv-cap{font-size:11.5px;color:var(--muted);text-align:center;margin-top:5px}
   .prevlink{font-size:12.5px;font-weight:600;margin-left:8px;white-space:nowrap}
   .cropgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
   @media(min-width:700px){.cropgrid{grid-template-columns:repeat(4,1fr)}}
@@ -7679,34 +7679,66 @@ function loadPdfJs(){
   return pdfJsPromise;
 }
 
-/* Robust PDF preview shared by the label cropper, FNSKU stickers and
-   GST invoices. Chrome's embedded PDF viewer crashes on heavy files
-   (a grey broken-page icon instead of the preview) and phones don't
-   render PDF iframes at all, so pages are drawn as thumbnails with
-   pdf.js; the iframe is only the fallback when pdf.js can't load. */
+/* Full scrollable PDF preview shared by the label cropper, FNSKU
+   stickers and GST invoices — every page is on screen, so the whole
+   batch can be verified before printing. Pages are drawn with pdf.js
+   into a scrolling viewer; each page renders as it nears the viewport
+   and is released again once far away, so a 1,000-page file previews
+   as lightly as a 10-page one. Chrome's embedded PDF plugin is not
+   used (the CSP blocks it as a blob: frame on hardened deploys, and
+   phones don't render PDF iframes at all); the iframe remains only as
+   the fallback when pdf.js itself cannot load. */
 async function pdfPreviewInto(holder,heading,bytes,url,alt){
   if(!holder) return;
-  holder.innerHTML=`<div class="panel"><h4>${heading} <a class="prevlink" href="${url}" target="_blank" rel="noopener">Open full PDF ↗</a></h4><div class="thumbrow"><span class="note">Rendering preview…</span></div></div>`;
+  if(holder._pv){try{holder._pv.obs.disconnect();holder._pv.doc.destroy();}catch(e){}holder._pv=null;}
+  holder.innerHTML=`<div class="panel"><h4>${heading} <a class="prevlink" href="${url}" target="_blank" rel="noopener">Open full PDF ↗</a></h4><div class="prevscroll"><div class="note" style="margin:12px">Rendering preview…</div></div></div>`;
   try{
     await loadPdfJs();
     const pdoc=await pdfjsLib.getDocument({data:bytes.slice(0)}).promise;
-    const total=pdoc.numPages,show=Math.min(total,10);
-    const row=holder.querySelector(".thumbrow");
-    row.innerHTML="";
+    const total=pdoc.numPages;
+    const box=holder.querySelector(".prevscroll");
     const dpr=Math.min(window.devicePixelRatio||1,2);
-    for(let p=1;p<=show;p++){
-      const pg=await pdoc.getPage(p);
-      const vp=pg.getViewport({scale:150/pg.getViewport({scale:1}).width*dpr});
-      const cv=document.createElement("canvas");
-      cv.width=Math.ceil(vp.width);cv.height=Math.ceil(vp.height);
-      cv.style.width="150px";
-      await pg.render({canvasContext:cv.getContext("2d"),viewport:vp}).promise;
-      const cell=document.createElement("div");cell.className="thumb";
-      const cap=document.createElement("div");cap.className="tcap";cap.textContent="Page "+p;
-      cell.appendChild(cv);cell.appendChild(cap);row.appendChild(cell);
+    const base1=(await pdoc.getPage(1)).getViewport({scale:1});
+    const slotW=Math.max(200,Math.min(box.clientWidth-28,440));
+    box.innerHTML="";
+    const slots=[];
+    for(let p=1;p<=total;p++){
+      const cell=document.createElement("div");cell.className="pv-page";cell.style.width=slotW+"px";
+      const slot=document.createElement("div");slot.className="pv-slot";
+      slot.style.height=Math.round(slotW*base1.height/base1.width)+"px";
+      const cap=document.createElement("div");cap.className="pv-cap";cap.textContent="Page "+p+" / "+total;
+      cell.appendChild(slot);cell.appendChild(cap);box.appendChild(cell);
+      slots.push(slot);
     }
-    if(total>show) row.insertAdjacentHTML("beforeend",`<div class="thumb tmore">+ ${total-show} more page(s)<br>in the PDF</div>`);
-    if(pdoc.destroy) pdoc.destroy();
+    const release=idx=>{
+      const slot=slots[idx];
+      if(slot.dataset.st==="r"){slot.dataset.gone="1";return;}
+      if(slot.dataset.st==="d"){slot.innerHTML="";delete slot.dataset.st;}
+    };
+    const render=async idx=>{
+      const slot=slots[idx];
+      if(slot.dataset.st) return;
+      slot.dataset.st="r";
+      try{
+        const pg=await pdoc.getPage(idx+1);
+        const base=pg.getViewport({scale:1});
+        const vp=pg.getViewport({scale:dpr*slotW/base.width});
+        const cv=document.createElement("canvas");
+        cv.width=Math.ceil(vp.width);cv.height=Math.ceil(vp.height);
+        await pg.render({canvasContext:cv.getContext("2d"),viewport:vp}).promise;
+        slot.style.height=Math.round(slotW*base.height/base.width)+"px";
+        slot.innerHTML="";slot.appendChild(cv);slot.dataset.st="d";
+        if(slot.dataset.gone){delete slot.dataset.gone;release(idx);}
+      }catch(e){delete slot.dataset.st;}
+    };
+    const obs=new IntersectionObserver(es=>{
+      for(const e of es){
+        const idx=slots.indexOf(e.target);
+        if(idx>=0){if(e.isIntersecting)render(idx);else release(idx);}
+      }
+    },{root:box,rootMargin:"1400px 0px"});
+    slots.forEach(s=>obs.observe(s));
+    holder._pv={obs,doc:pdoc};
   }catch(e){
     holder.innerHTML=`<div class="panel"><h4>${heading}</h4><iframe class="pdfprev" src="${url}" title="${alt}"></iframe></div>`;
   }
