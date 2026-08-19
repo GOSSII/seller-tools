@@ -1734,7 +1734,7 @@ const HELP={
   "keyword-combiner":{input:`Best source words: <b>Advertising console → Sponsored ads reports → Search term report</b> — the words customers actually type.`,
     steps:["Paste word lists into A, B and (optionally) C — one term per line.","Pick broad / \"phrase\" / [exact] wrapping; enable reversed A↔B if word order matters.","Copy all combinations into your PPC campaign."]},
   "label-cropper":{input:`<b>Orders → Manage Orders</b> → tick your unshipped Easy Ship orders → <b>Print label &amp; invoice</b> — Amazon downloads the label PDF. Drop that file here (several files at once is fine).`,
-    steps:["Drop the PDF — labels are sorted by product automatically, and invoice pages are recognised.","Pick the output: 4×6 thermal, or A4 with 1 or 4 labels per sheet; choose whether invoices are skipped, attached, or a separate PDF.","Keep \"Print SKU on label\" on so packers see the product name; add the Order List page first or last.","Check the preview, download, print."]},
+    steps:["Drop the PDF — labels come out SKU-wise by default (switch to Qty or original order if you prefer), and invoice pages are recognised.","Pick the output: 4×6 thermal, or A4 with 1 or 4 labels per sheet; choose whether invoices are skipped, attached, or a separate PDF.","Keep \"SKU | Qty on label\" and \"Page numbers\" on — packers see the product, and 1 / 2 / 3… makes the printed stack easy to count and verify; add the Order List page first or last.","Check the preview, download, print."]},
   "order-printer":{input:`<b>Orders → Order Reports → Unshipped Orders</b> → Request report → Download (a .txt file). If you want customer addresses on packing slips, enable the address columns in the report settings on that page.`,
     steps:["Drop the report file.","Print the picklist — total units per SKU, one trip to the shelf.","Print packing slips — one per order, each on its own page."]},
   "settlement-analyzer":{input:`<b>Payments → All Statements</b> → pick a closed settlement → <b>Download Flat File V2</b> (a .txt file). Any completed settlement period works.`,
@@ -7694,7 +7694,7 @@ function renderLabelCropper(){
   app.innerHTML=`
     <div class="wrap page">
       <h2>Amazon Label Cropper</h2>
-      <p class="lede">Drop your Amazon label PDF(s) and get clean, print-ready pages. Labels are automatically sorted by SKU (unrecognised ones go last), invoice pages are detected and handled per your choice below, and the label position is adjustable for different layouts.</p>
+      <p class="lede">Drop your Amazon label PDF(s) and get clean, print-ready pages. Labels come out SKU-wise by default (unrecognised ones go last), every label carries its SKU | Qty and a page number so the stack is easy to verify, and invoice pages are detected and handled per your choice below.</p>
       ${helpHtml("label-cropper")}
       <label class="sa-drop" id="lc-drop">
         <div class="ico">🏷️</div>
@@ -7731,10 +7731,21 @@ function renderLabelCropper(){
               <option value="right"${saved.invPos==="right"?" selected":""}>Right half</option>
               <option value="bottom"${saved.invPos==="bottom"?" selected":""}>Bottom half</option>
             </select></div>
-          <div><label for="lc-skuprint">Print SKU on label</label>
+          <div><label for="lc-sort">Sorting</label>
+            <select id="lc-sort">
+              <option value="sku"${(saved.sort||"sku")==="sku"?" selected":""}>SKU-wise (A→Z)</option>
+              <option value="qty"${saved.sort==="qty"?" selected":""}>Qty — high to low</option>
+              <option value="orig"${saved.sort==="orig"?" selected":""}>Original order</option>
+            </select></div>
+          <div><label for="lc-skuprint">SKU | Qty on label</label>
             <select id="lc-skuprint">
               <option value="yes"${(saved.skuPrint||"yes")==="yes"?" selected":""}>Yes — top strip</option>
               <option value="no"${saved.skuPrint==="no"?" selected":""}>No</option>
+            </select></div>
+          <div><label for="lc-pagenum">Page numbers</label>
+            <select id="lc-pagenum">
+              <option value="yes"${(saved.pnum||"yes")==="yes"?" selected":""}>Yes — 1 / 2 / 3…</option>
+              <option value="no"${saved.pnum==="no"?" selected":""}>No</option>
             </select></div>
           <div><label for="lc-olist">Order list page</label>
             <select id="lc-olist">
@@ -7777,7 +7788,7 @@ function renderLabelCropper(){
     lcFiles=[...list].filter(f=>/pdf$/i.test(f.name)||f.type==="application/pdf");
     if(!lcFiles.length){status("That doesn't look like a PDF.");return;}
     document.getElementById("lc-go").disabled=false;
-    status(`${lcFiles.length} file(s) ready — ${lcFiles.map(f=>f.name).join(", ")}. Click "Crop to 4×6".`);
+    status(`${lcFiles.length} file(s) ready — ${lcFiles.map(f=>f.name).join(", ")}. Click "Crop labels".`);
   };
   drop.addEventListener("drop",ev=>take(ev.dataTransfer.files));
   file.addEventListener("change",()=>take(file.files));
@@ -7812,13 +7823,15 @@ function renderLabelCropper(){
       const invMode=invSel.value;
       const invPos=document.getElementById("lc-invpos").value;
       const skuPrint=document.getElementById("lc-skuprint").value==="yes";
+      const sortMode=document.getElementById("lc-sort").value; // sku | qty | orig
+      const numPrint=document.getElementById("lc-pagenum").value==="yes";
       const olist=document.getElementById("lc-olist").value; // no | first | last
       const splitSel=document.getElementById("lc-split").value; // auto | 1 | 2
       const dtPrint=document.getElementById("lc-datetime").value==="yes";
       const blankSkip=document.getElementById("lc-blank").value!=="keep";
       // One stamp for the whole batch, e.g. "30 Jul 2026, 6:45 am".
       const dtStamp=new Date().toLocaleString("en-IN",{day:"numeric",month:"short",year:"numeric",hour:"numeric",minute:"2-digit",hour12:true});
-      try{localStorage.setItem("lc_crop",JSON.stringify({preset:presetKey,custom:crop,fmt,invMode,invPos,skuPrint:skuPrint?"yes":"no",olist,split:splitSel,dt:dtPrint?"yes":"no",blank:blankSkip?"skip":"keep"}));}catch(e){}
+      try{localStorage.setItem("lc_crop",JSON.stringify({preset:presetKey,custom:crop,fmt,invMode,invPos,skuPrint:skuPrint?"yes":"no",sort:sortMode,pnum:numPrint?"yes":"no",olist,split:splitSel,dt:dtPrint?"yes":"no",blank:blankSkip?"skip":"keep"}));}catch(e){}
       const A4W=595.28,A4H=841.89;
       const white=()=>PDFLib.rgb(1,1,1);
 
@@ -7994,20 +8007,21 @@ function renderLabelCropper(){
           if(!x.qty&&iv.qty) x.qty=iv.qty;
         }
       }
-      // Labels only, always sorted by SKU; unrecognised SKUs go last in
-      // their original order.
+      // Labels only. SKU-wise is the default sort; unrecognised SKUs go
+      // last in their original order.
       const orderList=lcPageInfo.filter(x=>!x.inv);
-      orderList.sort((a,b)=>{
+      if(sortMode==="sku") orderList.sort((a,b)=>{
         const ka=a.sku||"￿", kb=b.sku||"￿";
         return ka<kb?-1:ka>kb?1:(a.f-b.f)||(a.i-b.i);
       });
+      else if(sortMode==="qty") orderList.sort((a,b)=>(b.qty||0)-(a.qty||0)||(a.f-b.f)||(a.i-b.i));
       const skippedInv=lcPageInfo.filter(x=>x.inv).length;
 
       // Stage 1: label-only 4x6 pages (masked), plus invoice pages if wanted.
       status("Cropping…");
       const labelDoc=await PDFLib.PDFDocument.create();
       const invDoc=invMode==="none"?null:await PDFLib.PDFDocument.create();
-      const skuFont=(skuPrint||dtPrint)?await labelDoc.embedFont(PDFLib.StandardFonts.HelveticaBold):null;
+      const skuFont=(skuPrint||dtPrint||numPrint)?await labelDoc.embedFont(PDFLib.StandardFonts.HelveticaBold):null;
       // Embed only the pages we will actually draw (labels + their linked
       // invoice pages). Skipped blanks stay out — pdf-lib can't even embed
       // a page whose Contents stream is missing entirely.
@@ -8051,17 +8065,19 @@ function renderLabelCropper(){
           page.drawRectangle({x:288-dx,y:0,width:dx,height:432,color:white()});}
         if(dy>0.1){page.drawRectangle({x:0,y:0,width:288,height:dy,color:white()});
           page.drawRectangle({x:0,y:432-dy,width:288,height:dy,color:white()});}
-        if(skuPrint||dtPrint){
+        if(skuPrint||dtPrint||numPrint){
           page.drawRectangle({x:0,y:416,width:288,height:16,color:white()});
           const parts=[];
-          if(skuPrint) parts.push("#"+(labels+1)+"/"+orderList.length
-            +(info.sku?"  "+info.sku:"")
-            +(info.qty?" | Qty: "+info.qty:""));
+          if(numPrint) parts.push((labels+1)+" / "+orderList.length);
+          if(skuPrint&&(info.sku||info.qty)) parts.push(
+            (info.sku||"")+(info.sku&&info.qty?" | ":"")+(info.qty?"Qty - "+info.qty:""));
           if(dtPrint) parts.push(dtStamp);
           const strip=parts.join("  ·  ");
-          // Shrink the type when SKU + date both need to fit the 4" strip.
-          const size=strip.length>56?7.5:9;
-          page.drawText(strip.slice(0,size===9?60:74),{x:8,y:size===9?420.5:421.5,size,font:skuFont,color:PDFLib.rgb(0,0,0)});
+          if(strip){
+            // Shrink the type when number + SKU + date all share the 4" strip.
+            const size=strip.length>56?7.5:9;
+            page.drawText(strip.slice(0,size===9?60:74),{x:8,y:size===9?420.5:421.5,size,font:skuFont,color:PDFLib.rgb(0,0,0)});
+          }
         }
         labels++;
         if(invDoc){
@@ -8229,7 +8245,7 @@ function renderLabelCropper(){
         </div>`:"";
       }
 
-      status(`Done — ${labels} label(s)${split===2?` (2 per page detected${autoLeft?", labels column auto-cropped":""})`:""}${skippedInv?`, ${invMode==="none"?"skipped":"paired"} ${skippedInv} invoice page(s)`:""}${blanksSkipped?`, ${blanksSkipped} blank page(s) removed`:""}, ${outDoc.getPageCount()} output page(s), sorted by SKU. Check the preview, then download.`);
+      status(`Done — ${labels} label(s)${split===2?` (2 per page detected${autoLeft?", labels column auto-cropped":""})`:""}${skippedInv?`, ${invMode==="none"?"skipped":"paired"} ${skippedInv} invoice page(s)`:""}${blanksSkipped?`, ${blanksSkipped} blank page(s) removed`:""}, ${outDoc.getPageCount()} output page(s)${sortMode==="sku"?", sorted SKU-wise":sortMode==="qty"?", sorted by quantity":", in original order"}. Check the preview, then download.`);
     }catch(e){
       try{console.error("Label cropper:",e);}catch(_){}
       status("Could not process that PDF"+(String(e).includes("load failed")?" — the PDF engine failed to load (check your connection) and nothing was uploaded anywhere.":" — it may be corrupted or password-protected."));
