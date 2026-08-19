@@ -355,6 +355,13 @@
 
   /* ---- Label cropper / order printer ---- */
   .pdfprev{width:100%;height:480px;border:1px solid var(--line);border-radius:12px;background:#f7f9fc}
+  .sa-drop.loaded{border-style:solid;border-color:#1e9e63;background:#f2fbf7}
+  .sa-drop.loaded h3{color:#116b42}
+  /* Once loaded, the invisible full-area input must not swallow clicks —
+     otherwise the "Choose different file(s)" link is unreachable and any
+     stray click reopens the picker. */
+  .sa-drop.loaded input{pointer-events:none}
+  .sa-change{display:inline-block;margin-top:6px;color:var(--blue);font-weight:600;font-size:13px;text-decoration:underline;cursor:pointer}
   .prevscroll{height:540px;overflow:auto;border:1px solid var(--line);border-radius:12px;background:#eef1f6}
   .pv-page{margin:14px auto;max-width:calc(100% - 28px)}
   .pv-slot{background:#fff;border:1px solid var(--line);border-radius:4px;box-shadow:0 1px 4px rgba(15,26,43,.08);overflow:hidden}
@@ -1740,7 +1747,7 @@ const HELP={
   "keyword-combiner":{input:`Best source words: <b>Advertising console → Sponsored ads reports → Search term report</b> — the words customers actually type.`,
     steps:["Paste word lists into A, B and (optionally) C — one term per line.","Pick broad / \"phrase\" / [exact] wrapping; enable reversed A↔B if word order matters.","Copy all combinations into your PPC campaign."]},
   "label-cropper":{input:`<b>Orders → Manage Orders</b> → tick your unshipped Easy Ship orders → <b>Print label &amp; invoice</b> — Amazon downloads the label PDF. Drop that file here (several files at once is fine).`,
-    steps:["Drop the PDF — labels come out SKU-wise by default (switch to Qty or original order if you prefer), and invoice pages are recognised.","Pick the output: 4×6 thermal, or A4 with 1 or 4 labels per sheet; choose whether invoices are skipped, attached, or a separate PDF.","Keep \"SKU | Qty on label\" and \"Page numbers\" on — packers see the product, and 1 / 2 / 3… makes the printed stack easy to count and verify; add the Order List page first or last.","Check the preview, download, print."]},
+    steps:["Drop the PDF — labels come out SKU-wise by default (switch to Qty or original order if you prefer), and invoice pages are recognised.","Pick the output: 4×6 thermal, or A4 with 1 or 4 labels per sheet; choose whether invoices are skipped, attached, or a separate PDF.","Keep \"SKU | Qty on label\" and \"Page numbers\" on — packers see the product, and 1 / 2 / 3… makes the printed stack easy to count and verify. The SKU | Qty prints after the invoice table (like Amazon's own caption) by default, or in a top/bottom strip; add the Order List page first or last.","Check the preview, download, print."]},
   "order-printer":{input:`<b>Orders → Order Reports → Unshipped Orders</b> → Request report → Download (a .txt file). If you want customer addresses on packing slips, enable the address columns in the report settings on that page.`,
     steps:["Drop the report file.","Print the picklist — total units per SKU, one trip to the shelf.","Print packing slips — one per order, each on its own page."]},
   "settlement-analyzer":{input:`<b>Payments → All Statements</b> → pick a closed settlement → <b>Download Flat File V2</b> (a .txt file). Any completed settlement period works.`,
@@ -7762,6 +7769,9 @@ function renderLabelCropper(){
   try{saved=JSON.parse(localStorage.getItem("lc_crop")||"{}");}catch(e){}
   const preset=saved.preset||"full";
   const c=Object.assign({},CROP_PRESETS[preset]||CROP_PRESETS["es-quadrant"],saved.custom&&preset==="custom"?saved.custom:{});
+  // Legacy "yes" (before the position option) becomes the new default.
+  const skuPosSaved=saved.skuPrint==="yes"?"mid":(saved.skuPrint||"mid");
+  lcFiles=[];
   app.innerHTML=`
     <div class="wrap page">
       <h2>Amazon Label Cropper</h2>
@@ -7810,8 +7820,10 @@ function renderLabelCropper(){
             </select></div>
           <div><label for="lc-skuprint">SKU | Qty on label</label>
             <select id="lc-skuprint">
-              <option value="yes"${(saved.skuPrint||"yes")==="yes"?" selected":""}>Yes — top strip</option>
-              <option value="no"${saved.skuPrint==="no"?" selected":""}>No</option>
+              <option value="mid"${skuPosSaved==="mid"?" selected":""}>Yes — middle (after invoice table)</option>
+              <option value="top"${skuPosSaved==="top"?" selected":""}>Yes — top strip</option>
+              <option value="bot"${skuPosSaved==="bot"?" selected":""}>Yes — bottom strip</option>
+              <option value="no"${skuPosSaved==="no"?" selected":""}>No</option>
             </select></div>
           <div><label for="lc-pagenum">Page numbers</label>
             <select id="lc-pagenum">
@@ -7856,13 +7868,26 @@ function renderLabelCropper(){
   ["dragenter","dragover"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add("over");}));
   ["dragleave","drop"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove("over");}));
   const take=list=>{
-    lcFiles=[...list].filter(f=>/pdf$/i.test(f.name)||f.type==="application/pdf");
-    if(!lcFiles.length){status("That doesn't look like a PDF.");return;}
+    const files=[...list].filter(f=>/pdf$/i.test(f.name)||f.type==="application/pdf");
+    if(!files.length){status("That doesn't look like a PDF.");return;}
+    lcFiles=files;
     document.getElementById("lc-go").disabled=false;
-    status(`${lcFiles.length} file(s) ready — ${lcFiles.map(f=>f.name).join(", ")}. Click "Crop labels".`);
+    const names=lcFiles.map(f=>f.name).join(", ");
+    const mb=(lcFiles.reduce((s,f)=>s+f.size,0)/1048576).toFixed(1);
+    drop.classList.add("loaded");
+    drop.querySelector(".ico").textContent="✅";
+    drop.querySelector("h3").textContent=`${lcFiles.length} file(s) loaded (${mb} MB)`;
+    drop.querySelector("p").innerHTML=`${esc(names)}<br><span class="sa-change">Choose different file(s)</span>`;
+    status(`${lcFiles.length} file(s) ready — ${names}. Click "Crop labels".`);
   };
   drop.addEventListener("drop",ev=>take(ev.dataTransfer.files));
-  file.addEventListener("change",()=>take(file.files));
+  file.addEventListener("change",()=>{take(file.files);file.value="";});
+  // Once loaded, an accidental click can't silently restart the file
+  // picker — replacing files takes the explicit "Choose different" link
+  // (dropping new files on the area still works).
+  // (Once loaded the input has pointer-events:none, so a click targeting
+  // it can only be the label forwarding the "Choose different" click.)
+  drop.addEventListener("click",e=>{if(lcFiles.length&&e.target!==file&&!e.target.closest(".sa-change"))e.preventDefault();});
   document.getElementById("lc-preset").addEventListener("change",e=>{
     const p=CROP_PRESETS[e.target.value];
     if(p&&e.target.value!=="custom"){
@@ -7893,7 +7918,8 @@ function renderLabelCropper(){
       const fmt=document.getElementById("lc-fmt").value;
       const invMode=invSel.value;
       const invPos=document.getElementById("lc-invpos").value;
-      const skuPrint=document.getElementById("lc-skuprint").value==="yes";
+      const skuPos=document.getElementById("lc-skuprint").value; // mid | top | bot | no
+      const skuPrint=skuPos!=="no";
       const sortMode=document.getElementById("lc-sort").value; // sku | qty | orig
       const numPrint=document.getElementById("lc-pagenum").value==="yes";
       const olist=document.getElementById("lc-olist").value; // no | first | last
@@ -7902,7 +7928,7 @@ function renderLabelCropper(){
       const blankSkip=document.getElementById("lc-blank").value!=="keep";
       // One stamp for the whole batch, e.g. "30 Jul 2026, 6:45 am".
       const dtStamp=new Date().toLocaleString("en-IN",{day:"numeric",month:"short",year:"numeric",hour:"numeric",minute:"2-digit",hour12:true});
-      try{localStorage.setItem("lc_crop",JSON.stringify({preset:presetKey,custom:crop,fmt,invMode,invPos,skuPrint:skuPrint?"yes":"no",sort:sortMode,pnum:numPrint?"yes":"no",olist,split:splitSel,dt:dtPrint?"yes":"no",blank:blankSkip?"skip":"keep"}));}catch(e){}
+      try{localStorage.setItem("lc_crop",JSON.stringify({preset:presetKey,custom:crop,fmt,invMode,invPos,skuPrint:skuPos,sort:sortMode,pnum:numPrint?"yes":"no",olist,split:splitSel,dt:dtPrint?"yes":"no",blank:blankSkip?"skip":"keep"}));}catch(e){}
       const A4W=595.28,A4H=841.89;
       const white=()=>PDFLib.rgb(1,1,1);
 
@@ -7960,6 +7986,40 @@ function renderLabelCropper(){
               }catch(e){}
             }
             info.inv=invRe.test(text);
+            // Middle caption position: find where the printed content ends.
+            // Labels often ship with no text layer at all, so the invoice
+            // table's bottom edge can only be seen in the pixels — render
+            // small and scan for the lowest inked row inside the crop.
+            if(skuPos==="mid"){
+              try{
+                const sc2=300/Math.max(pageW,pageH);
+                const vp2=pageObj.getViewport({scale:sc2});
+                const cnv=document.createElement("canvas");
+                cnv.width=Math.max(1,Math.ceil(vp2.width));cnv.height=Math.max(1,Math.ceil(vp2.height));
+                const ctx=cnv.getContext("2d",{willReadFrequently:true});
+                ctx.fillStyle="#fff";ctx.fillRect(0,0,cnv.width,cnv.height);
+                await pageObj.render({canvasContext:ctx,viewport:vp2}).promise;
+                const x0=Math.max(0,Math.floor(crop.left/100*cnv.width)),
+                      x1=Math.min(cnv.width,Math.ceil((crop.left+crop.width)/100*cnv.width)),
+                      y0=Math.max(0,Math.floor(crop.top/100*cnv.height)),
+                      y1=Math.min(cnv.height,Math.ceil((crop.top+crop.height)/100*cnv.height));
+                const img=ctx.getImageData(0,0,cnv.width,cnv.height).data;
+                const rowDark=yy=>{
+                  let dark=0;
+                  for(let xx=x0;xx<x1;xx++){
+                    const k=(yy*cnv.width+xx)*4;
+                    if(img[k+3]>40&&img[k]+img[k+1]+img[k+2]<600&&++dark>1) return true;
+                  }
+                  return false;
+                };
+                // The caption goes in the first free space below ALL label
+                // content (after the invoice table block — on most labels
+                // Amazon's own "Sold on" line is the last inked row).
+                for(let yy=y1-1;yy>=y0;yy--){
+                  if(rowDark(yy)){if(y1>y0)info.botFrac=(yy+1-y0)/(y1-y0);break;}
+                }
+              }catch(e){}
+            }
             // Caption overlays ("Name | Qty - 1", "Name ( Qty : 1 )") are
             // single text items — match them item-by-item first, anchored
             // at the start, so dates/amounts nearby can't pollute the name.
@@ -8172,11 +8232,11 @@ function renderLabelCropper(){
           page.drawRectangle({x:288-dx,y:0,width:dx,height:432,color:white()});}
         if(dy>0.1){page.drawRectangle({x:0,y:0,width:288,height:dy,color:white()});
           page.drawRectangle({x:0,y:432-dy,width:288,height:dy,color:white()});}
-        if(skuPrint||dtPrint||numPrint){
+        if(numPrint||dtPrint||skuPos==="top"){
           page.drawRectangle({x:0,y:416,width:288,height:16,color:white()});
           const parts=[];
           if(numPrint) parts.push((labels+1)+" / "+orderList.length);
-          if(skuPrint&&(info.sku||info.qty)) parts.push(
+          if(skuPos==="top"&&(info.sku||info.qty)) parts.push(
             (info.sku||"")+(info.sku&&info.qty?" | ":"")+(info.qty?"Qty - "+info.qty:""));
           if(dtPrint) parts.push(dtStamp);
           const strip=parts.join("  ·  ");
@@ -8185,6 +8245,19 @@ function renderLabelCropper(){
             const size=strip.length>56?7.5:9;
             page.drawText(strip.slice(0,size===9?60:74),{x:8,y:size===9?420.5:421.5,size,font:skuFont,color:PDFLib.rgb(0,0,0)});
           }
+        }
+        if(skuPrint&&skuPos!=="top"&&(info.sku||info.qty)){
+          const capText=((info.sku||"")+(info.sku&&info.qty?" | ":"")+(info.qty?"Qty - "+info.qty:"")).slice(0,64);
+          // Middle: just under the measured content bottom — where Amazon
+          // prints its own caption, after the seller/GSTIN/invoice table.
+          // Bottom, split halves, or no measurement: strip at the page's
+          // bottom edge instead.
+          let capTop=16;
+          if(skuPos==="mid"&&info.botFrac!==undefined&&info.region===undefined)
+            capTop=Math.max(16,Math.min(430,dy+ch*scale*(1-info.botFrac)-2));
+          const size2=capText.length>44?8:10;
+          page.drawRectangle({x:0,y:capTop-14,width:288,height:14,color:white()});
+          page.drawText(capText,{x:10,y:capTop-11,size:size2,font:skuFont,color:PDFLib.rgb(0,0,0)});
         }
         labels++;
         if(invDoc){
