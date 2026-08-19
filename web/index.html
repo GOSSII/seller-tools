@@ -7771,6 +7771,10 @@ function renderLabelCropper(){
   const c=Object.assign({},CROP_PRESETS[preset]||CROP_PRESETS["es-quadrant"],saved.custom&&preset==="custom"?saved.custom:{});
   // Legacy "yes" (before the position option) becomes the new default.
   const skuPosSaved=saved.skuPrint==="yes"?"mid":(saved.skuPrint||"mid");
+  // olist2: the order-list page defaults to "last" now — old implicit
+  // "no" values (saved on every run before there was a real default)
+  // migrate once; choices made after this keep sticking via olist2.
+  const olistSaved=saved.olist2||(saved.olist==="first"||saved.olist==="yes"?"first":"last");
   lcFiles=[];
   app.innerHTML=`
     <div class="wrap page">
@@ -7832,9 +7836,9 @@ function renderLabelCropper(){
             </select></div>
           <div><label for="lc-olist">Order list page</label>
             <select id="lc-olist">
-              <option value="no"${(saved.olist==="yes"||saved.olist==="first"||saved.olist==="last")?"":" selected"}>No</option>
-              <option value="first"${(saved.olist==="yes"||saved.olist==="first")?" selected":""}>Yes — first page</option>
-              <option value="last"${saved.olist==="last"?" selected":""}>Yes — last page</option>
+              <option value="last"${olistSaved==="last"?" selected":""}>Yes — last page</option>
+              <option value="first"${olistSaved==="first"?" selected":""}>Yes — first page</option>
+              <option value="no"${olistSaved==="no"?" selected":""}>No</option>
             </select></div>
           <div><label for="lc-split">Labels per page</label>
             <select id="lc-split">
@@ -7922,13 +7926,13 @@ function renderLabelCropper(){
       const skuPrint=skuPos!=="no";
       const sortMode=document.getElementById("lc-sort").value; // sku | qty | orig
       const numPrint=document.getElementById("lc-pagenum").value==="yes";
-      const olist=document.getElementById("lc-olist").value; // no | first | last
+      const olist=document.getElementById("lc-olist").value; // last | first | no
       const splitSel=document.getElementById("lc-split").value; // auto | 1 | 2
       const dtPrint=document.getElementById("lc-datetime").value==="yes";
       const blankSkip=document.getElementById("lc-blank").value!=="keep";
       // One stamp for the whole batch, e.g. "30 Jul 2026, 6:45 am".
       const dtStamp=new Date().toLocaleString("en-IN",{day:"numeric",month:"short",year:"numeric",hour:"numeric",minute:"2-digit",hour12:true});
-      try{localStorage.setItem("lc_crop",JSON.stringify({preset:presetKey,custom:crop,fmt,invMode,invPos,skuPrint:skuPos,sort:sortMode,pnum:numPrint?"yes":"no",olist,split:splitSel,dt:dtPrint?"yes":"no",blank:blankSkip?"skip":"keep"}));}catch(e){}
+      try{localStorage.setItem("lc_crop",JSON.stringify({preset:presetKey,custom:crop,fmt,invMode,invPos,skuPrint:skuPos,sort:sortMode,pnum:numPrint?"yes":"no",olist2:olist,split:splitSel,dt:dtPrint?"yes":"no",blank:blankSkip?"skip":"keep"}));}catch(e){}
       const A4W=595.28,A4H=841.89;
       const white=()=>PDFLib.rgb(1,1,1);
 
@@ -8012,11 +8016,28 @@ function renderLabelCropper(){
                   }
                   return false;
                 };
-                // The caption goes in the first free space below ALL label
-                // content (after the invoice table block — on most labels
-                // Amazon's own "Sold on" line is the last inked row).
-                for(let yy=y1-1;yy>=y0;yy--){
-                  if(rowDark(yy)){if(y1>y0)info.botFrac=(yy+1-y0)/(y1-y0);break;}
+                // Group inked rows into content blocks (tiny gaps merge).
+                // "Middle" is Amazon's own caption slot: the gap between
+                // the invoice-table block and the bottom code table
+                // (STXA/Sold-on). Only a bottommost block that starts in
+                // the last 22% of the label counts as a code table — when
+                // there isn't one, the caption goes below all content.
+                const Hpx=y1-y0;
+                const gapPx=Math.max(2,Math.round(Hpx*4/300));
+                const minGapPx=Math.ceil(Hpx*18/(crop.height/100*pageH||1));
+                const blocks=[];
+                let bs=-1,bg=0;
+                for(let yy=y0;yy<y1;yy++){
+                  if(rowDark(yy)){if(bs<0)bs=yy;bg=0;}
+                  else if(bs>=0&&++bg>=gapPx){blocks.push([bs,yy-bg]);bs=-1;bg=0;}
+                }
+                if(bs>=0) blocks.push([bs,y1-1]);
+                if(blocks.length&&Hpx>0){
+                  const last=blocks[blocks.length-1];
+                  const prev=blocks.length>1?blocks[blocks.length-2]:null;
+                  if(prev&&(last[0]-y0)/Hpx>=0.78&&(last[0]-prev[1])>=minGapPx)
+                    info.botFrac=(prev[1]+1-y0)/Hpx;
+                  else info.botFrac=(last[1]+1-y0)/Hpx;
                 }
               }catch(e){}
             }
