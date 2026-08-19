@@ -355,6 +355,12 @@
 
   /* ---- Label cropper / order printer ---- */
   .pdfprev{width:100%;height:480px;border:1px solid var(--line);border-radius:12px;background:#f7f9fc}
+  .thumbrow{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start;margin-top:4px}
+  .thumb canvas{display:block;border:1px solid var(--line);border-radius:8px;background:#fff;max-width:100%}
+  .tcap{font-size:11.5px;color:var(--muted);text-align:center;margin-top:4px}
+  .tmore{display:flex;align-items:center;justify-content:center;width:150px;min-height:200px;
+    border:1px dashed var(--line);border-radius:8px;color:var(--muted);font-size:12px;text-align:center}
+  .prevlink{font-size:12.5px;font-weight:600;margin-left:8px;white-space:nowrap}
   .cropgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
   @media(min-width:700px){.cropgrid{grid-template-columns:repeat(4,1fr)}}
   .bigbtn{display:inline-block;padding:12px 22px;border:0;border-radius:10px;background:var(--blue);
@@ -7673,6 +7679,39 @@ function loadPdfJs(){
   return pdfJsPromise;
 }
 
+/* Robust PDF preview shared by the label cropper, FNSKU stickers and
+   GST invoices. Chrome's embedded PDF viewer crashes on heavy files
+   (a grey broken-page icon instead of the preview) and phones don't
+   render PDF iframes at all, so pages are drawn as thumbnails with
+   pdf.js; the iframe is only the fallback when pdf.js can't load. */
+async function pdfPreviewInto(holder,heading,bytes,url,alt){
+  if(!holder) return;
+  holder.innerHTML=`<div class="panel"><h4>${heading} <a class="prevlink" href="${url}" target="_blank" rel="noopener">Open full PDF ↗</a></h4><div class="thumbrow"><span class="note">Rendering preview…</span></div></div>`;
+  try{
+    await loadPdfJs();
+    const pdoc=await pdfjsLib.getDocument({data:bytes.slice(0)}).promise;
+    const total=pdoc.numPages,show=Math.min(total,10);
+    const row=holder.querySelector(".thumbrow");
+    row.innerHTML="";
+    const dpr=Math.min(window.devicePixelRatio||1,2);
+    for(let p=1;p<=show;p++){
+      const pg=await pdoc.getPage(p);
+      const vp=pg.getViewport({scale:150/pg.getViewport({scale:1}).width*dpr});
+      const cv=document.createElement("canvas");
+      cv.width=Math.ceil(vp.width);cv.height=Math.ceil(vp.height);
+      cv.style.width="150px";
+      await pg.render({canvasContext:cv.getContext("2d"),viewport:vp}).promise;
+      const cell=document.createElement("div");cell.className="thumb";
+      const cap=document.createElement("div");cap.className="tcap";cap.textContent="Page "+p;
+      cell.appendChild(cv);cell.appendChild(cap);row.appendChild(cell);
+    }
+    if(total>show) row.insertAdjacentHTML("beforeend",`<div class="thumb tmore">+ ${total-show} more page(s)<br>in the PDF</div>`);
+    if(pdoc.destroy) pdoc.destroy();
+  }catch(e){
+    holder.innerHTML=`<div class="panel"><h4>${heading}</h4><iframe class="pdfprev" src="${url}" title="${alt}"></iframe></div>`;
+  }
+}
+
 const CROP_PRESETS={
   "es-quadrant":{name:"Easy Ship — label only (top-left quarter)",left:0,top:0,width:50,height:50},
   "top-half":{name:"Top half of page",left:0,top:0,width:100,height:50},
@@ -8231,7 +8270,7 @@ function renderLabelCropper(){
         dl2.style.display="inline-block";
       }else dl2.style.display="none";
       const fmtName=fmt==="4x6"?"4×6 thermal":fmt==="a4-4up"?"A4, 4 per sheet":"A4, 1 per sheet";
-      document.getElementById("lc-prev").innerHTML=`<div class="panel"><h4>Preview — ${labels} label(s) on ${outDoc.getPageCount()} page(s) (${fmtName})</h4><iframe class="pdfprev" src="${url}" title="Cropped labels preview"></iframe></div>`;
+      pdfPreviewInto(document.getElementById("lc-prev"),`Preview — ${labels} label(s) on ${outDoc.getPageCount()} page(s) (${fmtName})`,outBytes,url,"Cropped labels preview");
 
       // Compact detection summary — chips per SKU, no table.
       {
@@ -8875,7 +8914,7 @@ function renderFnskuLabels(){
       const url=URL.createObjectURL(new Blob([res.bytes],{type:"application/pdf"}));
       const dl=document.getElementById("fk-dl");
       dl.href=url; dl.style.display="inline-block";
-      document.getElementById("fk-prev").innerHTML=`<div class="panel"><h4>Preview — ${res.stickers} sticker(s) on ${res.pages} page(s) (${esc(res.fmtName)})</h4><iframe class="pdfprev" src="${url}" title="FNSKU sticker preview"></iframe></div>`;
+      pdfPreviewInto(document.getElementById("fk-prev"),`Preview — ${res.stickers} sticker(s) on ${res.pages} page(s) (${esc(res.fmtName)})`,res.bytes,url,"FNSKU sticker preview");
       status(`Done — ${res.stickers} sticker(s) on ${res.pages} page(s). Print at 100% scale (no "fit to page").`+(res.dense?" Note: long codes print quite dense on this sticker size — test-scan one sticker before printing the lot.":""));
     }catch(err){
       status("Something went wrong: "+((err&&err.message)||err));
@@ -9572,7 +9611,7 @@ async function gstinvGenerate(){
     const dl=document.getElementById("gstinv-dl");
     if(dl){dl.href=url;dl.style.display="inline-block";}
     const prev=document.getElementById("gstinv-prev");
-    if(prev) prev.innerHTML=`<div class="panel"><h4>Preview — ${invoices.length} invoice(s), ${doc.getPageCount()} page(s)</h4><iframe class="pdfprev" src="${url}" title="GST invoices preview"></iframe></div>`;
+    if(prev) pdfPreviewInto(prev,`Preview — ${invoices.length} invoice(s), ${doc.getPageCount()} page(s)`,bytes,url,"GST invoices preview");
     const intraN=invoices.filter(i=>i.intra).length;
     const gross=invoices.reduce((s,i)=>s+i.total,0);
     gstinvStatus(`Done — ${invoices.length} invoice(s) (${inr(gross)} incl. GST): ${intraN} CGST+SGST, ${invoices.length-intraN} IGST. Invoice numbers ${invoices[0]?invoices[0].invNo:""}–${invoices.length?invoices[invoices.length-1].invNo:""}. Check the preview, then download. Set the starting number to ${num} for your next batch.`);
