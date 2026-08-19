@@ -7946,10 +7946,32 @@ function renderLabelCropper(){
               if(!half.oid){const mo2=it.s.match(/\b(\d{3}-\d{7}-\d{7})\b/);if(mo2)half.oid=mo2[1];}
               if(c&&!cap) cap=c;
             }
+            // Raw Amazon invoice pages: read the line-item table by column
+            // position — the seller SKU is the "( ... )" after the ASIN in
+            // the Description column, qty is the digits under the Qty
+            // header. Joined-text regexes can't do this reliably: reading
+            // order interleaves amounts into the description (mangling
+            // names) and a Qty *column* never matches "Qty: n" patterns.
+            let colSku="",colQty=0;
+            const hDesc=posItems.find(t=>t.s.trim()==="Description");
+            const hQty=posItems.find(t=>t.s.trim()==="Qty");
+            if(hDesc&&hQty&&hQty.x>hDesc.x){
+              const rightOf=(x0,names)=>posItems.reduce((m2,t)=>names.indexOf(t.s.trim())>=0&&t.x>x0?Math.min(m2,t.x):m2,Infinity);
+              const descEnd=Math.min(rightOf(hDesc.x,["Unit","Unit Price","Qty"]),hQty.x);
+              const qtyEnd=rightOf(hQty.x,["Net","Net Amount","Tax","Tax Rate"]);
+              const descText=posItems.filter(t=>t.y<hDesc.y-2&&t.x>=hDesc.x-2&&t.x<descEnd-2)
+                .map(t=>t.s).join(" ");
+              const dm=descText.match(/\bB0[A-Z0-9]{8}\b\s*\(\s*([^)]{2,120}?)\s*\)/);
+              if(dm) colSku=dm[1].replace(/\s+/g," ").trim();
+              const qv=posItems.filter(t=>t.y<hQty.y-2&&t.x>=hQty.x-15&&t.x<(qtyEnd===Infinity?hQty.x+40:qtyEnd)&&/^\d{1,4}$/.test(t.s.trim()))
+                .sort((a,b)=>b.y-a.y)[0];
+              if(qv) colQty=parseInt(qv.s,10)||0;
+            }
             // 1) explicit "SKU: xyz" marker (raw Amazon labels/invoices)
             const m=text.match(/\bSKU\b\s*[:#\-]?\s*([A-Za-z0-9][A-Za-z0-9_\-\/\.]{1,39})/i);
             if(m) info.sku=m[1];
             else if(cap) info.sku=cap[1].trim();
+            else if(colSku) info.sku=colSku.slice(0,60);
             else{
               // joined-text fallbacks for captions split across items
               const m2=text.match(/([A-Za-z0-9][^|]{1,60}?)\s*\|\s*Qty\s*[:#]?\s*\d+/i);
@@ -7972,6 +7994,7 @@ function renderLabelCropper(){
               }
             }
             if(cap) info.qty=parseInt(cap[2],10)||0;
+            else if(colQty) info.qty=colQty;
             else{
               const mq=text.match(/\bQty\s*[-:#]?\s*(\d+)/i);
               if(mq) info.qty=parseInt(mq[1],10)||0;
