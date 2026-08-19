@@ -7948,24 +7948,37 @@ function renderLabelCropper(){
             }
             // Raw Amazon invoice pages: read the line-item table by column
             // position — the seller SKU is the "( ... )" after the ASIN in
-            // the Description column, qty is the digits under the Qty
-            // header. Joined-text regexes can't do this reliably: reading
-            // order interleaves amounts into the description (mangling
-            // names) and a Qty *column* never matches "Qty: n" patterns.
+            // the Description column; qty is the lone bare integer among
+            // the row's right-hand cells, because every other number there
+            // carries ₹ / decimals / a minus (discounts) / % (tax rate).
+            // pdf.js often merges adjacent cells into one text item
+            // ("Discount Qty ", "2 ₹170.08 5%"), so neither exact header
+            // matching nor per-column x-bands can be trusted for the qty.
             let colSku="",colQty=0;
             const hDesc=posItems.find(t=>t.s.trim()==="Description");
-            const hQty=posItems.find(t=>t.s.trim()==="Qty");
-            if(hDesc&&hQty&&hQty.x>hDesc.x){
-              const rightOf=(x0,names)=>posItems.reduce((m2,t)=>names.indexOf(t.s.trim())>=0&&t.x>x0?Math.min(m2,t.x):m2,Infinity);
-              const descEnd=Math.min(rightOf(hDesc.x,["Unit","Unit Price","Qty"]),hQty.x);
-              const qtyEnd=rightOf(hQty.x,["Net","Net Amount","Tax","Tax Rate"]);
-              const descText=posItems.filter(t=>t.y<hDesc.y-2&&t.x>=hDesc.x-2&&t.x<descEnd-2)
+            const hQty=hDesc&&posItems.find(t=>/\bQty\b/.test(t.s)&&t.x>hDesc.x&&Math.abs(t.y-hDesc.y)<26);
+            if(hDesc&&hQty){
+              const rightOf=(x0,names)=>posItems.reduce((mm,t)=>names.indexOf(t.s.trim())>=0&&t.x>x0?Math.min(mm,t.x):mm,Infinity);
+              const descEnd=Math.min(rightOf(hDesc.x,["Unit","Unit Price"]),hQty.x);
+              const headY=Math.min(hDesc.y,hQty.y)-4;
+              // The table body ends at TOTAL / Amount in Words — footer
+              // text below that ("Page 1 of 1", payment details) must not
+              // be mistaken for row cells.
+              const floor=posItems.reduce((mm,t)=>/^(TOTAL:?$|Amount in Words)/.test(t.s.trim())&&t.y<headY?Math.max(mm,t.y):mm,-1)+2;
+              const descText=posItems.filter(t=>t.y<headY&&t.y>floor&&t.x>=hDesc.x-2&&t.x<descEnd-2)
                 .map(t=>t.s).join(" ");
               const dm=descText.match(/\bB0[A-Z0-9]{8}\b\s*\(\s*([^)]{2,120}?)\s*\)/);
               if(dm) colSku=dm[1].replace(/\s+/g," ").trim();
-              const qv=posItems.filter(t=>t.y<hQty.y-2&&t.x>=hQty.x-15&&t.x<(qtyEnd===Infinity?hQty.x+40:qtyEnd)&&/^\d{1,4}$/.test(t.s.trim()))
-                .sort((a,b)=>b.y-a.y)[0];
-              if(qv) colQty=parseInt(qv.s,10)||0;
+              // Row cells right of the description, top to bottom; cells
+              // with lowercase letters are prose, not table values.
+              const cells=posItems.filter(t=>t.y<headY&&t.y>floor&&t.x>=descEnd-2&&!/[a-z]/.test(t.s))
+                .sort((a,b)=>(b.y-a.y)||(a.x-b.x));
+              outer:
+              for(const c of cells){
+                for(const tk of c.s.split(/\s+/)){
+                  if(/^\d{1,4}$/.test(tk)){colQty=parseInt(tk,10);break outer;}
+                }
+              }
             }
             // 1) explicit "SKU: xyz" marker (raw Amazon labels/invoices)
             const m=text.match(/\bSKU\b\s*[:#\-]?\s*([A-Za-z0-9][A-Za-z0-9_\-\/\.]{1,39})/i);
