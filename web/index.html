@@ -8203,9 +8203,7 @@ function renderLabelCropper(){
         }
       }
       // Labels only. SKU-wise is the default sort; unrecognised SKUs go
-      // last in their original order. Multi-item orders group under the
-      // joined SKU list so no product hides behind the first line item.
-      const skuKey=x=>x.items&&x.items.length>1?x.items.map(t=>t.sku).join("  +  "):(x.sku||"");
+      // last in their original order.
       const orderList=lcPageInfo.filter(x=>!x.inv);
       if(sortMode==="sku") orderList.sort((a,b)=>{
         const ka=a.sku||"￿", kb=b.sku||"￿";
@@ -8389,11 +8387,16 @@ function renderLabelCropper(){
       if(olist!=="no"){
         const font=await outDoc.embedFont(PDFLib.StandardFonts.Helvetica);
         const fontB=await outDoc.embedFont(PDFLib.StandardFonts.HelveticaBold);
+        // Each product counts under its own SKU row — a packet holding
+        // two products appears in two rows (the labels' captions carry
+        // the full contents), and the Total row says how many packets
+        // hold multiple SKUs so the arithmetic stays checkable.
         const groups=new Map();
         for(const x of orderList){
-          const k=skuKey(x)||"(not detected)";
-          groups.set(k,(groups.get(k)||0)+1);
+          for(const k of x.items&&x.items.length>1?x.items.map(t=>t.sku):[x.sku||"(not detected)"])
+            groups.set(k,(groups.get(k)||0)+1);
         }
+        const multi=orderList.filter(x=>x.items&&x.items.length>1).length;
         const rows=[...groups.entries()].sort((a,b)=>a[0]<b[0]?-1:1);
         const mkPage=n=>olist==="first"?outDoc.insertPage(n,[A4W,A4H]):outDoc.addPage([A4W,A4H]);
         // Full-grid ORD | SKU table (ORD = packets of that SKU) with a
@@ -8422,7 +8425,7 @@ function renderLabelCropper(){
           if(withTotal){
             bottom=y-ROW-6;
             pageO.drawLine({start:{x:TL,y},end:{x:TR,y},thickness:1,color:black});
-            pageO.drawText(`Total package: ${labels}`,{x:TL+12,y:bottom+10,size:13,font:fontB});
+            pageO.drawText(`Total package: ${labels}${multi?`  (${multi} contain 2+ SKUs)`:""}`,{x:TL+12,y:bottom+10,size:13,font:fontB});
           }
           pageO.drawRectangle({x:TL,y:bottom,width:TR-TL,height:tableTop-bottom,borderColor:black,borderWidth:1.2});
           const vEnd=withTotal?y:bottom;
@@ -8456,9 +8459,9 @@ function renderLabelCropper(){
       // Compact detection summary — chips per SKU, no table.
       {
         const counts={};
-        orderList.forEach(x=>{const k=skuKey(x);if(k)counts[k]=(counts[k]||0)+1;});
+        orderList.forEach(x=>{for(const k of x.items&&x.items.length>1?x.items.map(t=>t.sku):[x.sku]) if(k)counts[k]=(counts[k]||0)+1;});
         const entries=Object.entries(counts);
-        const unknown=orderList.length-entries.reduce((s,e)=>s+e[1],0);
+        const unknown=orderList.filter(x=>!x.sku&&!(x.items&&x.items.length)).length;
         document.getElementById("lc-skus").innerHTML=(entries.length||detectFailed)?`<div class="panel">
           ${detectFailed?`<div class="banner warn">The text-reading engine could not load, so labels are in their original order. Nothing was uploaded anywhere — try again once online.</div>`:""}
           ${entries.length?`<div class="chips">${entries.map(([k,n])=>`<span class="chip">${esc(k)} · ${n}</span>`).join("")}${unknown?`<span class="chip">(no SKU read) · ${unknown}</span>`:""}</div>`:""}
