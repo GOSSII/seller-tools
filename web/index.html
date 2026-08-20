@@ -8080,18 +8080,24 @@ function renderLabelCropper(){
               const floor=posItems.reduce((mm,t)=>/^(TOTAL:?$|Amount in Words)/.test(t.s.trim())&&t.y<headY?Math.max(mm,t.y):mm,-1)+2;
               const descText=posItems.filter(t=>t.y<headY&&t.y>floor&&t.x>=hDesc.x-2&&t.x<descEnd-2)
                 .map(t=>t.s).join(" ");
-              const dm=descText.match(/\bB0[A-Z0-9]{8}\b\s*\(\s*([^)]{2,120}?)\s*\)/);
-              if(dm) colSku=dm[1].replace(/\s+/g," ").trim();
+              // Every line item, in row order — an order can hold several
+              // products, and a label captioned with only the first one
+              // would make the packer ship an incomplete parcel.
+              const skus=[...descText.matchAll(/\bB0[A-Z0-9]{8}\b\s*\(\s*([^)]{2,120}?)\s*\)/g)]
+                .map(m2=>m2[1].replace(/\s+/g," ").trim());
               // Row cells right of the description, top to bottom; cells
-              // with lowercase letters are prose, not table values.
+              // with lowercase letters are prose, not table values. One
+              // bare integer per row = that row's qty.
               const cells=posItems.filter(t=>t.y<headY&&t.y>floor&&t.x>=descEnd-2&&!/[a-z]/.test(t.s))
                 .sort((a,b)=>(b.y-a.y)||(a.x-b.x));
-              outer:
+              const ints=[];
               for(const c of cells){
                 for(const tk of c.s.split(/\s+/)){
-                  if(/^\d{1,4}$/.test(tk)){colQty=parseInt(tk,10);break outer;}
+                  if(/^\d{1,4}$/.test(tk)){ints.push(parseInt(tk,10));break;}
                 }
               }
+              if(skus.length){colSku=skus[0];colQty=ints[0]||0;}
+              if(skus.length>1) info.items=skus.map((s2,i2)=>({sku:s2,qty:ints[i2]||0}));
             }
             // 1) explicit "SKU: xyz" marker (raw Amazon labels/invoices)
             const m=text.match(/\bSKU\b\s*[:#\-]?\s*([A-Za-z0-9][A-Za-z0-9_\-\/\.]{1,39})/i);
@@ -8193,10 +8199,13 @@ function renderLabelCropper(){
           if(!x.sku&&iv.sku) x.sku=iv.sku;
           if(!x.oid&&iv.oid) x.oid=iv.oid;
           if(!x.qty&&iv.qty) x.qty=iv.qty;
+          if(!x.items&&iv.items) x.items=iv.items;
         }
       }
       // Labels only. SKU-wise is the default sort; unrecognised SKUs go
-      // last in their original order.
+      // last in their original order. Multi-item orders group under the
+      // joined SKU list so no product hides behind the first line item.
+      const skuKey=x=>x.items&&x.items.length>1?x.items.map(t=>t.sku).join("  +  "):(x.sku||"");
       const orderList=lcPageInfo.filter(x=>!x.inv);
       if(sortMode==="sku") orderList.sort((a,b)=>{
         const ka=a.sku||"￿", kb=b.sku||"￿";
@@ -8258,7 +8267,9 @@ function renderLabelCropper(){
           const parts=[];
           if(numPrint) parts.push((labels+1)+" / "+orderList.length);
           if(skuPos==="top"&&(info.sku||info.qty)) parts.push(
-            (info.sku||"")+(info.sku&&info.qty?" | ":"")+(info.qty?"Qty - "+info.qty:""));
+            info.items&&info.items.length>1
+              ? info.items.map(t=>t.sku+(t.qty?" x"+t.qty:"")).join(" + ")
+              : (info.sku||"")+(info.sku&&info.qty?" | ":"")+(info.qty?"Qty - "+info.qty:""));
           if(dtPrint) parts.push(dtStamp);
           const strip=parts.join("  ·  ");
           if(strip){
@@ -8268,17 +8279,24 @@ function renderLabelCropper(){
           }
         }
         if(skuPrint&&skuPos!=="top"&&(info.sku||info.qty)){
-          const capText=((info.sku||"")+(info.sku&&info.qty?" | ":"")+(info.qty?"Qty - "+info.qty:"")).slice(0,64);
+          // Multi-item orders print one line per product so the packer
+          // fills the parcel completely.
+          const capLines=info.items&&info.items.length>1
+            ? info.items.slice(0,4).map(t=>(t.sku+(t.qty?" | Qty - "+t.qty:"")).slice(0,64))
+            : [((info.sku||"")+(info.sku&&info.qty?" | ":"")+(info.qty?"Qty - "+info.qty:"")).slice(0,64)];
+          const bandH=14*capLines.length;
           // Middle: just under the measured content bottom — where Amazon
           // prints its own caption, after the seller/GSTIN/invoice table.
           // Bottom, split halves, or no measurement: strip at the page's
           // bottom edge instead.
-          let capTop=16;
+          let capTop=bandH+2;
           if(skuPos==="mid"&&info.botFrac!==undefined&&info.region===undefined)
-            capTop=Math.max(16,Math.min(430,dy+ch*scale*(1-info.botFrac)-2));
-          const size2=capText.length>44?8:10;
-          page.drawRectangle({x:0,y:capTop-14,width:288,height:14,color:white()});
-          page.drawText(capText,{x:10,y:capTop-11,size:size2,font:skuFont,color:PDFLib.rgb(0,0,0)});
+            capTop=Math.max(bandH+2,Math.min(430,dy+ch*scale*(1-info.botFrac)-2));
+          page.drawRectangle({x:0,y:capTop-bandH,width:288,height:bandH,color:white()});
+          capLines.forEach((ln,li)=>{
+            const size2=ln.length>44?8:10;
+            page.drawText(ln,{x:10,y:capTop-11-14*li,size:size2,font:skuFont,color:PDFLib.rgb(0,0,0)});
+          });
         }
         labels++;
         if(invDoc){
@@ -8373,7 +8391,7 @@ function renderLabelCropper(){
         const fontB=await outDoc.embedFont(PDFLib.StandardFonts.HelveticaBold);
         const groups=new Map();
         for(const x of orderList){
-          const k=x.sku||"(not detected)";
+          const k=skuKey(x)||"(not detected)";
           groups.set(k,(groups.get(k)||0)+1);
         }
         const rows=[...groups.entries()].sort((a,b)=>a[0]<b[0]?-1:1);
@@ -8414,7 +8432,8 @@ function renderLabelCropper(){
         for(const [sku,n] of rows){
           if(y-ROW<80){closeTable(false);startPage();}
           pageO.drawText(String(n),{x:TL+12,y:y-ROW+8,size:12,font:fontB});
-          pageO.drawText(sku.slice(0,80),{x:C1+12,y:y-ROW+8,size:12,font});
+          const rs=sku.length>62?9:12;
+          pageO.drawText(sku.slice(0,rs===12?62:88),{x:C1+12,y:y-ROW+8,size:rs,font});
           y-=ROW;
           // full grid: a rule under every row
           pageO.drawLine({start:{x:TL,y},end:{x:TR,y},thickness:0.8,color:black});
@@ -8437,7 +8456,7 @@ function renderLabelCropper(){
       // Compact detection summary — chips per SKU, no table.
       {
         const counts={};
-        orderList.forEach(x=>{if(x.sku)counts[x.sku]=(counts[x.sku]||0)+1;});
+        orderList.forEach(x=>{const k=skuKey(x);if(k)counts[k]=(counts[k]||0)+1;});
         const entries=Object.entries(counts);
         const unknown=orderList.length-entries.reduce((s,e)=>s+e[1],0);
         document.getElementById("lc-skus").innerHTML=(entries.length||detectFailed)?`<div class="panel">
