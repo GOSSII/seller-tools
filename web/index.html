@@ -799,10 +799,10 @@
     <nav class="foot-nav" aria-label="Footer">
       <a href="#/pricing">Pricing</a>
       <a href="#/changelog">What's new</a>
-      <a href="/terms.html">Terms</a>
-      <a href="/privacy.html">Privacy</a>
-      <a href="/refunds.html">Refunds</a>
-      <a href="/contact.html">Contact</a>
+      <a href="/terms">Terms</a>
+      <a href="/privacy">Privacy</a>
+      <a href="/refunds">Refunds</a>
+      <a href="/contact">Contact</a>
     </nav>
     Fee rates reflect published 2026 marketplace rate cards and are estimates — always confirm against your own Seller Central rate card before pricing.<br>
     &copy; <span id="foot-year">2026</span> Seller Tools India.
@@ -2093,9 +2093,9 @@ function renderSignup(){
         <input id="su-pass" type="password" autocomplete="new-password" placeholder="At least 6 characters">
         <label class="showpass"><input type="checkbox" data-showpass="su-pass"> Show password</label></div>
       <label class="agree"><input type="checkbox" id="su-agree">
-        <span>I agree to the <a href="/terms.html" target="_blank" rel="noopener">Terms</a> and <a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</span></label>
+        <span>I agree to the <a href="/terms" target="_blank" rel="noopener">Terms</a> and <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</span></label>
       <button type="submit" class="bigbtn" id="su-submit">Create account</button>
-      <p class="sa-sub" style="margin:0;font-size:12px">Continuing with Google also means you agree to the <a href="/terms.html" target="_blank" rel="noopener">Terms</a> and <a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</p>
+      <p class="sa-sub" style="margin:0;font-size:12px">Continuing with Google also means you agree to the <a href="/terms" target="_blank" rel="noopener">Terms</a> and <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</p>
     </form>
     <div class="auth-links">Already have an account? <a href="#/login">Log in</a></div>`);
   const form=document.getElementById("signup-form"), msg=document.getElementById("signup-msg"),
@@ -2802,7 +2802,7 @@ function renderAccount(){
           <h3>Need help?</h3>
           <p class="sa-sub" style="margin:0 0 4px">Billing question, wrong charge, or a report that looks off — email us and we reply within a day.</p>
           <div class="acct-row"><span class="k">Email</span><span class="v"><a href="mailto:gossiistudio@gmail.com">gossiistudio@gmail.com</a></span></div>
-          <div class="acct-row"><span class="k">Refunds</span><span class="v"><a href="/refunds.html" target="_blank" rel="noopener">7-day refund policy →</a></span></div>
+          <div class="acct-row"><span class="k">Refunds</span><span class="v"><a href="/refunds" target="_blank" rel="noopener">Refund policy →</a></span></div>
         </div>
       </div>
       <div>
@@ -3115,7 +3115,7 @@ function renderAccount(){
         <summary>Login activity &amp; devices
           <span class="sum">${events.length?`${events.length} sign-in${events.length===1?"":"s"} since ${esc(fmtDate(events[events.length-1].at))}`:`${devices.length} device${devices.length===1?"":"s"}`} — click to expand</span></summary>
         ${devHtml}${evHtml}
-        <p style="font-size:12.5px;color:var(--faint);margin-top:10px">We record login time, IP, browser/OS and a device identifier to enforce one active login and the device limit — see our <a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</p>
+        <p style="font-size:12.5px;color:var(--faint);margin-top:10px">We record login time, IP, browser/OS and a device identifier to enforce one active login and the device limit — see our <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</p>
         <button type="button" class="lp-btn sec" id="ac-logout-all" style="margin-top:8px">Log out everywhere</button>
       </details>`;
       const lo=document.getElementById("ac-logout-all");
@@ -3657,8 +3657,8 @@ function renderHome(){
         <details><summary>Which marketplaces do you support?</summary><p>Amazon India (Amazon.in) only. Fees, GST and settlement formats are all specific to the India marketplace.</p></details>
         <details><summary>How do I get my settlement report?</summary><p>In Seller Central go to Payments → Reports Repository (or Date Range Reports) and download the transaction/settlement report, then paste or upload it into the Settlement Analyzer.</p></details>
         <details><summary>Do plans auto-renew?</summary><p>Yes — plans renew automatically at the same price so your reports don't stop mid-month. You can <b>cancel anytime</b> from your account page in one click; you keep access until the end of the period you've already paid for, and you're never charged again after cancelling. Under RBI rules your bank or UPI app notifies you before each automatic payment, so a renewal is never a surprise.</p></details>
-        <details><summary>What is your refund policy?</summary><p>You keep access until your paid period ends. Payments are non-refundable once a plan is activated, except for duplicate or failed charges. See our <a href="/refunds.html">Refund Policy</a> for details.</p></details>
-        <details><summary>How do I contact you?</summary><p>Email <a href="mailto:gossiistudio@gmail.com">gossiistudio@gmail.com</a> — see the <a href="/contact.html">Contact</a> page for expected reply times.</p></details>
+        <details><summary>What is your refund policy?</summary><p>You keep access until your paid period ends. Payments are non-refundable once a plan is activated, except for duplicate or failed charges. See our <a href="/refunds">Refund Policy</a> for details.</p></details>
+        <details><summary>How do I contact you?</summary><p>Email <a href="mailto:gossiistudio@gmail.com">gossiistudio@gmail.com</a> — see the <a href="/contact">Contact</a> page for expected reply times.</p></details>
       </section>
 
       <div class="lp2-cta">
@@ -3783,7 +3783,7 @@ function renderPricing(){
           ${paidBtn(pr," sec")}
         </div>
       </div>
-      <p class="pr-note">Prices in INR, inclusive of applicable taxes. Plans renew automatically and can be cancelled anytime from your account. See our <a href="/refunds.html">Refund Policy</a>. Tools are estimates; always verify against Seller Central and your CA.</p>
+      <p class="pr-note">Prices in INR, inclusive of applicable taxes. Plans renew automatically and can be cancelled anytime from your account. See our <a href="/refunds">Refund Policy</a>. Tools are estimates; always verify against Seller Central and your CA.</p>
     </div>`;
   /* A Starter user looking at Pro deserves to know what happens to the
      time they already paid for: it converts to Pro days by value, and
@@ -4828,7 +4828,7 @@ function saRenderResults(){
     <span>${okRecon?'matches the deposit total to the paisa.':`differs from the deposit total by ${inr(diff)}; check the file is complete.`}</span>
   </div>`;
   if(Math.abs(agg.unknown)>=0.005)
-    h+=`<div class="banner warn" style="text-align:left"><b>${inr(agg.unknown)}</b> of this settlement is a transaction type this tool does not recognise yet. It <b>is</b> included in the payout reconciliation above — it is real money — but it is deliberately left out of the fee and profit figures, because guessing what it was is how a number becomes wrong. You can see the exact labels in the breakdown below, marked “Not recognised”. If you tell us what they are we'll add them: <a href="/contact.html">contact</a>.</div>`;
+    h+=`<div class="banner warn" style="text-align:left"><b>${inr(agg.unknown)}</b> of this settlement is a transaction type this tool does not recognise yet. It <b>is</b> included in the payout reconciliation above — it is real money — but it is deliberately left out of the fee and profit figures, because guessing what it was is how a number becomes wrong. You can see the exact labels in the breakdown below, marked “Not recognised”. If you tell us what they are we'll add them: <a href="/contact">contact</a>.</div>`;
 
   if(r.summary)
     h+=`<div class="panel"><div class="sa-sub" style="font-size:13px">Settlement <b>${esc(r.summary.settlementId)}</b> · ${esc(r.summary.settlementStartDate)} → ${esc(r.summary.settlementEndDate)} · deposited ${esc(r.summary.depositDate)}${agg.credits?` · credits &amp; reimbursements ${inr(agg.credits)}`:""}</div></div>`;
@@ -11900,7 +11900,7 @@ function renderChangelog(){
     <p class="lede">Every shipped change a seller can feel, newest first.</p>
     ${CHANGELOG.map(c=>`<div class="panel"><h4>${esc(c.t)} <span class="sa-sub">— ${esc(fmtDate(c.d))}</span></h4>
       <p class="sa-sub" style="margin:6px 0 0;font-size:13.5px;line-height:1.65">${esc(c.n)}</p></div>`).join("")}
-    <div class="banner info">Something broken, or something you wish existed? Tell us: <a href="/contact.html">contact</a>.</div>
+    <div class="banner info">Something broken, or something you wish existed? Tell us: <a href="/contact">contact</a>.</div>
   </div>`;
 }
 function sendPing(){
