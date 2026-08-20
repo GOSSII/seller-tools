@@ -8,7 +8,7 @@
 <title>Seller Tools India — Amazon India Profit &amp; Fee Calculators</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Calistoga&display=swap" rel="stylesheet">
-<meta name="description" content="15 reports + 18 free tools for Amazon India sellers: settlement analyzer, SAFE-T refund finder, RTO radar, storage rent, stranded stock, ads optimizer, GST filing. Files never leave your browser. From ₹199/month.">
+<meta name="description" content="13 reports + 20 free tools for Amazon India sellers: settlement analyzer, SAFE-T refund finder, RTO radar, storage rent, stranded stock, ads optimizer, GST filing. Files never leave your browser. From ₹199/month.">
 <link rel="canonical" href="https://sellertoolsindia.com/">
 <meta property="og:title" content="Seller Tools India — Amazon ka poora hisaab">
 <meta property="og:description" content="Refunds Amazon still owes you, RTO hotspots, storage rent on dead stock, GST-ready numbers — from the reports you already download. Files never leave your browser.">
@@ -20,7 +20,7 @@
 <meta property="og:locale" content="en_IN">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Seller Tools India — Amazon ka poora hisaab">
-<meta name="twitter:description" content="15 reports + 18 free tools for Amazon.in sellers. Files never leave your browser. From ₹199/month.">
+<meta name="twitter:description" content="13 reports + 20 free tools for Amazon.in sellers. Files never leave your browser. From ₹199/month.">
 <meta name="twitter:image" content="https://sellertoolsindia.com/og-card.png">
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Seller Tools India","applicationCategory":"BusinessApplication","operatingSystem":"Web","description":"Analytics and recovery tools for Amazon India sellers — settlement analyzer, SAFE-T refund finder, RTO radar, storage and stranded-stock reports, ads optimizer and GST filing reports. All files processed in the browser.","offers":[{"@type":"Offer","price":"0","priceCurrency":"INR","name":"Free"},{"@type":"Offer","price":"199","priceCurrency":"INR","name":"Starter (monthly)"},{"@type":"Offer","price":"499","priceCurrency":"INR","name":"Pro (monthly)"}],"url":"https://sellertoolsindia.com/"}</script>
 <style>
@@ -2498,13 +2498,6 @@ function renderPaywall(info){
 
 /* Small pure-CSS teaser mockups reused in the paywall panels. */
 const PW_MOCKS={
-  labels:`<div class="row"><span>A4 label pages read</span><b>100</b></div>
-    <div class="row"><span>Sorted SKU-wise</span><b>27 SKUs</b></div>
-    <div class="row"><span>SKU | Qty printed on each</span><b>✓</b></div>
-    <div class="row"><span>Ready to print</span><b class="big">100 × 4×6</b></div>`,
-  printer:`<div class="row"><span>Unshipped orders</span><b>36</b></div>
-    <div class="row"><span>Picklist</span><b>14 SKUs · 52 units</b></div>
-    <div class="row"><span>Packing slips</span><b class="big">36 pages</b></div>`,
   settlement:`<div class="row"><span>Product charges</span><b class="amt pos">+₹42,180</b></div>
     <div class="row"><span>Fees + shipping</span><b class="amt neg">−₹10,756</b></div>
     <div class="row"><span>Refunds</span><b class="amt neg">−₹1,841</b></div>
@@ -2558,16 +2551,6 @@ const PW_MOCKS={
     <div class="row"><span>CABLE-USB-C · weight band 2 → 1</span><b class="amt pos">+₹20/u</b></div>
     <div class="row"><span>Worth per month</span><b class="big">₹18,430</b></div>`
 };
-const LC_INFO={route:"label-cropper",title:"Amazon Label Cropper",plan:"Starter",
-  price:"₹199/month — unlock with Starter",priceAlt:"or ₹999/year (save ~58%)",
-  desc:"Amazon's A4 label PDFs become clean 4×6 thermal pages — sorted, captioned and counted for the packing table.",
-  feats:["Labels sorted SKU-wise, with SKU | Qty printed on each","Page numbers and an Order List page to verify the stack","Multi-product orders captioned in full — nothing ships short"],
-  mock:PW_MOCKS.labels};
-const OP_INFO={route:"order-printer",title:"Amazon Order Printer",plan:"Starter",
-  price:"₹199/month — unlock with Starter",priceAlt:"or ₹999/year (save ~58%)",
-  desc:"Your unshipped-orders report becomes a picklist and packing slips in one click.",
-  feats:["Picklist with total units per SKU — one trip to the shelf","One packing slip per order, each on its own page","Customer addresses straight from the report, if enabled"],
-  mock:PW_MOCKS.printer};
 const SA_INFO={route:"settlement-analyzer",title:"Amazon Settlement Analyzer",plan:"Starter",
   price:"₹199/month — unlock with Starter",priceAlt:"or ₹999/year (save ~58%)",
   desc:"See where every rupee of your payout went — straight from your settlement file.",
@@ -2956,17 +2939,16 @@ function renderAccount(){
       if(rn) rn.textContent=ent.plan==="free"?"Upgrade":"Renew / change plan";
       if(ft){
         const feats=ent.plan==="pro"
-          ?["Label Cropper","Order Printer","Settlement Analyzer","Reconciliation &amp; SAFE-T","GST &amp; TCS Report","SKU P&amp;L with your costs",
+          ?["Settlement Analyzer","Reconciliation &amp; SAFE-T","GST &amp; TCS Report","SKU P&amp;L with your costs",
             "Ads Optimizer + Ad Profit","Returns, RTO, Storage, Stranded","Traffic Doctor","Multi-Month Trends",
             "Share reports as branded PDFs"]
           :ent.plan==="starter"
-          ?["Label Cropper","Order Printer","Settlement Analyzer","GST &amp; TCS Report","SKU Profitability Report","Multi-Month Trends"]
+          ?["Settlement Analyzer","GST &amp; TCS Report","SKU Profitability Report","Multi-Month Trends"]
           :null;
         if(feats) ft.innerHTML=`<h4 class="acct-h4">What's included</h4>
           <ul class="acct-feats">${feats.map(f=>`<li><span class="tick">✓</span>${f}</li>`).join("")}</ul>`;
         else ft.innerHTML=`<h4 class="acct-h4">What a plan unlocks</h4>
           <ul class="acct-feats">
-            <li><span class="tick">✓</span>Label Cropper &amp; Order Printer <span class="pchip m">Starter</span></li>
             <li><span class="tick">✓</span>Settlement Analyzer <span class="pchip m">Starter</span></li>
             <li><span class="tick">✓</span>GST &amp; TCS Report <span class="pchip m">Starter</span></li>
             <li><span class="tick">✓</span>SKU Profitability Report <span class="pchip m">Starter</span></li>
@@ -3486,7 +3468,7 @@ function adminConfirmThen(btn,text,fn){
 
 function renderHome(){
   setMeta("Free Amazon India seller tools — profit, fees & settlement analyzer",
-    "Calculators, reports and packing tools for Amazon India sellers: true profit per SKU, FBA fees, settlement analyzer, GST report and 4×6 label cropper. Files never leave your browser.");
+    "Free calculators and tools for Amazon India sellers: true profit per SKU, FBA fees, settlement analyzer, GST report and 4×6 label cropper. Files never leave your browser.");
   backBtn.hidden=true;
   const heroBars=[34,48,28,60,44,72,52,88,64,96,70,100].map(h=>`<i style="height:${h}%"></i>`).join("");
   const minis=[{id:"link-builder",icon:"🔗",name:"Amazon Link Builder"},{id:"keyword-combiner",icon:"🔤",name:"Keyword Combiner"},{id:"listing-checker",icon:"📝",name:"Listing Quality Checker"}]
@@ -3538,7 +3520,7 @@ function renderHome(){
       </section>
 
       <section class="lp2-stats"><div class="lp2-stats-in">
-        <div><div class="v">18</div><div class="k">free tools &amp; calculators</div></div>
+        <div><div class="v">20</div><div class="k">free tools &amp; calculators</div></div>
         <div><div class="v">100%</div><div class="k">in-browser — nothing uploaded</div></div>
         <div><div class="v">₹199</div><div class="k">/mo for the paid reports</div></div>
         <div><div class="v">2026</div><div class="k">Amazon.in rate cards</div></div>
@@ -3563,7 +3545,7 @@ function renderHome(){
         const tkTool=(href,ic,name,line)=>`<a href="${href}">${TKI[ic]}<span class="t"><b>${name}</b><span>${line}</span></span><span class="ar">${TKI.arrow}</span></a>`;
         return `
       <div class="tk-h"><h2>Teen kaam. Barah tools. <span class="chip warnchip" style="vertical-align:middle;font-size:12px">Paid plans</span></h2>
-        <p>Har tool ek hi sawaal ka jawab deta hai — <b>mera paisa kahan hai?</b> Reports aap Seller Central se download karte ho, jawab yahan milta hai. <b>Ye chaudah tools paid plan mein hain</b> (₹199/mahina se); <a href="#tools">18 free tools</a> alag hain aur unke liye login bhi nahi chahiye.</p></div>
+        <p>Har tool ek hi sawaal ka jawab deta hai — <b>mera paisa kahan hai?</b> Reports aap Seller Central se download karte ho, jawab yahan milta hai. <b>Ye baarah tools paid plan mein hain</b> (₹199/mahina se); <a href="#tools">20 free tools</a> alag hain aur unke liye login bhi nahi chahiye.</p></div>
       <section class="tk-jobs">
         <div class="tk-job g">
           <div class="tag">Kaam #1</div><h3>Paisa wapas lo</h3>
@@ -3612,7 +3594,7 @@ function renderHome(){
           <div class="row"><span>Time saved every month</span><b id="sv-hours">—</b></div>
           <div class="row"><span>Worth per year (at an assumed ₹150/hour)</span><b class="amt pos" id="sv-value">—</b></div>
         </div>
-        <div class="note" style="margin-top:10px">The <a href="#/label-cropper">Label Cropper</a> and <a href="#/order-printer">Order Printer</a> do all of it in one click, with your files never leaving your browser.</div>
+        <div class="note" style="margin-top:10px">The <a href="#/label-cropper">Label Cropper</a> and <a href="#/order-printer">Order Printer</a> do all of it in one click — free, with your files never leaving your browser.</div>
       </div>
 
       <section class="lp2-sec" id="tools">
@@ -3620,8 +3602,10 @@ function renderHome(){
         <p>Start free, no login. Upgrade only when the paid reports save you more than they cost.</p>
       </section>
       <div class="lp2-plan"><span class="tag free">Free forever</span><span>No login needed — click any tool to open it</span></div>
-      <div class="grid g4" style="padding:14px 0 0">
+      <div class="grid" style="padding:14px 0 0">
         <a class="tile" href="#/profit"><span class="pill">Popular</span><div class="ico">🧮</div><h3>Amazon Profit Calculator</h3><p>Estimate profit per unit after Amazon's 2026 referral, closing and FBA fees, your product cost and the ad spend you expect.</p></a>
+        <a class="tile" href="#/label-cropper"><div class="ico">🏷️</div><h3>Amazon Label Cropper</h3><p>Crop Easy Ship A4 label PDFs to clean 4×6 thermal pages, sorted by SKU.</p></a>
+        <a class="tile" href="#/order-printer"><div class="ico">🖨️</div><h3>Amazon Order Printer</h3><p>Picklists and packing slips from your unshipped-orders report.</p></a>
         <a class="tile" href="#/payout-forecast"><div class="ico">💸</div><h3>Payout Date Forecaster</h3><p>Your next 6 settlement closes and estimated bank-credit dates — from your cycle and daily sales.</p></a>
         <a class="tile" href="#/gst-invoice"><div class="ico">🧾</div><h3>GST Invoice Generator</h3><p>Invoices for your self-ship orders — one merged A4 PDF, numbered in sequence, CGST+SGST or IGST by state.</p></a>
         <a class="tile" href="#/fnsku-labels"><div class="ico">📦</div><h3>FNSKU Barcode Sticker Generator</h3><p>Code 128 barcode stickers for FBA units — A4 65/40/24-up sheets or 4×6 thermal.</p></a>
@@ -3629,10 +3613,8 @@ function renderHome(){
       <div class="minigrid">
         ${minis.map(m=>`<a class="tile-mini" href="#/${m.id}"><span class="ico">${m.icon}</span>${esc(m.name)}</a>`).join("")}
       </div>
-      <div class="lp2-plan"><span class="tag starter">Starter · ₹199/mo</span><span>The reports that find money — and the packing-floor tools</span></div>
+      <div class="lp2-plan"><span class="tag starter">Starter · ₹199/mo</span><span>The reports that find money</span></div>
       <div class="grid" style="padding:14px 0 0">
-        <a class="tile" href="#/label-cropper"><div class="ico">🏷️</div><h3>Amazon Label Cropper</h3><p>Crop Easy Ship A4 label PDFs to clean 4×6 thermal pages, sorted by SKU.</p></a>
-        <a class="tile" href="#/order-printer"><div class="ico">🖨️</div><h3>Amazon Order Printer</h3><p>Picklists and packing slips from your unshipped-orders report.</p></a>
         <a class="tile" href="#/settlement-analyzer"><div class="ico">🧾</div><h3>Amazon Settlement Analyzer</h3><p>Every rupee of your payout itemised — reconciles to your deposit to the paisa.</p></a>
         <a class="tile" href="#/gst-report"><div class="ico">🧾</div><h3>GST &amp; TCS Report</h3><p>TCS, TDS 194-O and the GST charged on Amazon fees — a CA-ready breakdown for your ITC eligibility review.</p></a>
         <a class="tile" href="#/sku-report"><div class="ico">📊</div><h3>SKU Profitability Report</h3><p>Each SKU's settlement contribution after fees, taxes and refunds — and true profit once you add product costs.</p></a>
@@ -3658,7 +3640,7 @@ function renderHome(){
       </section>
       <div class="pr-grid" style="padding-top:16px">
         <div class="pr-card"><h3>Free</h3><div class="pr-price">₹0</div><div class="pr-alt">Forever. No login needed.</div>
-          <ul class="pr-feats"><li><span class="tick">✓</span> All 18 free calculators &amp; tools</li><li><span class="tick">✓</span> FNSKU stickers &amp; GST invoices</li><li><span class="tick">✓</span> Link builder &amp; keyword combiner</li><li><span class="tick">✓</span> Files never leave your browser</li></ul>
+          <ul class="pr-feats"><li><span class="tick">✓</span> All 20 free calculators &amp; tools</li><li><span class="tick">✓</span> Label cropper &amp; order printer</li><li><span class="tick">✓</span> FNSKU stickers &amp; GST invoices</li><li><span class="tick">✓</span> Files never leave your browser</li></ul>
           <button type="button" class="lp-btn sec" data-scroll="tools">Use free tools</button></div>
         <div class="pr-card pop"><span class="pr-badge">Most popular</span><h3>Starter</h3><div class="pr-price">₹199 <small>/ month</small></div><div class="pr-alt">or ₹999 / year (save ~58%)</div>
           <ul class="pr-feats"><li><span class="tick">✓</span> Everything in Free</li><li><span class="tick">✓</span> Settlement Analyzer</li><li><span class="tick">✓</span> GST &amp; TCS filing report</li><li><span class="tick">✓</span> SKU Profitability Report</li><li><span class="tick">✓</span> Multi-Month Trends</li></ul>
@@ -3670,7 +3652,7 @@ function renderHome(){
 
       <section class="lp-faq" aria-label="Frequently asked questions">
         <h2>Questions sellers ask</h2>
-        <details><summary>Is it really free?</summary><p>Yes — the 18 free tools are free with no login: every calculator, the FNSKU barcode sticker generator, GST invoice generator, link builder and keyword combiner. The packing tools (Label Cropper, Order Printer) and the advanced reports (Settlement Analyzer, GST report, SKU report, Trends and the Pro reports) are on a paid plan from ₹199/month. The free tools stay free.</p></details>
+        <details><summary>Is it really free?</summary><p>Yes — all 20 free tools are free with no login: every calculator, the label cropper, order printer, FNSKU barcode sticker generator, GST invoice generator, link builder and keyword combiner. The advanced reports (Settlement Analyzer, GST report, SKU report, Trends and the Pro reports) are on a paid plan from ₹199/month. The free tools stay free.</p></details>
         <details><summary>Do you upload or store my files?</summary><p>No. Settlement reports and label PDFs are processed entirely in your browser — they are never uploaded to any server. That is our core promise and it will always be true. Most other label-cropping sites upload your PDFs — including your customers' names and addresses — to their servers and promise to delete them later; we never receive them in the first place.</p></details>
         <details><summary>Which marketplaces do you support?</summary><p>Amazon India (Amazon.in) only. Fees, GST and settlement formats are all specific to the India marketplace.</p></details>
         <details><summary>How do I get my settlement report?</summary><p>In Seller Central go to Payments → Reports Repository (or Date Range Reports) and download the transaction/settlement report, then paste or upload it into the Settlement Analyzer.</p></details>
@@ -3720,7 +3702,7 @@ const PR_PRICES={
 };
 function renderPricing(){
   setMeta("Pricing — Seller Tools India",
-    "Simple pricing for Amazon India sellers. Free calculators and tools, plus Starter (₹199/month) and Pro (₹499/month) plans for the packing tools and settlement, GST and SKU reports.");
+    "Simple pricing for Amazon India sellers. Free calculators and tools, plus Starter (₹199/month) and Pro (₹499/month) plans for settlement, GST and SKU reports.");
   backBtn.hidden=false;
   const loggedIn=!!sessionUser();
   const per=pricingPeriod;
@@ -3751,6 +3733,8 @@ function renderPricing(){
           <div class="pr-alt">Forever. No login needed.</div>
           <ul class="pr-feats">
             <li><span class="tick">✓</span> All calculators (profit, fees, ACOS, price bands)</li>
+            <li><span class="tick">✓</span> Label Cropper — 4×6 with SKU</li>
+            <li><span class="tick">✓</span> Order Printer</li>
             <li><span class="tick">✓</span> GST Invoice Generator — self-ship invoices as one A4 PDF</li>
             <li><span class="tick">✓</span> Link Builder &amp; Keyword Combiner</li>
             <li><span class="tick">✓</span> FBA label maker &amp; listing checker</li>
@@ -3767,8 +3751,6 @@ function renderPricing(){
           <div class="pr-alt">${st.alt}</div>
           <ul class="pr-feats">
             <li><span class="tick">✓</span> Everything in Free</li>
-            <li><span class="tick">✓</span> Label Cropper — 4×6 labels, SKU-sorted &amp; captioned</li>
-            <li><span class="tick">✓</span> Order Printer — picklist &amp; packing slips</li>
             <li><span class="tick">✓</span> Settlement Analyzer — every rupee itemised</li>
             <li><span class="tick">✓</span> GST &amp; TCS Report for filing</li>
             <li><span class="tick">✓</span> SKU Profitability Report</li>
@@ -7798,11 +7780,11 @@ const CROP_PRESETS={
 };
 let lcFiles=[], lcBusy=false, lcPageInfo=[];
 
-function renderLabelCropper(){ gatePremium(LC_INFO, lcBody); }
+function renderLabelCropper(){ lcBody(); }
 function lcBody(){
   document.title="Amazon Label Cropper — Seller Tools India";
   const md=document.querySelector('meta[name="description"]');
-  if(md) md.setAttribute("content","Crop Amazon India Easy Ship A4 label PDFs to clean 4×6 thermal-printer pages — fully in your browser.");
+  if(md) md.setAttribute("content","Crop Amazon India Easy Ship A4 label PDFs to clean 4×6 thermal-printer pages — free, fully in your browser.");
   backBtn.hidden=false;
   let saved={};
   try{saved=JSON.parse(localStorage.getItem("lc_crop")||"{}");}catch(e){}
@@ -8556,11 +8538,11 @@ function parseOrdersReport(text){
 }
 
 let opParsed=null;
-function renderOrderPrinter(){ gatePremium(OP_INFO, opBody); }
+function renderOrderPrinter(){ opBody(); }
 function opBody(){
   document.title="Amazon Order Printer — Picklist & Packing Slips — Seller Tools India";
   const md=document.querySelector('meta[name="description"]');
-  if(md) md.setAttribute("content","Turn your Amazon unshipped-orders report into a printable picklist and packing slips — fully in your browser.");
+  if(md) md.setAttribute("content","Turn your Amazon unshipped-orders report into a printable picklist and packing slips — free, fully in your browser.");
   backBtn.hidden=false;
   app.innerHTML=`
     <div class="wrap page">
