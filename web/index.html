@@ -355,6 +355,14 @@
 
   /* ---- Label cropper / order printer ---- */
   .pdfprev{width:100%;height:480px;border:1px solid var(--line);border-radius:12px;background:#f7f9fc}
+  /* OAuth return: cover everything until the token exchange finishes —
+     without this the header/home paint first and the sign-in flow looks
+     broken. The inline script after <body> sets the class; the auth
+     handler removes it when it has rendered the right screen. */
+  html.authing header,html.authing footer,html.authing #app{visibility:hidden}
+  html.authing body::before{content:"Signing you in…";position:fixed;inset:0;display:flex;
+    align-items:center;justify-content:center;font-size:19px;font-weight:700;
+    color:var(--ink);background:var(--bg);z-index:999}
   .sa-drop.loaded{border-style:solid;border-color:#1e9e63;background:#f2fbf7}
   .sa-drop.loaded h3{color:#116b42}
   /* Once loaded, the invisible full-area input must not swallow clicks —
@@ -780,7 +788,7 @@
 </style>
 </head>
 <body>
-
+<script>if(/access_token=|error_description=|type=recovery/.test(location.hash)||/[?&]code=/.test(location.search))document.documentElement.className+=" authing";</script>
 <header>
   <div class="wrap mast">
     <a class="brand" href="/"><span class="logo" aria-hidden="true">₹</span><span class="txt"><span class="brand-full">Seller Tools India</span><span class="brand-short">Seller Tools</span></span></a>
@@ -2248,8 +2256,14 @@ function renderPhonePrompt(nextHash){
     finally{submit.disabled=false; submit.textContent="Save & continue";}
   });
 }
+let AUTH_REDIRECT_ACTIVE=false;
 async function handleAuthRedirect(){
-  if(!authTokensInUrl()) return false;
+  if(!authTokensInUrl()){ document.documentElement.classList.remove("authing"); return false; }
+  AUTH_REDIRECT_ACTIVE=true;
+  try{ return await handleAuthRedirectInner(); }
+  finally{ AUTH_REDIRECT_ACTIVE=false; document.documentElement.classList.remove("authing"); }
+}
+async function handleAuthRedirectInner(){
   // Paint immediately — the token exchange below takes a few seconds and
   // the home page flashing first reads as a broken redirect.
   payShell(`<div style="font-size:36px;line-height:1">🔐</div>
@@ -11888,7 +11902,7 @@ function route(){
   renderCalc(h);
   window.scrollTo(0,0);
 }
-window.addEventListener("hashchange",()=>{ if(!location.hash||location.hash.startsWith("#/")) route(); });
+window.addEventListener("hashchange",()=>{ if(AUTH_REDIRECT_ACTIVE) return; if(!location.hash||location.hash.startsWith("#/")) route(); });
 document.addEventListener("click",e=>{
   const a=e.target.closest?e.target.closest('a[href^="/"]'):null;
   if(!a) return;
@@ -11901,7 +11915,7 @@ document.addEventListener("click",e=>{
   route();
   window.scrollTo(0,0);
 });
-window.addEventListener("popstate",route);
+window.addEventListener("popstate",()=>{ if(!AUTH_REDIRECT_ACTIVE) route(); });
 /* Premium tools re-check entitlement when the tab regains focus, so a session
    kicked on another device locks here within seconds of the user returning. */
 const PREMIUM_ROUTES=["settlement-analyzer","gst-report","sku-report","sku-report/advanced","reconcile","trends","ad-profit","fee-bands","ads-optimizer","returns","storage","rto","stranded","traffic"];
