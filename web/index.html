@@ -8374,15 +8374,15 @@ function renderLabelCropper(){
         const groups=new Map();
         for(const x of orderList){
           const k=x.sku||"(not detected)";
-          const g=groups.get(k)||{count:0,units:0,qtys:new Set()};
-          g.count++; g.units+=x.qty||1; g.qtys.add(x.qty||1);
-          groups.set(k,g);
+          groups.set(k,(groups.get(k)||0)+1);
         }
         const rows=[...groups.entries()].sort((a,b)=>a[0]<b[0]?-1:1);
         const mkPage=n=>olist==="first"?outDoc.insertPage(n,[A4W,A4H]):outDoc.addPage([A4W,A4H]);
-        // Bordered ORD | QTY | SKU table with a Total row.
-        const TL=40,TR=A4W-40,C1=TL+70,C2=TL+140;
+        // Full-grid ORD | SKU table (ORD = packets of that SKU) with a
+        // Total row, and the site as a watermark at the bottom.
+        const TL=40,TR=A4W-40,C1=TL+70;
         const black=PDFLib.rgb(0,0,0), grey=PDFLib.rgb(0.45,0.45,0.45);
+        const site=/^(localhost|127\.)/.test(location.hostname)?"amazonsellertools.vercel.app":location.host;
         const ROW=24,HEAD=30;
         let inserted=0,pageO=null,y=0,tableTop=0;
         const startPage=()=>{
@@ -8390,11 +8390,12 @@ function renderLabelCropper(){
           let ty=A4H-46;
           pageO.drawText("Order List",{x:TL,y:ty,size:14,font:fontB});
           pageO.drawText(`${labels} labels — Seller Tools India`,{x:TR-160,y:ty+1,size:9,font,color:grey});
+          const ww=font.widthOfTextAtSize(site,10);
+          pageO.drawText(site,{x:(A4W-ww)/2,y:26,size:10,font,color:PDFLib.rgb(0.62,0.62,0.62)});
           tableTop=ty-12;
           const hb=tableTop-HEAD;
           pageO.drawText("ORD",{x:TL+12,y:hb+10,size:13,font:fontB});
-          pageO.drawText("QTY",{x:C1+12,y:hb+10,size:13,font:fontB});
-          pageO.drawText("SKU",{x:C2+12,y:hb+10,size:13,font:fontB});
+          pageO.drawText("SKU",{x:C1+12,y:hb+10,size:13,font:fontB});
           pageO.drawLine({start:{x:TL,y:hb},end:{x:TR,y:hb},thickness:1,color:black});
           y=hb;
         };
@@ -8407,17 +8408,16 @@ function renderLabelCropper(){
           }
           pageO.drawRectangle({x:TL,y:bottom,width:TR-TL,height:tableTop-bottom,borderColor:black,borderWidth:1.2});
           const vEnd=withTotal?y:bottom;
-          for(const vx of [C1,C2])
-            pageO.drawLine({start:{x:vx,y:tableTop},end:{x:vx,y:vEnd},thickness:1,color:black});
+          pageO.drawLine({start:{x:C1,y:tableTop},end:{x:C1,y:vEnd},thickness:1,color:black});
         };
         startPage();
-        for(const [sku,g] of rows){
+        for(const [sku,n] of rows){
           if(y-ROW<80){closeTable(false);startPage();}
-          const qty=g.qtys.size===1?String([...g.qtys][0]):String(g.units);
-          pageO.drawText(String(g.count),{x:TL+12,y:y-ROW+8,size:12,font:fontB});
-          pageO.drawText(qty,{x:C1+12,y:y-ROW+8,size:12,font});
-          pageO.drawText(sku.slice(0,72),{x:C2+12,y:y-ROW+8,size:12,font});
+          pageO.drawText(String(n),{x:TL+12,y:y-ROW+8,size:12,font:fontB});
+          pageO.drawText(sku.slice(0,80),{x:C1+12,y:y-ROW+8,size:12,font});
           y-=ROW;
+          // full grid: a rule under every row
+          pageO.drawLine({start:{x:TL,y},end:{x:TR,y},thickness:0.8,color:black});
         }
         closeTable(true);
       }
