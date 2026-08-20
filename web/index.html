@@ -3488,7 +3488,7 @@ function renderHome(){
     "Calculators, reports and packing tools for Amazon India sellers: true profit per SKU, FBA fees, settlement analyzer, GST report and 4×6 label cropper. Files never leave your browser.");
   backBtn.hidden=true;
   const heroBars=[34,48,28,60,44,72,52,88,64,96,70,100].map(h=>`<i style="height:${h}%"></i>`).join("");
-  const minis=[{id:"gst-invoice",icon:"🧾",name:"GST Invoice Generator"},{id:"link-builder",icon:"🔗",name:"Amazon Link Builder"},{id:"keyword-combiner",icon:"🔤",name:"Keyword Combiner"},{id:"payout-forecast",icon:"💸",name:"Payout Forecaster"},{id:"listing-checker",icon:"📝",name:"Listing Quality Checker"}]
+  const minis=[{id:"link-builder",icon:"🔗",name:"Amazon Link Builder"},{id:"keyword-combiner",icon:"🔤",name:"Keyword Combiner"},{id:"listing-checker",icon:"📝",name:"Listing Quality Checker"}]
     .concat(CALCS.filter(c=>c.id!=="profit").map(c=>({id:c.id,icon:c.icon,name:c.name.replace(/^Amazon /,"")})));
   app.innerHTML=`
     <div class="wrap">
@@ -3622,6 +3622,8 @@ function renderHome(){
       <div class="grid g4" style="padding:14px 0 0">
         <a class="tile" href="#/profit"><span class="pill">Popular</span><div class="ico">🧮</div><h3>Amazon Profit Calculator</h3><p>Estimate profit per unit after Amazon's 2026 referral, closing and FBA fees, your product cost and the ad spend you expect.</p></a>
         <a class="tile" href="#/fnsku-labels"><div class="ico">📦</div><h3>FNSKU Sticker Generator</h3><p>Code 128 barcode stickers for FBA units — A4 65/40/24-up sheets or 4×6 thermal.</p></a>
+        <a class="tile" href="#/gst-invoice"><div class="ico">🧾</div><h3>GST Invoice Generator</h3><p>Invoices for your self-ship orders — one merged A4 PDF, numbered in sequence, CGST+SGST or IGST by state.</p></a>
+        <a class="tile" href="#/payout-forecast"><div class="ico">💸</div><h3>Payout Forecaster</h3><p>Your next 6 settlement closes and estimated bank-credit dates — from your cycle and daily sales.</p></a>
       </div>
       <div class="minigrid">
         ${minis.map(m=>`<a class="tile-mini" href="#/${m.id}"><span class="ico">${m.icon}</span>${esc(m.name)}</a>`).join("")}
