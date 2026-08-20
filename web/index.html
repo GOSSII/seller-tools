@@ -2678,6 +2678,9 @@ async function startCheckout(planKey, autoRenew){
   const opts={
     key:order.key_id, name:"Seller Tools India",
     description:(order.label||"Plan")+(autoRenew?" · auto-renew":""),
+    // No Razorpay-account OTP flows: the buyer already authenticated with
+    // us; checkout should only take the payment.
+    remember_customer:false,
     prefill:{ email:order.email||u.email||"" },
     theme:{ color:"#2f5af0" },
     handler:function(){ renderPaymentPolling(order); },
