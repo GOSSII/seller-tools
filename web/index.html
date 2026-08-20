@@ -363,6 +363,16 @@
   html.authing body::before{content:"Signing you in…";position:fixed;inset:0;display:flex;
     align-items:center;justify-content:center;font-size:19px;font-weight:700;
     color:var(--ink);background:var(--bg);z-index:999}
+  /* Flip-tile counter beside the Label Cropper title */
+  .lc-h2row{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:4px}
+  .lc-h2row h2{margin:0}
+  .lc-odo{margin-left:auto;text-align:center}
+  .lc-odo-digits{display:flex;gap:5px;justify-content:flex-end}
+  .lc-digit{width:34px;height:44px;border-radius:9px;background:var(--blue);overflow:hidden;position:relative;box-shadow:0 2px 6px rgba(47,90,240,.35)}
+  .lc-digit .reel{position:absolute;left:0;top:0;width:100%;transition:transform .7s cubic-bezier(.2,.7,.3,1)}
+  .lc-digit .reel span{display:flex;align-items:center;justify-content:center;height:44px;color:#fff;font-weight:800;font-size:24px;font-variant-numeric:tabular-nums}
+  .lc-odo-cap{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-top:6px}
+  @media(prefers-reduced-motion:reduce){.lc-digit .reel{transition:none}}
   .sa-drop.loaded{border-style:solid;border-color:#1e9e63;background:#f2fbf7}
   .sa-drop.loaded h3{color:#116b42}
   /* Once loaded, the invisible full-area input must not swallow clicks —
@@ -7865,7 +7875,11 @@ function lcBody(){
   lcFiles=[];
   app.innerHTML=`
     <div class="wrap page">
-      <h2>Amazon Label Cropper</h2>
+      <div class="lc-h2row"><h2>Amazon Label Cropper</h2>
+        <div class="lc-odo" id="lc-odo" hidden aria-label="Labels cropped so far">
+          <div class="lc-odo-digits" id="lc-odo-digits"></div>
+          <div class="lc-odo-cap">Labels cropped</div>
+        </div></div>
       <p class="lede">Drop your Amazon label PDF(s) and get clean, print-ready pages. Labels come out SKU-wise by default (unrecognised ones go last), every label carries its SKU | Qty and a page number so the stack is easy to verify, and invoice pages are detected and handled per your choice below.</p>
       ${helpHtml("label-cropper")}
       <label class="sa-drop" id="lc-drop">
@@ -7875,7 +7889,6 @@ function lcBody(){
         <input type="file" id="lc-file" accept="application/pdf,.pdf" multiple>
       </label>
       <div class="sa-priv">🔒 Private by design — PDFs are processed entirely in your browser and never uploaded. Most label-cropping sites send your PDFs (with your customers' names and addresses) to their servers; this one can't, even in principle.</div>
-      <div class="note" id="lc-count" hidden style="margin:10px 0 0;font-weight:600"></div>
       <div class="card" style="margin-top:14px">
         <label for="lc-preset">Label position on the page</label>
         <select id="lc-preset">${Object.entries(CROP_PRESETS).map(([k,p])=>`<option value="${k}"${k===preset?" selected":""}>${esc(p.name)}</option>`).join("")}</select>
@@ -7956,23 +7969,33 @@ function lcBody(){
       <div id="lc-prev"></div>
     </div>`;
   const drop=document.getElementById("lc-drop"),file=document.getElementById("lc-file");
-  /* Social-proof counter, always visible once the first label is counted.
-     Only a NUMBER ever leaves the browser (disclosed in privacy.html);
-     the file never does. */
-  const LC_COUNT_FLOOR=1;
+  /* Flip-tile counter beside the title, always visible once the first
+     label is counted. Only a NUMBER ever leaves the browser (disclosed in
+     privacy.html); the file never does. Each tile is a masked reel of 0–9
+     that rolls to its digit; on first load it rolls up from zero. */
   let lcCountTotal=null;
-  const lcCountShow=()=>{
-    const el=document.getElementById("lc-count");
-    if(el&&lcCountTotal!==null&&lcCountTotal>=LC_COUNT_FLOOR){
-      el.hidden=false;
-      el.textContent="🏷️ "+lcCountTotal.toLocaleString("en-IN")+" labels cropped with this tool so far.";
+  const lcOdoSet=(v,animateFromZero)=>{
+    const box=document.getElementById("lc-odo"),row=document.getElementById("lc-odo-digits");
+    if(!box||!row||!(v>=1)) return;
+    const digits=String(v).split("");
+    if(row.children.length!==digits.length){
+      row.innerHTML=digits.map(()=>`<div class="lc-digit"><div class="reel">${
+        Array.from({length:10},(_,d)=>`<span>${d}</span>`).join("")}</div></div>`).join("");
     }
+    const apply=()=>{[...row.children].forEach((cell,i)=>{
+      cell.firstChild.style.transform="translateY(-"+(parseInt(digits[i],10)*44)+"px)";});};
+    box.hidden=false;
+    if(animateFromZero){
+      [...row.children].forEach(cell=>{cell.firstChild.style.transform="translateY(0)";});
+      requestAnimationFrame(()=>requestAnimationFrame(apply));
+    } else apply();
   };
+  const lcCountShow=(fromZero)=>{ if(lcCountTotal!==null) lcOdoSet(lcCountTotal,fromZero); };
   fetch("/api/counter?tool=label-cropper").then(r=>r.ok?r.json():null)
-    .then(j=>{ if(j&&typeof j.value==="number"){ lcCountTotal=j.value; lcCountShow(); } }).catch(()=>{});
+    .then(j=>{ if(j&&typeof j.value==="number"){ lcCountTotal=j.value; lcCountShow(true); } }).catch(()=>{});
   const lcCountAdd=n=>{
     if(!(n>0)) return;
-    if(lcCountTotal!==null){ lcCountTotal+=n; lcCountShow(); }
+    if(lcCountTotal!==null){ lcCountTotal+=n; lcCountShow(false); }
     try{ fetch("/api/counter",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({tool:"label-cropper",n})}).catch(()=>{}); }catch(e){}
   };
