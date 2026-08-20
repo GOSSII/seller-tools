@@ -7875,6 +7875,7 @@ function lcBody(){
         <input type="file" id="lc-file" accept="application/pdf,.pdf" multiple>
       </label>
       <div class="sa-priv">🔒 Private by design — PDFs are processed entirely in your browser and never uploaded. Most label-cropping sites send your PDFs (with your customers' names and addresses) to their servers; this one can't, even in principle.</div>
+      <div class="note" id="lc-count" hidden style="margin:10px 0 0;font-weight:600"></div>
       <div class="card" style="margin-top:14px">
         <label for="lc-preset">Label position on the page</label>
         <select id="lc-preset">${Object.entries(CROP_PRESETS).map(([k,p])=>`<option value="${k}"${k===preset?" selected":""}>${esc(p.name)}</option>`).join("")}</select>
@@ -7955,6 +7956,26 @@ function lcBody(){
       <div id="lc-prev"></div>
     </div>`;
   const drop=document.getElementById("lc-drop"),file=document.getElementById("lc-file");
+  /* Social-proof counter. Shown only past an honest floor — a young counter
+     stays private rather than faked. Only a NUMBER ever leaves the browser
+     (disclosed in privacy.html); the file never does. */
+  const LC_COUNT_FLOOR=500;
+  let lcCountTotal=null;
+  const lcCountShow=()=>{
+    const el=document.getElementById("lc-count");
+    if(el&&lcCountTotal!==null&&lcCountTotal>=LC_COUNT_FLOOR){
+      el.hidden=false;
+      el.textContent="🏷️ "+lcCountTotal.toLocaleString("en-IN")+" labels cropped with this tool so far.";
+    }
+  };
+  fetch("/api/counter?tool=label-cropper").then(r=>r.ok?r.json():null)
+    .then(j=>{ if(j&&typeof j.value==="number"){ lcCountTotal=j.value; lcCountShow(); } }).catch(()=>{});
+  const lcCountAdd=n=>{
+    if(!(n>0)) return;
+    if(lcCountTotal!==null){ lcCountTotal+=n; lcCountShow(); }
+    try{ fetch("/api/counter",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({tool:"label-cropper",n})}).catch(()=>{}); }catch(e){}
+  };
   const status=t=>{document.getElementById("lc-status").textContent=t;};
   ["dragenter","dragover"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add("over");}));
   ["dragleave","drop"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove("over");}));
@@ -8555,6 +8576,7 @@ function lcBody(){
         </div>`:"";
       }
 
+      lcCountAdd(labels);
       status(`Done — ${labels} label(s)${split===2?` (2 per page detected${autoLeft?", labels column auto-cropped":""})`:""}${skippedInv?`, ${invMode==="none"?"skipped":"paired"} ${skippedInv} invoice page(s)`:""}${blanksSkipped?`, ${blanksSkipped} blank page(s) removed`:""}, ${outDoc.getPageCount()} output page(s)${sortMode==="sku"?", sorted SKU-wise":sortMode==="qty"?", sorted by quantity":", in original order"}. Check the preview, then download.`);
     }catch(e){
       try{console.error("Label cropper:",e);}catch(_){}

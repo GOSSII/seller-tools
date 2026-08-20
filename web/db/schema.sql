@@ -54,6 +54,7 @@ create index if not exists entitlements_user_idx
 -- 42P10 and the first live webhook grant failed forever. Admin grants keep
 -- payment_id NULL, and a UNIQUE btree allows any number of NULLs, so they
 -- stay unconstrained exactly as before.
+alter table public.entitlements drop constraint if exists entitlements_payment_id_key;
 alter table public.entitlements
   add constraint entitlements_payment_id_key unique (payment_id);
 
@@ -268,3 +269,21 @@ do $$ begin
   alter table public.payments add constraint payments_status_chk
     check (status in ('pending','paid','failed','refunded')) not valid;
 exception when duplicate_object then null; end $$;
+
+
+-- ---------------------------------------------------------------------------
+-- counters: public social-proof tallies ("N labels cropped so far").
+-- RLS on with no policies: PostgREST anon/authenticated can neither read nor
+-- write; our /api/counter endpoint uses the service role for both. The
+-- increment is an atomic SECURITY DEFINER function so concurrent runs never
+-- lose counts, and it is revoked from every client-facing role.
+create table if not exists public.counters (
+  key   text primary key,
+  value bigint not null default 0
+);
+alter table public.counters enable row level security;
+insert into public.counters (key, value) values ('label_cropper', 0) on conflict do nothing;
+create or replace function public.counter_add(k text, n bigint) returns bigint
+language sql security definer set search_path = public as
+$$ update counters set value = value + n where key = k returning value; $$;
+revoke all on function public.counter_add(text, bigint) from public, anon, authenticated;
