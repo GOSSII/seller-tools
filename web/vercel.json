@@ -3,6 +3,26 @@
   "crons": [
     { "path": "/api/cleanup", "schedule": "17 3 * * *" }
   ],
+  "redirects": [
+    {
+      "source": "/((?!api/).*)",
+      "has": [{ "type": "host", "value": "amazonsellertools.vercel.app" }],
+      "destination": "https://sellertoolsindia.com/$1",
+      "permanent": true
+    },
+    {
+      "source": "/((?!api/).*)",
+      "has": [{ "type": "host", "value": "sellertoolsindia.vercel.app" }],
+      "destination": "https://sellertoolsindia.com/$1",
+      "permanent": true
+    },
+    {
+      "source": "/((?!api/).*)",
+      "has": [{ "type": "host", "value": "www.sellertoolsindia.com" }],
+      "destination": "https://sellertoolsindia.com/$1",
+      "permanent": true
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",
