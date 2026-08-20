@@ -7956,10 +7956,10 @@ function lcBody(){
       <div id="lc-prev"></div>
     </div>`;
   const drop=document.getElementById("lc-drop"),file=document.getElementById("lc-file");
-  /* Social-proof counter. Shown only past an honest floor — a young counter
-     stays private rather than faked. Only a NUMBER ever leaves the browser
-     (disclosed in privacy.html); the file never does. */
-  const LC_COUNT_FLOOR=500;
+  /* Social-proof counter, always visible once the first label is counted.
+     Only a NUMBER ever leaves the browser (disclosed in privacy.html);
+     the file never does. */
+  const LC_COUNT_FLOOR=1;
   let lcCountTotal=null;
   const lcCountShow=()=>{
     const el=document.getElementById("lc-count");
