@@ -3621,9 +3621,9 @@ function renderHome(){
       <div class="lp2-plan"><span class="tag free">Free forever</span><span>No login needed — click any tool to open it</span></div>
       <div class="grid g4" style="padding:14px 0 0">
         <a class="tile" href="#/profit"><span class="pill">Popular</span><div class="ico">🧮</div><h3>Amazon Profit Calculator</h3><p>Estimate profit per unit after Amazon's 2026 referral, closing and FBA fees, your product cost and the ad spend you expect.</p></a>
-        <a class="tile" href="#/fnsku-labels"><div class="ico">📦</div><h3>FNSKU Sticker Generator</h3><p>Code 128 barcode stickers for FBA units — A4 65/40/24-up sheets or 4×6 thermal.</p></a>
+        <a class="tile" href="#/payout-forecast"><div class="ico">💸</div><h3>Payout Date Forecaster</h3><p>Your next 6 settlement closes and estimated bank-credit dates — from your cycle and daily sales.</p></a>
         <a class="tile" href="#/gst-invoice"><div class="ico">🧾</div><h3>GST Invoice Generator</h3><p>Invoices for your self-ship orders — one merged A4 PDF, numbered in sequence, CGST+SGST or IGST by state.</p></a>
-        <a class="tile" href="#/payout-forecast"><div class="ico">💸</div><h3>Payout Forecaster</h3><p>Your next 6 settlement closes and estimated bank-credit dates — from your cycle and daily sales.</p></a>
+        <a class="tile" href="#/fnsku-labels"><div class="ico">📦</div><h3>FNSKU Barcode Sticker Generator</h3><p>Code 128 barcode stickers for FBA units — A4 65/40/24-up sheets or 4×6 thermal.</p></a>
       </div>
       <div class="minigrid">
         ${minis.map(m=>`<a class="tile-mini" href="#/${m.id}"><span class="ico">${m.icon}</span>${esc(m.name)}</a>`).join("")}
@@ -3669,7 +3669,7 @@ function renderHome(){
 
       <section class="lp-faq" aria-label="Frequently asked questions">
         <h2>Questions sellers ask</h2>
-        <details><summary>Is it really free?</summary><p>Yes — the 18 free tools are free with no login: every calculator, the FNSKU sticker generator, GST invoice generator, link builder and keyword combiner. The packing tools (Label Cropper, Order Printer) and the advanced reports (Settlement Analyzer, GST report, SKU report, Trends and the Pro reports) are on a paid plan from ₹199/month. The free tools stay free.</p></details>
+        <details><summary>Is it really free?</summary><p>Yes — the 18 free tools are free with no login: every calculator, the FNSKU barcode sticker generator, GST invoice generator, link builder and keyword combiner. The packing tools (Label Cropper, Order Printer) and the advanced reports (Settlement Analyzer, GST report, SKU report, Trends and the Pro reports) are on a paid plan from ₹199/month. The free tools stay free.</p></details>
         <details><summary>Do you upload or store my files?</summary><p>No. Settlement reports and label PDFs are processed entirely in your browser — they are never uploaded to any server. That is our core promise and it will always be true. Most other label-cropping sites upload your PDFs — including your customers' names and addresses — to their servers and promise to delete them later; we never receive them in the first place.</p></details>
         <details><summary>Which marketplaces do you support?</summary><p>Amazon India (Amazon.in) only. Fees, GST and settlement formats are all specific to the India marketplace.</p></details>
         <details><summary>How do I get my settlement report?</summary><p>In Seller Central go to Payments → Reports Repository (or Date Range Reports) and download the transaction/settlement report, then paste or upload it into the Settlement Analyzer.</p></details>
