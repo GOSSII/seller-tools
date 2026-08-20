@@ -783,9 +783,9 @@
 
 <header>
   <div class="wrap mast">
-    <a class="brand" href="#/"><span class="logo" aria-hidden="true">₹</span><span class="txt"><span class="brand-full">Seller Tools India</span><span class="brand-short">Seller Tools</span></span></a>
+    <a class="brand" href="/"><span class="logo" aria-hidden="true">₹</span><span class="txt"><span class="brand-full">Seller Tools India</span><span class="brand-short">Seller Tools</span></span></a>
     <div class="mast-right">
-      <a class="back" id="back" href="#/" hidden title="All calculators" aria-label="All calculators">← <span class="backtxt">All calculators</span></a>
+      <a class="back" id="back" href="/" hidden title="All calculators" aria-label="All calculators">← <span class="backtxt">All calculators</span></a>
       <span id="authslot" class="authslot"></span>
     </div>
   </div>
@@ -797,8 +797,8 @@
 <footer>
   <div class="wrap">
     <nav class="foot-nav" aria-label="Footer">
-      <a href="#/pricing">Pricing</a>
-      <a href="#/changelog">What's new</a>
+      <a href="/pricing">Pricing</a>
+      <a href="/changelog">What's new</a>
       <a href="/terms">Terms</a>
       <a href="/privacy">Privacy</a>
       <a href="/refunds">Refunds</a>
@@ -1903,7 +1903,7 @@ function renderAuthSlot(){
   const slot=document.getElementById("authslot");
   if(!slot) return;
   const u=sessionUser();
-  if(!u){ hdrMenuOpen=false; slot.innerHTML=`<a class="hdr-login" href="#/login">Login</a>`; return; }
+  if(!u){ hdrMenuOpen=false; slot.innerHTML=`<a class="hdr-login" href="/login">Login</a>`; return; }
   const nm=userDisplayName(u);
   slot.innerHTML=`
     <div class="hdr-menu">
@@ -1914,7 +1914,7 @@ function renderAuthSlot(){
       </button>
       <div class="hdr-dd" id="hdr-dd" role="menu" ${hdrMenuOpen?"":"hidden"}>
         <div class="who"><div class="nm" style="font-weight:700">${esc(nm)}</div><div class="e">${esc(u.email||"")}</div></div>
-        <a href="#/account" role="menuitem">Account</a>
+        <a href="/account" role="menuitem">Account</a>
         <button type="button" role="menuitem" class="danger" id="hdr-logout">Logout</button>
       </div>
     </div>`;
@@ -2047,8 +2047,8 @@ function renderLogin(){
       <button type="submit" class="bigbtn" id="lg-submit">Log in</button>
     </form>
     <div class="auth-links">
-      <a href="#/reset">Forgot password?</a><br>
-      New here? <a href="#/signup">Create an account</a>
+      <a href="/reset">Forgot password?</a><br>
+      New here? <a href="/signup">Create an account</a>
     </div>`);
   const form=document.getElementById("login-form"), msg=document.getElementById("login-msg"),
         submit=document.getElementById("lg-submit");
@@ -2097,7 +2097,7 @@ function renderSignup(){
       <button type="submit" class="bigbtn" id="su-submit">Create account</button>
       <p class="sa-sub" style="margin:0;font-size:12px">Continuing with Google also means you agree to the <a href="/terms" target="_blank" rel="noopener">Terms</a> and <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</p>
     </form>
-    <div class="auth-links">Already have an account? <a href="#/login">Log in</a></div>`);
+    <div class="auth-links">Already have an account? <a href="/login">Log in</a></div>`);
   const form=document.getElementById("signup-form"), msg=document.getElementById("signup-msg"),
         submit=document.getElementById("su-submit");
   wireShowPass();
@@ -2134,7 +2134,7 @@ function renderReset(){
         <input id="rs-email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com"></div>
       <button type="submit" class="bigbtn" id="rs-submit">Send reset link</button>
     </form>
-    <div class="auth-links"><a href="#/login">Back to login</a></div>`);
+    <div class="auth-links"><a href="/login">Back to login</a></div>`);
   const form=document.getElementById("reset-form"), msg=document.getElementById("reset-msg"),
         submit=document.getElementById("rs-submit");
   try{ document.getElementById("rs-email").focus(); }catch(e){}
@@ -2162,8 +2162,8 @@ function renderNewPassword(){
   if(!sessionUser()){
     authShell("Link expired","This password link is invalid or has already been used.",`
       <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <a class="lp-btn" href="#/reset">Request a new link</a>
-        <a class="lp-btn sec" href="#/login">Back to login</a></div>`);
+        <a class="lp-btn" href="/reset">Request a new link</a>
+        <a class="lp-btn sec" href="/login">Back to login</a></div>`);
     return;
   }
   authShell("Set a new password","You're verified — choose a new password.",`
@@ -2224,8 +2224,8 @@ async function handleAuthRedirect(){
       <h2 style="margin-top:8px">That link didn't work</h2>
       <p class="lede">${esc(errDesc)}. Links expire quickly — please request a fresh one.</p>
       <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:6px">
-        <a class="lp-btn" href="#/reset">Request a new link</a>
-        <a class="lp-btn sec" href="#/login">Back to login</a></div>`);
+        <a class="lp-btn" href="/reset">Request a new link</a>
+        <a class="lp-btn sec" href="/login">Back to login</a></div>`);
     return true;
   }
   if(linkType==="recovery"){ location.hash="#/new-password"; return true; }
@@ -2240,8 +2240,8 @@ async function handleAuthRedirect(){
       <h2 style="margin-top:8px">${linkType==="signup"?"Email confirmed — you're logged in":"You're logged in"}</h2>
       <p class="lede">Welcome to Seller Tools India! Your account is ready.</p>
       <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:6px">
-        <a class="lp-btn" href="#/">Explore the tools</a>
-        <a class="lp-btn sec" href="#/account">Go to account</a></div>`);
+        <a class="lp-btn" href="/">Explore the tools</a>
+        <a class="lp-btn sec" href="/account">Go to account</a></div>`);
     return true;
   }
   return false;
@@ -2330,7 +2330,7 @@ function handleSessionTaken(){
     <p class="lede">You logged in on another device, so this session was signed out. One login at a time is part of keeping prices low.</p>
     <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:6px">
       <button type="button" class="lp-btn" id="st-here">Use here instead</button>
-      <a class="lp-btn sec" href="#/account">Go to account</a>
+      <a class="lp-btn sec" href="/account">Go to account</a>
     </div></div></div></div>`;
   const btn=document.getElementById("st-here");
   if(btn) btn.addEventListener("click",async()=>{
@@ -2349,7 +2349,7 @@ function renderDeviceLimit(limit){
     <p class="lede">Your account is set up for up to ${esc(String(limit||3))} devices, and this is a new one. To keep prices low we limit how many devices share one account. You can reset your devices yourself — every other device is signed out and this one becomes your first device.</p>
     <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:6px">
       <button type="button" class="lp-btn" id="dl-reset">Log out other devices &amp; use here</button>
-      <a class="lp-btn sec" href="#/account">Go to account</a>
+      <a class="lp-btn sec" href="/account">Go to account</a>
     </div>
     <p class="lede" style="margin-top:10px;font-size:13px">Trouble? Email <a href="mailto:gossiistudio@gmail.com?subject=Reset%20devices">gossiistudio@gmail.com</a> and we'll reset them for you.</p>
   </div></div></div>`;
@@ -2460,7 +2460,7 @@ function renderProUpgrade(info){
         <h4>${esc(info.title)} is a Pro feature</h4>
         <p class="sa-sub">You're on Starter (₹199/month). Upgrade to <b>Pro (₹499/month — just ₹300 more)</b> for all nine Pro reports — Reconciliation &amp; SAFE-T, Ads Optimizer, Ad Profitability, Returns, RTO, Storage, Stranded, Fee Bands and Traffic Doctor — plus SKU P&amp;L with your product costs.</p>
         <p class="sa-sub">${esc(info.desc)}</p>
-        <a class="lp-btn" href="#/pricing" style="margin-top:8px">See Pro pricing</a>
+        <a class="lp-btn" href="/pricing" style="margin-top:8px">See Pro pricing</a>
       </div>
     </div>`;
 }
@@ -2488,9 +2488,9 @@ function renderPaywall(info){
           ${info.priceAlt?`<div class="pw-price-alt">${esc(info.priceAlt)}</div>`:""}
           <div class="pw-guarantee">Instant access after payment · secure checkout via Razorpay</div>
           <div class="pw-cta">
-            <a class="lp-btn" href="#/pricing">See plans &amp; unlock</a>
+            <a class="lp-btn" href="/pricing">See plans &amp; unlock</a>
           </div>
-          ${loggedIn?"":'<div class="pw-cta-note">Already have an account? <a href="#/login">Log in</a> — your plan unlocks this page instantly.</div>'}
+          ${loggedIn?"":'<div class="pw-cta-note">Already have an account? <a href="/login">Log in</a> — your plan unlocks this page instantly.</div>'}
         </div>
       </div>
     </div>`;
@@ -2728,18 +2728,18 @@ function renderPaymentSuccess(ent, order){
   payShell(`<div style="font-size:40px;line-height:1">🎉</div>
     <h2 style="margin-top:8px">${esc(nice)} unlocked${till?` till ${esc(till)}`:""}</h2>
     <p class="lede">Payment received — thank you! Your premium tools are ready.</p>
-    ${order&&order.fellBack?`<div class="banner info" style="text-align:left;margin:10px 0">Auto-renew isn't available on our payment account just yet, so this was a <b>one-time payment</b> — you won't be charged again automatically. We'll remind you to renew from your <a href="#/account">account</a> when the plan is close to expiry.</div>`:""}
+    ${order&&order.fellBack?`<div class="banner info" style="text-align:left;margin:10px 0">Auto-renew isn't available on our payment account just yet, so this was a <b>one-time payment</b> — you won't be charged again automatically. We'll remind you to renew from your <a href="/account">account</a> when the plan is close to expiry.</div>`:""}
     <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:6px">
-      <a class="lp-btn" href="#/settlement-analyzer">Open Settlement Analyzer</a>
-      <a class="lp-btn sec" href="#/account">Go to account</a>
+      <a class="lp-btn" href="/settlement-analyzer">Open Settlement Analyzer</a>
+      <a class="lp-btn sec" href="/account">Go to account</a>
     </div>`);
 }
 function renderPaymentPending(order){
   payShell(`<div style="font-size:36px;line-height:1">⏳</div>
     <h2 style="margin-top:8px">Payment received — activating</h2>
-    <p class="lede">Your payment went through and your plan is being switched on. This can take a minute. Check your <a href="#/account">account</a> shortly, or refresh the tool.</p>
+    <p class="lede">Your payment went through and your plan is being switched on. This can take a minute. Check your <a href="/account">account</a> shortly, or refresh the tool.</p>
     ${order&&order.fellBack?`<div class="banner info" style="text-align:left;margin:10px 0">Auto-renew isn't available just yet, so this was a <b>one-time payment</b> — you won't be charged again automatically.</div>`:""}
-    <div style="margin-top:6px"><a class="lp-btn sec" href="#/account">Go to account</a></div>`);
+    <div style="margin-top:6px"><a class="lp-btn sec" href="/account">Go to account</a></div>`);
 }
 function renderPaymentProblem(msg, retryPlan){
   payShell(`<div style="font-size:36px;line-height:1">⚠️</div>
@@ -2747,7 +2747,7 @@ function renderPaymentProblem(msg, retryPlan){
     <p class="lede">${esc(msg)}</p>
     <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:6px">
       ${retryPlan?'<button type="button" class="lp-btn" id="pp-once">Pay once — no auto-renew</button>':""}
-      <a class="lp-btn ${retryPlan?"sec":""}" href="#/pricing">Back to pricing</a>
+      <a class="lp-btn ${retryPlan?"sec":""}" href="/pricing">Back to pricing</a>
     </div>`);
   const b=document.getElementById("pp-once");
   if(b) b.addEventListener("click",()=>{ b.disabled=true; b.textContent="Opening secure checkout…"; startCheckout(retryPlan,false); });
@@ -2809,7 +2809,7 @@ function renderAccount(){
         <div class="card acct-card">
           <h3>Plan &amp; billing</h3>
           <p class="sa-sub" style="margin:0 0 12px" id="ac-billsub">Your plan, auto-renewal and payment history.</p>
-          <a class="lp-btn" id="ac-renew" href="#/pricing">Renew / change plan</a>
+          <a class="lp-btn" id="ac-renew" href="/pricing">Renew / change plan</a>
           <div id="ac-feats"></div>
           <div id="ac-sub"></div>
           <div id="ac-pay"></div>
@@ -2822,28 +2822,28 @@ function renderAccount(){
       <div class="acct-groups">
         <div class="acct-g"><h4><i style="background:var(--green)"></i>Paisa wapas lo</h4>
           <div class="acct-links">
-            <a href="#/reconcile" data-plan="pro">🕵️ Reconciliation &amp; SAFE-T</a>
-            <a href="#/returns" data-plan="pro">↩️ Returns Analyzer</a>
-            <a href="#/rto" data-plan="pro">🔁 RTO Radar</a>
-            <a href="#/stranded" data-plan="pro">🚧 Stranded Inventory</a>
+            <a href="/reconcile" data-plan="pro">🕵️ Reconciliation &amp; SAFE-T</a>
+            <a href="/returns" data-plan="pro">↩️ Returns Analyzer</a>
+            <a href="/rto" data-plan="pro">🔁 RTO Radar</a>
+            <a href="/stranded" data-plan="pro">🚧 Stranded Inventory</a>
           </div></div>
         <div class="acct-g"><h4><i style="background:var(--blue)"></i>Kharcha ghatao</h4>
           <div class="acct-links">
-            <a href="#/fee-bands" data-plan="pro">🪜 Fee Band Optimizer</a>
-            <a href="#/ads-optimizer" data-plan="pro">🎯 Ads Optimizer</a>
-            <a href="#/ad-profit" data-plan="pro">📉 Ad Profitability by SKU</a>
-            <a href="#/storage" data-plan="pro">📦 Storage Fee Analyzer</a>
+            <a href="/fee-bands" data-plan="pro">🪜 Fee Band Optimizer</a>
+            <a href="/ads-optimizer" data-plan="pro">🎯 Ads Optimizer</a>
+            <a href="/ad-profit" data-plan="pro">📉 Ad Profitability by SKU</a>
+            <a href="/storage" data-plan="pro">📦 Storage Fee Analyzer</a>
           </div></div>
         <div class="acct-g"><h4><i style="background:var(--ink)"></i>Hisaab samjho</h4>
           <div class="acct-links">
-            <a href="#/settlement-analyzer" data-plan="starter">🧾 Settlement Analyzer</a>
-            <a href="#/gst-report" data-plan="starter">🧮 GST &amp; TCS Report</a>
-            <a href="#/sku-report" data-plan="starter">📊 SKU Profitability</a>
-            <a href="#/trends" data-plan="starter">📈 Multi-Month Trends</a>
-            <a href="#/traffic" data-plan="pro">🩺 Traffic Doctor</a>
+            <a href="/settlement-analyzer" data-plan="starter">🧾 Settlement Analyzer</a>
+            <a href="/gst-report" data-plan="starter">🧮 GST &amp; TCS Report</a>
+            <a href="/sku-report" data-plan="starter">📊 SKU Profitability</a>
+            <a href="/trends" data-plan="starter">📈 Multi-Month Trends</a>
+            <a href="/traffic" data-plan="pro">🩺 Traffic Doctor</a>
           </div></div>
       </div>
-      <p class="sa-sub" id="ac-quick-more" style="margin:10px 0 0" hidden>9 more reports come with Pro — <a href="#/pricing">see pricing →</a></p>
+      <p class="sa-sub" id="ac-quick-more" style="margin:10px 0 0" hidden>9 more reports come with Pro — <a href="/pricing">see pricing →</a></p>
     </div>
     <div class="card acct-card" id="ac-activity" style="margin-top:16px"></div>
   </div>`;
@@ -2910,7 +2910,7 @@ function renderAccount(){
         const pitch=onYearly?`Renew anytime — you keep access till ${esc(fmtDate(acS.ent.expires_at))}.`
           :`Switch to yearly at ${yearly} and save ~58% vs monthly.`;
         b.innerHTML=`<div><b>${esc(nice)} ends in ${dl} day${dl===1?"":"s"}.</b> <span style="color:var(--muted)">${pitch}</span></div>
-          <a class="lp-btn" href="#/pricing" style="flex:none">Renew / change plan</a>`;
+          <a class="lp-btn" href="/pricing" style="flex:none">Renew / change plan</a>`;
         b.classList.add("show");
       }
     }
@@ -2958,7 +2958,7 @@ function renderAccount(){
             <li><span class="tick">✓</span>Ads Optimizer + Ad Profit <span class="pchip b">Pro</span></li>
             <li><span class="tick">✓</span>Returns, RTO, Storage &amp; Stranded <span class="pchip b">Pro</span></li>
           </ul>
-          <p style="font-size:12.5px;color:var(--muted);margin-top:8px">Starter ₹199/mo · Pro ₹499/mo — yearly saves ~58%. <a href="#/pricing">See pricing →</a></p>`;
+          <p style="font-size:12.5px;color:var(--muted);margin-top:8px">Starter ₹199/mo · Pro ₹499/mo — yearly saves ~58%. <a href="/pricing">See pricing →</a></p>`;
       }
       /* Quick open only lists what THIS plan can actually open. Free users
          don't get the card at all (the plan card already sells the upgrade). */
@@ -3015,7 +3015,7 @@ function renderAccount(){
         }else if(status==="halted"||status==="paused"){
           stat="Paused";
           note="The last charge didn't go through";
-          body=`Auto-renewal is <b>paused</b> — the last charge didn't go through. Renew from the <a href="#/pricing">pricing page</a> to continue.`;
+          body=`Auto-renewal is <b>paused</b> — the last charge didn't go through. Renew from the <a href="/pricing">pricing page</a> to continue.`;
         }else{
           note=nextDt?`Next charge around ${nextDt}`:"Cancel anytime";
           body=`Auto-renewal is <b>ON</b> for <b>${esc(nice)}</b>${nextDt?` — next charge around ${esc(nextDt)}`:""}. Cancel anytime; you keep access until the period ends.`;
@@ -3185,7 +3185,7 @@ function renderNotFound(){
     <div style="font-size:34px;line-height:1">🔍</div>
     <h2 style="margin-top:8px">Page not found</h2>
     <p class="lede">The page you're looking for doesn't exist.</p>
-    <a class="lp-btn" href="#/">Go home</a></div></div>`;
+    <a class="lp-btn" href="/">Go home</a></div></div>`;
 }
 async function renderAdmin(){
   backBtn.hidden=false;
@@ -3482,7 +3482,7 @@ function renderHome(){
           <p class="sub">Fees, settlements, GST, labels — 20+ tools that turn Seller Central's messy files into clear answers. Everything runs in your browser; your files are never uploaded.</p>
           <div class="lp-cta">
             <button type="button" class="lp-btn" data-scroll="tools">Try the free tools →</button>
-            <a class="lp-btn sec" href="#/pricing">See plans from ₹199/mo</a>
+            <a class="lp-btn sec" href="/pricing">See plans from ₹199/mo</a>
           </div>
           <div class="lp-trust">
             <span><span class="tick">✓</span> No login for free tools</span>
@@ -3594,7 +3594,7 @@ function renderHome(){
           <div class="row"><span>Time saved every month</span><b id="sv-hours">—</b></div>
           <div class="row"><span>Worth per year (at an assumed ₹150/hour)</span><b class="amt pos" id="sv-value">—</b></div>
         </div>
-        <div class="note" style="margin-top:10px">The <a href="#/label-cropper">Label Cropper</a> and <a href="#/order-printer">Order Printer</a> do all of it in one click — free, with your files never leaving your browser.</div>
+        <div class="note" style="margin-top:10px">The <a href="/label-cropper">Label Cropper</a> and <a href="/order-printer">Order Printer</a> do all of it in one click — free, with your files never leaving your browser.</div>
       </div>
 
       <section class="lp2-sec" id="tools">
@@ -3603,35 +3603,35 @@ function renderHome(){
       </section>
       <div class="lp2-plan"><span class="tag free">Free forever</span><span>No login needed — click any tool to open it</span></div>
       <div class="grid" style="padding:14px 0 0">
-        <a class="tile" href="#/profit"><span class="pill">Popular</span><div class="ico">🧮</div><h3>Amazon Profit Calculator</h3><p>Estimate profit per unit after Amazon's 2026 referral, closing and FBA fees, your product cost and the ad spend you expect.</p></a>
-        <a class="tile" href="#/label-cropper"><div class="ico">🏷️</div><h3>Amazon Label Cropper</h3><p>Crop Easy Ship A4 label PDFs to clean 4×6 thermal pages, sorted by SKU.</p></a>
-        <a class="tile" href="#/order-printer"><div class="ico">🖨️</div><h3>Amazon Order Printer</h3><p>Picklists and packing slips from your unshipped-orders report.</p></a>
-        <a class="tile" href="#/payout-forecast"><div class="ico">💸</div><h3>Payout Date Forecaster</h3><p>Your next 6 settlement closes and estimated bank-credit dates — from your cycle and daily sales.</p></a>
-        <a class="tile" href="#/gst-invoice"><div class="ico">🧾</div><h3>GST Invoice Generator</h3><p>Invoices for your self-ship orders — one merged A4 PDF, numbered in sequence, CGST+SGST or IGST by state.</p></a>
-        <a class="tile" href="#/fnsku-labels"><div class="ico">📦</div><h3>FNSKU Barcode Sticker Generator</h3><p>Code 128 barcode stickers for FBA units — A4 65/40/24-up sheets or 4×6 thermal.</p></a>
+        <a class="tile" href="/profit"><span class="pill">Popular</span><div class="ico">🧮</div><h3>Amazon Profit Calculator</h3><p>Estimate profit per unit after Amazon's 2026 referral, closing and FBA fees, your product cost and the ad spend you expect.</p></a>
+        <a class="tile" href="/label-cropper"><div class="ico">🏷️</div><h3>Amazon Label Cropper</h3><p>Crop Easy Ship A4 label PDFs to clean 4×6 thermal pages, sorted by SKU.</p></a>
+        <a class="tile" href="/order-printer"><div class="ico">🖨️</div><h3>Amazon Order Printer</h3><p>Picklists and packing slips from your unshipped-orders report.</p></a>
+        <a class="tile" href="/payout-forecast"><div class="ico">💸</div><h3>Payout Date Forecaster</h3><p>Your next 6 settlement closes and estimated bank-credit dates — from your cycle and daily sales.</p></a>
+        <a class="tile" href="/gst-invoice"><div class="ico">🧾</div><h3>GST Invoice Generator</h3><p>Invoices for your self-ship orders — one merged A4 PDF, numbered in sequence, CGST+SGST or IGST by state.</p></a>
+        <a class="tile" href="/fnsku-labels"><div class="ico">📦</div><h3>FNSKU Barcode Sticker Generator</h3><p>Code 128 barcode stickers for FBA units — A4 65/40/24-up sheets or 4×6 thermal.</p></a>
       </div>
       <div class="minigrid">
-        ${minis.map(m=>`<a class="tile-mini" href="#/${m.id}"><span class="ico">${m.icon}</span>${esc(m.name)}</a>`).join("")}
+        ${minis.map(m=>`<a class="tile-mini" href="/${m.id}"><span class="ico">${m.icon}</span>${esc(m.name)}</a>`).join("")}
       </div>
       <div class="lp2-plan"><span class="tag starter">Starter · ₹199/mo</span><span>The reports that find money</span></div>
       <div class="grid" style="padding:14px 0 0">
-        <a class="tile" href="#/settlement-analyzer"><div class="ico">🧾</div><h3>Amazon Settlement Analyzer</h3><p>Every rupee of your payout itemised — reconciles to your deposit to the paisa.</p></a>
-        <a class="tile" href="#/gst-report"><div class="ico">🧾</div><h3>GST &amp; TCS Report</h3><p>TCS, TDS 194-O and the GST charged on Amazon fees — a CA-ready breakdown for your ITC eligibility review.</p></a>
-        <a class="tile" href="#/sku-report"><div class="ico">📊</div><h3>SKU Profitability Report</h3><p>Each SKU's settlement contribution after fees, taxes and refunds — and true profit once you add product costs.</p></a>
+        <a class="tile" href="/settlement-analyzer"><div class="ico">🧾</div><h3>Amazon Settlement Analyzer</h3><p>Every rupee of your payout itemised — reconciles to your deposit to the paisa.</p></a>
+        <a class="tile" href="/gst-report"><div class="ico">🧾</div><h3>GST &amp; TCS Report</h3><p>TCS, TDS 194-O and the GST charged on Amazon fees — a CA-ready breakdown for your ITC eligibility review.</p></a>
+        <a class="tile" href="/sku-report"><div class="ico">📊</div><h3>SKU Profitability Report</h3><p>Each SKU's settlement contribution after fees, taxes and refunds — and true profit once you add product costs.</p></a>
       </div>
       <div class="lp2-plan"><span class="tag pro">Pro · ₹499/mo</span><span>For serious sellers</span></div>
       <div class="grid" style="padding:14px 0 8px">
-        <a class="tile" href="#/sku-report/advanced"><span class="pill">Pro</span><div class="ico">⚡</div><h3>SKU P&amp;L with your costs</h3><p>Add product costs to turn each SKU's settlement contribution into real profit, with loss-makers flagged.</p></a>
-        <a class="tile" href="#/reconcile"><span class="pill">Pro</span><div class="ico">🕵️</div><h3>Reconciliation &amp; SAFE-T Finder</h3><p>Cross-check settlements and your MTR for missing referral-fee credits, potential SAFE-T cases and unpaid shipments — separating what is confirmed from what needs more evidence.</p></a>
-        <a class="tile" href="#/ad-profit"><span class="pill">Pro</span><div class="ico">📉</div><h3>Ad Profitability by SKU</h3><p>ACOS and break-even ACOS per SKU — and which products stop making money once ads and product cost are counted.</p></a>
-        <a class="tile" href="#/trends"><span class="pill">Starter</span><div class="ico">📈</div><h3>Multi-Month Trends</h3><p>Sales, fees %, refund rate and net payout month by month — overall and per SKU.</p></a>
-        <a class="tile" href="#/fee-bands"><span class="pill">Pro</span><div class="ico">🪜</div><h3>Fee Band Optimizer</h3><p>The SKUs sitting a rupee over a referral step or a gram over a weight band — and what moving under is worth.</p></a>
-        <a class="tile" href="#/ads-optimizer"><span class="pill">Pro</span><div class="ico">🎯</div><h3>Ads Optimizer</h3><p>Search terms to negate, winners that earned an exact match, and a campaign scoreboard — from the Search Term report.</p></a>
-        <a class="tile" href="#/returns"><span class="pill">Pro</span><div class="ico">↩️</div><h3>Returns Analyzer</h3><p>What returns cost per SKU, how much stock comes back sellable, and Amazon's reasons bucketed into RTO, product and listing problems.</p></a>
-        <a class="tile" href="#/storage"><span class="pill">Pro</span><div class="ico">📦</div><h3>Storage Fee Analyzer</h3><p>Which ASINs pay the warehouse rent, which pay rent while selling nothing, and months of cover per ASIN — from Amazon's own billing report.</p></a>
-        <a class="tile" href="#/rto"><span class="pill">Pro</span><div class="ico">🔁</div><h3>RTO Radar</h3><p>RTO rate by state and pincode, per-SKU return-to-origin economics, and the order value stuck in transit back to you.</p></a>
-        <a class="tile" href="#/stranded"><span class="pill">Pro</span><div class="ico">🚧</div><h3>Stranded Inventory</h3><p>Stock in the warehouse that cannot sell — its value, how long it has been stuck, and Amazon's own fix for every row.</p></a>
-        <a class="tile" href="#/traffic"><span class="pill">Pro</span><div class="ico">🩺</div><h3>Traffic Doctor</h3><p>Where to investigate an underperforming ASIN first — low traffic, weak conversion or low Featured Offer share — from the Business Report.</p></a>
+        <a class="tile" href="/sku-report/advanced"><span class="pill">Pro</span><div class="ico">⚡</div><h3>SKU P&amp;L with your costs</h3><p>Add product costs to turn each SKU's settlement contribution into real profit, with loss-makers flagged.</p></a>
+        <a class="tile" href="/reconcile"><span class="pill">Pro</span><div class="ico">🕵️</div><h3>Reconciliation &amp; SAFE-T Finder</h3><p>Cross-check settlements and your MTR for missing referral-fee credits, potential SAFE-T cases and unpaid shipments — separating what is confirmed from what needs more evidence.</p></a>
+        <a class="tile" href="/ad-profit"><span class="pill">Pro</span><div class="ico">📉</div><h3>Ad Profitability by SKU</h3><p>ACOS and break-even ACOS per SKU — and which products stop making money once ads and product cost are counted.</p></a>
+        <a class="tile" href="/trends"><span class="pill">Starter</span><div class="ico">📈</div><h3>Multi-Month Trends</h3><p>Sales, fees %, refund rate and net payout month by month — overall and per SKU.</p></a>
+        <a class="tile" href="/fee-bands"><span class="pill">Pro</span><div class="ico">🪜</div><h3>Fee Band Optimizer</h3><p>The SKUs sitting a rupee over a referral step or a gram over a weight band — and what moving under is worth.</p></a>
+        <a class="tile" href="/ads-optimizer"><span class="pill">Pro</span><div class="ico">🎯</div><h3>Ads Optimizer</h3><p>Search terms to negate, winners that earned an exact match, and a campaign scoreboard — from the Search Term report.</p></a>
+        <a class="tile" href="/returns"><span class="pill">Pro</span><div class="ico">↩️</div><h3>Returns Analyzer</h3><p>What returns cost per SKU, how much stock comes back sellable, and Amazon's reasons bucketed into RTO, product and listing problems.</p></a>
+        <a class="tile" href="/storage"><span class="pill">Pro</span><div class="ico">📦</div><h3>Storage Fee Analyzer</h3><p>Which ASINs pay the warehouse rent, which pay rent while selling nothing, and months of cover per ASIN — from Amazon's own billing report.</p></a>
+        <a class="tile" href="/rto"><span class="pill">Pro</span><div class="ico">🔁</div><h3>RTO Radar</h3><p>RTO rate by state and pincode, per-SKU return-to-origin economics, and the order value stuck in transit back to you.</p></a>
+        <a class="tile" href="/stranded"><span class="pill">Pro</span><div class="ico">🚧</div><h3>Stranded Inventory</h3><p>Stock in the warehouse that cannot sell — its value, how long it has been stuck, and Amazon's own fix for every row.</p></a>
+        <a class="tile" href="/traffic"><span class="pill">Pro</span><div class="ico">🩺</div><h3>Traffic Doctor</h3><p>Where to investigate an underperforming ASIN first — low traffic, weak conversion or low Featured Offer share — from the Business Report.</p></a>
       </div>
 
       <section class="lp2-sec">
@@ -3644,10 +3644,10 @@ function renderHome(){
           <button type="button" class="lp-btn sec" data-scroll="tools">Use free tools</button></div>
         <div class="pr-card pop"><span class="pr-badge">Most popular</span><h3>Starter</h3><div class="pr-price">₹199 <small>/ month</small></div><div class="pr-alt">or ₹999 / year (save ~58%)</div>
           <ul class="pr-feats"><li><span class="tick">✓</span> Everything in Free</li><li><span class="tick">✓</span> Settlement Analyzer</li><li><span class="tick">✓</span> GST &amp; TCS filing report</li><li><span class="tick">✓</span> SKU Profitability Report</li><li><span class="tick">✓</span> Multi-Month Trends</li></ul>
-          <a class="lp-btn" href="#/pricing">See pricing &amp; unlock</a></div>
+          <a class="lp-btn" href="/pricing">See pricing &amp; unlock</a></div>
         <div class="pr-card"><h3>Pro</h3><div class="pr-price">₹499 <small>/ month</small></div><div class="pr-alt">or ₹2,499 / year (save ~58%)</div>
           <ul class="pr-feats"><li><span class="tick">✓</span> Everything in Starter</li><li><span class="tick">✓</span> SKU P&amp;L with product costs</li><li><span class="tick">✓</span> Reconciliation &amp; SAFE-T finder</li><li><span class="tick">✓</span> Ads Optimizer &amp; Ad Profitability</li><li><span class="tick">✓</span> Returns, RTO, Storage &amp; Stranded</li><li><span class="tick">✓</span> Share reports as branded PDFs</li></ul>
-          <a class="lp-btn sec" href="#/pricing">See pricing</a></div>
+          <a class="lp-btn sec" href="/pricing">See pricing</a></div>
       </div>
 
       <section class="lp-faq" aria-label="Frequently asked questions">
@@ -3665,8 +3665,8 @@ function renderHome(){
         <h2>Stop guessing. Start with one settlement file.</h2>
         <p>Drop last month's statement into the analyzer and see where every rupee went — it takes under a minute.</p>
         <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
-          <a class="lp-btn" href="#/settlement-analyzer">Open the Settlement Analyzer</a>
-          <a class="lp-btn ghost" href="#/pricing">See pricing</a>
+          <a class="lp-btn" href="/settlement-analyzer">Open the Settlement Analyzer</a>
+          <a class="lp-btn ghost" href="/pricing">See pricing</a>
         </div>
         <div class="fine">🔒 Your files never leave your browser — reports are parsed on your own device</div>
       </div>
@@ -3713,7 +3713,7 @@ function renderPricing(){
   const paidBtn=(price,cls)=> loggedIn
     ? `<button type="button" class="lp-btn${cls}" data-checkout="${price.key}">Pay ${price.big} — ${perWord}</button>
        <p class="pr-auto-note">Renews automatically at ${price.big} ${perWord === "monthly" ? "every month" : "every year"} so your reports don't stop. <b>Cancel anytime</b> from your account — you keep access until the period you've paid for ends.</p>`
-    : `<a class="lp-btn${cls}" href="#/signup">Sign up to get started</a>`;
+    : `<a class="lp-btn${cls}" href="/signup">Sign up to get started</a>`;
   app.innerHTML=`
     <div class="wrap page">
       <div class="pr-head">
@@ -3740,7 +3740,7 @@ function renderPricing(){
             <li><span class="tick">✓</span> FBA label maker &amp; listing checker</li>
             <li><span class="tick">✓</span> Files never leave your browser</li>
           </ul>
-          <a class="lp-btn sec" href="#/">Use free tools</a>
+          <a class="lp-btn sec" href="/">Use free tools</a>
         </div>
 
         <div class="pr-card pop">
@@ -5263,7 +5263,7 @@ function skuReportBody(){
     if(o) o.innerHTML=`<div class="panel" style="border-color:var(--blue-line);background:var(--blue-soft)">
       <h4>⚡ Advanced P&amp;L is a Pro feature</h4>
       <p class="sa-sub">The basic SKU Profitability Report below is included in your plan. Adding <b>your product costs</b> to see true profit per SKU — with loss-makers flagged — needs <b>Pro (₹499/month)</b>.</p>
-      <a class="lp-btn" href="#/pricing" style="margin-top:8px">See Pro pricing</a></div>`;
+      <a class="lp-btn" href="/pricing" style="margin-top:8px">See Pro pricing</a></div>`;
   };
   getEntitlement().then(e=>{ if(e&&e.plan==="pro") skuIsPro=true; applyAdvIntent(); }).catch(applyAdvIntent);
   if(saParsed) skuRenderResults();
@@ -5334,7 +5334,7 @@ function skuRenderResults(){
       <div class="sa-sub" style="margin-top:3px">${inr(Math.abs(totals.refund))} refunded of ${inr(totals.sales)}</div></div>
     ${advOn?`<div class="stat ${trueProfit<0?'red':'green'}"><div class="k">True profit after product cost</div><div class="v">${costed.length?inr(trueProfit):"—"}</div><div class="sa-sub" style="margin-top:3px">${costed.length?`across ${costed.length} costed SKU${costed.length===1?"":"s"} · ${lossCount} loss-making`:"enter product costs below"}${needCost?` · <b>${needCost} still need a cost</b>`:""}</div></div>`:""}
   </div>
-  ${(!advOn||!costed.length)?`<div class="banner warn" style="text-align:left"><b>Product cost not added.</b> Every figure here is what Amazon settled — <b>contribution</b>, not profit. Your purchase or manufacturing cost is not in it, so a SKU showing a positive number can still be losing money. ${skuIsPro?`<a href="#/sku-report/advanced">Add product costs</a> to turn this into real profit and margin.`:`Adding product costs is a Pro feature — <a href="#/pricing">see plans</a>.`}</div>`:""}`;
+  ${(!advOn||!costed.length)?`<div class="banner warn" style="text-align:left"><b>Product cost not added.</b> Every figure here is what Amazon settled — <b>contribution</b>, not profit. Your purchase or manufacturing cost is not in it, so a SKU showing a positive number can still be losing money. ${skuIsPro?`<a href="/sku-report/advanced">Add product costs</a> to turn this into real profit and margin.`:`Adding product costs is a Pro feature — <a href="/pricing">see plans</a>.`}</div>`:""}`;
 
   if(realSkus.length>1)
   {
@@ -5367,14 +5367,14 @@ function skuRenderResults(){
     h+=`<div class="panel"><h4>Costs and adjustments not tied to a product <span class="sa-sub">— real money, but Amazon never attaches these to a SKU</span></h4>
       <div class="rows">${parts.map(([nm,v])=>`<div class="r mut"><span class="rl">${esc(nm)}</span><span class="rv ${v<0?"neg":""}">${v<0?"−":"+"}${inr(Math.abs(v))}</span></div>`).join("")}
       <div class="r fin"><span class="rl">Total not attributable to any SKU</span><span class="rv ${acct.net<0?"neg":""}">${inr(acct.net)}</span></div></div>
-      <div class="banner info" style="margin-top:10px">These are <b>not</b> a product's problem and are excluded from every per-SKU figure above. ${b.ads?`The advertising here is per-account; for spend broken down by SKU use the <a href="#/ad-profit">Ad Profitability</a> report with your Sponsored Products advertised-product export. `:""}${sawXfer?`The transfer is one movement shown from two sides — load the same week's other Account Type and it nets to ₹0. `:""}${carried?`The carried balance is what you already owed Amazon at the start of this statement; it is not a charge from this period's sales. `:""}</div></div>`;
+      <div class="banner info" style="margin-top:10px">These are <b>not</b> a product's problem and are excluded from every per-SKU figure above. ${b.ads?`The advertising here is per-account; for spend broken down by SKU use the <a href="/ad-profit">Ad Profitability</a> report with your Sponsored Products advertised-product export. `:""}${sawXfer?`The transfer is one movement shown from two sides — load the same week's other Account Type and it nets to ₹0. `:""}${carried?`The carried balance is what you already owed Amazon at the start of this statement; it is not a charge from this period's sales. `:""}</div></div>`;
   }
 
   if(skuShowUpgrade && !skuIsPro)
     h+=`<div class="panel" style="border-color:var(--blue-line);background:var(--blue-soft)">
       <h4>Advanced P&amp;L is a Pro feature</h4>
       <p class="sa-sub">You're on Starter (₹199/month). Upgrade to <b>Pro (₹499/month — just ₹300 more)</b> to add your product costs and see <b>true profit per SKU after cost</b>, with loss-making SKUs flagged and a full per-SKU fee breakdown.</p>
-      <a class="lp-btn" href="#/pricing" style="margin-top:8px">See Pro pricing</a></div>`;
+      <a class="lp-btn" href="/pricing" style="margin-top:8px">See Pro pricing</a></div>`;
 
   h+=`<div class="panel"><h4>Per-SKU breakdown <span class="sa-sub">(${skus.length})</span></h4>
     <div class="filterbar">
@@ -6240,7 +6240,7 @@ const REC_CHECKS={
     claim:`First search the Order ID in <b>Payments → Transaction View</b>. If the shipment is over 30 days old and still unpaid: <b>Help → Get Support → Selling on Amazon → Payments</b>, quoting the Order ID and ship date.`},
   negative:{icon:"🔻",amt:"Net loss",title:"Orders that netted negative",
     why:"Fees exceeded what the buyer paid — you shipped these at a loss. Not a claim, but fix the cause: weight slab, fee category, or a price below the fee floor.",
-    claim:`Re-check the maths with the <a href="#/profit">profit calculator</a> and <b>Reports → Fee Preview</b>. If the charged weight or category is wrong: <b>Help → Get Support</b> → ask for a fee correction with the Order ID.`},
+    claim:`Re-check the maths with the <a href="/profit">profit calculator</a> and <b>Reports → Fee Preview</b>. If the charged weight or category is wrong: <b>Help → Get Support</b> → ask for a fee correction with the Order ID.`},
 };
 const REC_ORDER=["notReturned","fcDamaged","lostWh","feeOver","feeDup","weightJump","refundFee","safeT","shipped","negative"];
 
@@ -6844,7 +6844,7 @@ function fbRenderChart(){
             <tr><td>above 5 kg</td><td colspan="3" class="sa-sub">each additional kg after 5 kg</td>
               <td class="num">+${inr0(add.after5)}</td><td class="num">+${inr0(ES_WH_ADD.after5)}</td></tr>
           </tbody></table></div>
-        <p class="sa-sub" style="margin:8px 0 0">Billed weight is the <b>greater of actual and volumetric</b> (L×W×H ÷ 5000), rounded up to the next 500 g — and at a fulfilment centre Amazon adds 100 g of packaging before rounding, which is why the FBA column asks for less than the band edge. A 780 g parcel bills at 1 kg; 900 g still bills at 1 kg; 910 g jumps to the next band. FBA also charges pick &amp; pack: ${inr0(pickPack(0.5))} up to 1 kg, then ₹5 per additional kg to 5 kg. To check one product against all of this — actual against volumetric, and the fee either way — use the <a href="#/fba-fee">FBA fee calculator</a>.</p>
+        <p class="sa-sub" style="margin:8px 0 0">Billed weight is the <b>greater of actual and volumetric</b> (L×W×H ÷ 5000), rounded up to the next 500 g — and at a fulfilment centre Amazon adds 100 g of packaging before rounding, which is why the FBA column asks for less than the band edge. A 780 g parcel bills at 1 kg; 900 g still bills at 1 kg; 910 g jumps to the next band. FBA also charges pick &amp; pack: ${inr0(pickPack(0.5))} up to 1 kg, then ₹5 per additional kg to 5 kg. To check one product against all of this — actual against volumetric, and the fee either way — use the <a href="/fba-fee">FBA fee calculator</a>.</p>
 
         <span class="htag" style="margin-top:18px">Fixed closing fee, per unit</span>
         <div class="tblwrap"><table class="sa">
@@ -6956,7 +6956,7 @@ function fbRenderResults(){
     <div class="stat"><div class="k">Worth testing</div><div class="v">${inr(testing)}</div><div class="sa-sub" style="margin-top:3px">${res.price.length} price step${res.price.length===1?"":"s"} · ${openW} weight target${openW===1?"":"s"}</div></div>
     <div class="stat ${total>0?"blue":"green"}"><div class="k">Over this period</div><div class="v">${inr(total)}</div>${pm===null?"":`<div class="sa-sub" style="margin-top:3px">≈ ${inr0(pm)}/month at this rate</div>`}</div>
   </div>`;
-  h+=`<div class="banner info">Every figure comes from fees Amazon actually charged these SKUs — the charge identifies the band, so nothing here depends on knowing your category or your parcel. Savings are <b>net of the revenue you give up</b> and exclude GST on the fee, which you claim back as input tax credit anyway. This is money not to spend again; money to <i>claim back</i> is in <a href="#/reconcile">Reconciliation</a>.</div>`;
+  h+=`<div class="banner info">Every figure comes from fees Amazon actually charged these SKUs — the charge identifies the band, so nothing here depends on knowing your category or your parcel. Savings are <b>net of the revenue you give up</b> and exclude GST on the fee, which you claim back as input tax credit anyway. This is money not to spend again; money to <i>claim back</i> is in <a href="/reconcile">Reconciliation</a>.</div>`;
   if(n.noFees)
     h+=`<div class="banner warn">${n.noFees} SKU${n.noFees>1?"s have":" has"} no selling-fee lines in these statements — Amazon is billing those fees on a separate invoice (<b>Tax Document Library → Seller Fee Invoices</b>), so there is no charge here to read a band from. Price steps can't be checked for ${n.noFees>1?"them":"it"}.</div>`;
   if(!res.price.length&&!res.weight.length)
@@ -6975,7 +6975,7 @@ function fbRenderResults(){
           <td class="num">${inr(o.prize)}</td>
           <td class="sa-sub">${esc(fbPriceNote(o))}${o.cats.length&&o.refSave>0.005?`<br><span style="color:var(--faint)">charged at the rate Amazon lists for ${esc(o.cats.slice(0,2).join(" / "))}${o.cats.length>2?" and "+(o.cats.length-2)+" more":""}</span>`:""}</td></tr>`).join("")}
         </tbody></table></div>
-      <div class="rec-claim"><b>How to act:</b> change the price in <b>Inventory → Manage Inventory → Edit</b>, or in a Price bulk-upload file. Run the <a href="#/price-bands">Price Band Optimizer</a> first if you want to see the whole ladder for one product, and check the new price still clears your product cost in the <a href="#/profit">profit calculator</a>.</div></div>`;
+      <div class="rec-claim"><b>How to act:</b> change the price in <b>Inventory → Manage Inventory → Edit</b>, or in a Price bulk-upload file. Run the <a href="/price-bands">Price Band Optimizer</a> first if you want to see the whole ladder for one product, and check the new price still clears your product cost in the <a href="/profit">profit calculator</a>.</div></div>`;
   }
   if(res.weight.length){
     const proven=res.weight.filter(w=>w.proven),maybe=res.weight.filter(w=>!w.proven);
@@ -6996,7 +6996,7 @@ function fbRenderResults(){
           <td class="num">${w.verdict==="blocked"?`<span class="sa-sub">${inr(w.prize)}</span>`:inr(w.prize)}</td>
           <td class="sa-sub">${fbWeightVerdict(w)}</td></tr>`;}).join("")}
         </tbody></table></div>
-      <div class="rec-claim"><b>How to act:</b> where your own weight says Amazon is billing a band too heavy, raise it as a fee claim — <a href="#/reconcile">Reconciliation</a> lists the individual charges and the 30-day window. Where the parcel really is in the band, only a lighter pack or a smaller box moves it; check both in the <a href="#/fba-fee">FBA fee calculator</a>.</div></div>`;
+      <div class="rec-claim"><b>How to act:</b> where your own weight says Amazon is billing a band too heavy, raise it as a fee claim — <a href="/reconcile">Reconciliation</a> lists the individual charges and the 30-day window. Where the parcel really is in the band, only a lighter pack or a smaller box moves it; check both in the <a href="/fba-fee">FBA fee calculator</a>.</div></div>`;
     if(n.atEdge)
       h+=`<div class="banner warn">${n.atEdge} SKU${n.atEdge>1?"s sit":" sits"} within ${FB_EDGE_G} g of the <b>next band up</b> — thicker tape, a bigger box or a heavier insert would push ${n.atEdge>1?"them":"it"} over, and the step costs more than the packaging ever will. Worth pinning the current pack down before anyone changes it.</div>`;
     if(n.underBilled)
@@ -7242,11 +7242,11 @@ function trendInsights(months,skus){
   if(L.dGross!==null&&L.dNet!==null&&L.dGross>0&&L.dNet<0)
     notes.push({k:"bad",t:`Sales rose but the payout rate <b>fell</b> (${inr0(P.netD)}/day → ${inr0(L.netD)}/day) — fees or refunds ate more than the growth brought in.`});
   if(L.dRefundPp!==null&&L.dRefundPp>=3&&L.refundPct>=5)
-    notes.push({k:"bad",t:`Refunds jumped to <b>${L.refundPct.toFixed(1)}%</b> of sales in ${name(L.m)} (up ${L.dRefundPp.toFixed(1)} points) — find the SKU behind it in the <a href="#/sku-report">SKU report</a> before it compounds.`});
+    notes.push({k:"bad",t:`Refunds jumped to <b>${L.refundPct.toFixed(1)}%</b> of sales in ${name(L.m)} (up ${L.dRefundPp.toFixed(1)} points) — find the SKU behind it in the <a href="/sku-report">SKU report</a> before it compounds.`});
   const squeeze3=rows.length>=3&&rows.slice(-3).every(r=>r.feePct!==null)
     &&rows.slice(-3).every((r,i,a)=>i===0||r.feePct>a[i-1].feePct);
   if((L.dFeePp!==null&&L.dFeePp>=2)||squeeze3)
-    notes.push({k:"bad",t:`Fees are taking a growing share of every sale — ${squeeze3?`up three straight months to <b>${L.feePct.toFixed(1)}%</b>`:`up ${L.dFeePp.toFixed(1)} points to <b>${L.feePct.toFixed(1)}%</b>`}. Run <a href="#/reconcile">Reconciliation</a>'s fee audit and check weight bands in the <a href="#/fee-bands">Fee Band Optimizer</a>.`});
+    notes.push({k:"bad",t:`Fees are taking a growing share of every sale — ${squeeze3?`up three straight months to <b>${L.feePct.toFixed(1)}%</b>`:`up ${L.dFeePp.toFixed(1)} points to <b>${L.feePct.toFixed(1)}%</b>`}. Run <a href="/reconcile">Reconciliation</a>'s fee audit and check weight bands in the <a href="/fee-bands">Fee Band Optimizer</a>.`});
   if(rows.length>=3){
     const best=rows.reduce((m,r)=>r.netD>m.netD?r:m,rows[0]);
     // Additive tolerance: a multiplicative one flips sign on a negative month.
@@ -7376,7 +7376,7 @@ function trRenderResults(){
   ${(totAds&&Math.abs(totAds)>Math.abs(totFees))?`<div class="act hot" style="margin-top:12px">
     <h5>Sponsored Ads are your largest operating cost</h5>
     <p>You spent <b>${inr(Math.abs(totAds))}</b> on Sponsored Ads — <b>${totGross?(Math.abs(totAds)/totGross*100).toFixed(1):"—"}% of gross sales</b>, and <b>${(Math.abs(totAds)/Math.abs(totFees)).toFixed(2)}×</b> your ${inr(Math.abs(totFees))} of Amazon selling &amp; fulfilment fees. Whether that is worth it depends on what the ads actually sold — the settlement cannot say. Check ACOS per SKU before spending more.</p>
-    <a href="#/ad-profit">Analyse advertising →</a></div>`:""}
+    <a href="/ad-profit">Analyse advertising →</a></div>`:""}
   ${totBal?`<div class="banner info" style="text-align:left"><b>Account-level balance adjustments: ${inr(Math.abs(totBal))}.</b> These affect what reached your bank but are excluded from the selling-fee rate, the advertising rate and every per-product figure. ${trXferTotal?`Of that, ${inr(Math.abs(trXferTotal))} is a transfer between your two Amazon payment accounts — one movement shown from two sides, which nets to ₹0 when both Account Types are loaded. ${Math.abs(totBal)-Math.abs(trXferTotal)>0.005?`The rest is balances carried forward from earlier weeks.`:""}`:`They are balances carried forward between statements, not charges from these periods' sales.`}</div>`:""}`;
   if(settlements.length===1)
     h+=`<div class="banner info">Only one settlement loaded — drop more statements to see a real trend.</div>`;
@@ -10099,7 +10099,7 @@ function adpRender(){
        month of ads against two months of payout and every ACOS reads low. */
     if(r.unattributed.total>0&&t.spend>0&&Math.abs(t.spend-r.unattributed.total)/r.unattributed.total>0.2)
       h+=`<div class="banner warn">Your ad report accounts for <b>${inr0(t.spend)}</b> of spend, but these statements were charged <b>${inr0(r.unattributed.total)}</b> of advertising — the two files cover different periods. Every ACOS and TACOS below is measured against whichever is shorter, so export the ad report for <b>exactly the dates these statements cover</b> before drawing conclusions.</div>`;
-    if(!r.costed) h+=`<div class="banner info">No product costs yet, so the table shows <b>payout</b> — what Amazon paid you — rather than profit. Type a cost per unit into the <b>Cost/unit</b> column below (or set one for everything at once) and the break-even ACOS and true profit appear. Costs save in this browser and the <a href="#/sku-report">SKU Profitability Report</a> uses the same ones.</div>`;
+    if(!r.costed) h+=`<div class="banner info">No product costs yet, so the table shows <b>payout</b> — what Amazon paid you — rather than profit. Type a cost per unit into the <b>Cost/unit</b> column below (or set one for everything at once) and the break-even ACOS and true profit appear. Costs save in this browser and the <a href="/sku-report">SKU Profitability Report</a> uses the same ones.</div>`;
     if(r.asinOnly) h+=`<div class="banner info">That ad report has ASINs but no SKU column, so rows only match if your settlement uses the same identifier. Re-export it with the <b>Advertised SKU</b> column for an exact match.</div>`;
     const unmatched=r.rows.filter(x=>x.orphan);
     /* An "orphan" that Amazon credits with ad sales is usually not a wasted
@@ -10643,8 +10643,8 @@ function rtRenderResults(){
     <span class="htag">Formulas &amp; sources</span>
     <ol>
       <li><b>Refunds ₹</b> and <b>% of sales</b> come from the settlement files: refunded principal ÷ gross principal per SKU, by value.</li>
-      <li><b>Back sellable</b> is the FBA customer returns report's disposition column — SELLABLE means the unit was restocked; customer-damaged and defective is stock you lost; FC- or carrier-damaged stock is Amazon's responsibility — reimbursable, and <a href="#/reconcile">Reconciliation</a> checks whether the reimbursement arrived.</li>
-      <li><b>Never back</b> is the seller-fulfilled Return Report: requests with no return delivery date recorded, excluding requests younger than 21 days (counted as in transit — the courier may simply not have arrived). Those rows are the raw material for SAFE-T — <a href="#/reconcile">Reconciliation</a> sorts them into claims.</li>
+      <li><b>Back sellable</b> is the FBA customer returns report's disposition column — SELLABLE means the unit was restocked; customer-damaged and defective is stock you lost; FC- or carrier-damaged stock is Amazon's responsibility — reimbursable, and <a href="/reconcile">Reconciliation</a> checks whether the reimbursement arrived.</li>
+      <li><b>Never back</b> is the seller-fulfilled Return Report: requests with no return delivery date recorded, excluding requests younger than 21 days (counted as in transit — the courier may simply not have arrived). Those rows are the raw material for SAFE-T — <a href="/reconcile">Reconciliation</a> sorts them into claims.</li>
       <li><b>Labels ₹</b> sums the Label cost column where the label was billed to you.</li>
       <li>Status: <span class="st st-loss">Return-heavy</span> ≥30% of sales and ₹2,000+ · <span class="st st-problem">Problem</span> ≥20% · <span class="st st-watch">Watch</span> ≥10% · <span class="st st-good">OK</span> otherwise. Refund ₹ is <b>revenue returned</b>, not net loss — stock that came back sellable was restocked, and the real cost is the fees and logistics around it.</li>
       <li>Buckets group Amazon's reason codes by the ACTION they call for; the mapping is fixed and shown per reason above. Nothing is estimated.</li>
@@ -10655,8 +10655,8 @@ function rtRenderResults(){
   h+=`<div class="panel"><h4>What should I do next?</h4><ul style="margin:8px 0 0 18px;line-height:1.9;font-size:13.5px">
     ${worst?`<li><b>${esc(worst.sku)}</b> refunds ${worst.refundPct.toFixed(0)}% of its sales (${inr0(worst.refundValue)}). Its top reason above says whether that is the courier, the product or the listing — fix that before advertising it further.</li>`:""}
     ${rtoB&&r.buckets[0]&&r.buckets[0].k==="rto"?`<li>Your biggest bucket is <b>logistics/RTO</b> — the product is fine; the delivery isn't. Review COD share and repeat-RTO pincodes before touching listings.</li>`:""}
-    ${swB?`<li><b>${num(swB.units)} switcheroo return${swB.units>1?"s":""}</b> — buyers returned something other than your product. Those refunds are SAFE-T material: run <a href="#/reconcile">Reconciliation</a> with the same files.</li>`:""}
-    <li>High-refund SKUs' true profit after returns is in the <a href="#/sku-report">SKU report</a> (Advanced P&amp;L); month-by-month refund trend is in <a href="#/trends">Trends</a>.</li>
+    ${swB?`<li><b>${num(swB.units)} switcheroo return${swB.units>1?"s":""}</b> — buyers returned something other than your product. Those refunds are SAFE-T material: run <a href="/reconcile">Reconciliation</a> with the same files.</li>`:""}
+    <li>High-refund SKUs' true profit after returns is in the <a href="/sku-report">SKU report</a> (Advanced P&amp;L); month-by-month refund trend is in <a href="/trends">Trends</a>.</li>
   </ul></div>`;
   out.innerHTML=h; rtWire(out,r);
 }
@@ -10878,7 +10878,7 @@ function stoRenderResults(){
       <li>Every figure is read straight from Amazon's Monthly Storage Fees report. The fee column is Amazon's own per-month estimate (the column is literally named "estimated-monthly-storage-fee") — the charged amount lands in the following month's settlement; confirm it there.</li>
       <li><b>Avg stock</b> is Amazon's daily average for the month (that's why it isn't a whole number); the report's order column is a daily average too, so <b>units sold/month</b> = that average × the days in the month. One row per ASIN per fulfilment centre; merged per ASIN here.</li>
       <li><b>Months of cover</b> = avg stock ÷ units sold per month. <b>∞</b> means the ASIN sold nothing while stocked.</li>
-      <li><b>Rent per unit sold</b> = the month's storage fee ÷ units sold in the month — add it to your per-unit costs in the <a href="#/sku-report">SKU report</a>.</li>
+      <li><b>Rent per unit sold</b> = the month's storage fee ÷ units sold in the month — add it to your per-unit costs in the <a href="/sku-report">SKU report</a>.</li>
       <li>Status: <span class="st st-loss">Paying rent, selling nothing</span> stock &gt; 0, orders 0 · <span class="st st-watch">Removal in progress</span> orders 0 but units already pending removal · <span class="st st-problem">Overstocked</span> &gt; 6 months cover · <span class="st st-watch">Heavy cover</span> &gt; 3 months · <span class="st st-good">OK</span> otherwise.</li>
       <li>The Aged Inventory Surcharge report is separate and only lists items already charged the ageing surcharge — if this tool has flagged nothing there, your account isn't paying it.</li>
     </ol>
@@ -10888,7 +10888,7 @@ function stoRenderResults(){
     ${dead.length?`<li><b>${num(dead.length)} ASIN${dead.length===1?"":"s"}</b> paid ${inr0(t.deadFee)} rent this month and sold zero units${dead.filter(e=>e.pending>0).length?` (${num(dead.filter(e=>e.pending>0).length)} already have removals in progress)`:""}. For each: cut the price, advertise it, or file a removal order — but compare Amazon's per-unit removal fee against the monthly rent first: for an ASIN paying ₹30/month, removal can cost more than a year of storage.</li>`:""}
     ${t.overFee>0?`<li>Stock deeper than 6 months of cover paid ${inr0(t.overFee)} — stop restocking those ASINs until cover normalises.</li>`:""}
     <li>Storage compounds with ageing: stock that crosses Amazon's age thresholds starts paying the Aged Inventory Surcharge on top. Clearing slow stock now avoids both.</li>
-    <li>Whether a rent-heavy ASIN is still profitable after storage is a <a href="#/sku-report">SKU report</a> question — add the rent per unit sold to its cost.</li>
+    <li>Whether a rent-heavy ASIN is still profitable after storage is a <a href="/sku-report">SKU report</a> question — add the rent per unit sold to its cost.</li>
   </ul></div>`;
   out.innerHTML=h; stoWire(out,r);
 }
@@ -11168,7 +11168,7 @@ function rtoRenderResults(){
       <li><b>RTO rate</b> = RTO order items ÷ shipped order items. Rows are deduplicated by order-item, so every count on this page is an <b>order item</b> — one Amazon order can carry several. A state or SKU under ${RTO_MIN_SHIPPED} shipped order items shows no rate, and the headline rate is withheld entirely until ${RTO_MIN_SHIPPED}+ shipped order items are at least ${RTO_MATURE_DAYS} days old — volume alone is not maturity.</li>
       <li><b>Value</b> is the item price of RTO order items — the revenue that travelled and came back. What you actually lose per RTO is the two-way shipping plus any damage; this report cannot price that, so it is not guessed.</li>
       <li>This report does not say COD vs prepaid — Amazon doesn't export it here. Indian RTO is overwhelmingly a COD phenomenon, but that is context, not a number from your data.</li>
-      <li>With the seller-fulfilled Return Report added, RTO orders are matched by order ID to show how many were <b>already refunded</b> — those may be SAFE-T material in <a href="#/reconcile">Reconciliation</a>.</li>
+      <li>With the seller-fulfilled Return Report added, RTO orders are matched by order ID to show how many were <b>already refunded</b> — those may be SAFE-T material in <a href="/reconcile">Reconciliation</a>.</li>
       <li>Status: <span class="st st-loss">RTO hotspot</span> ≥10% · <span class="st st-problem">High RTO</span> ≥6% · <span class="st st-watch">Watch</span> ≥4% · <span class="st st-good">OK</span> otherwise · <span class="st st-data">Low volume</span> under ${RTO_MIN_SHIPPED} shipped order items.</li>
     </ol>
   </div></details>`;
@@ -11176,8 +11176,8 @@ function rtoRenderResults(){
   h+=`<div class="panel"><h4>What should I do next?</h4><ul style="margin:8px 0 0 18px;line-height:1.9;font-size:13.5px">
     ${hot?`<li><b>${esc(hot.state)}</b> has returned ${hot.rate.toFixed(0)}% of the order items shipped to it. Options that work in practice: prepaid-only or partial-advance offers for high-RTO regions, address/phone verification on COD orders, and keeping heavier/costlier SKUs off COD there.</li>`:""}
     ${r.pins.length?`<li>The repeat-RTO pincodes above are your blocklist candidates — a pincode that has returned ${r.pins[0].rto} parcels is telling you something no average can.</li>`:""}
-    <li>If a seller-fulfilled RTO was refunded to the buyer and the item was not returned to you, review it in <a href="#/reconcile">Reconciliation &amp; SAFE-T Finder</a>. Eligibility depends on the return status, evidence, policy and filing window.</li>
-    <li>RTO logistics charges may not be visible on the same order row. Use the <a href="#/settlement-analyzer">Settlement Analyzer</a> or <a href="#/trends">Trends</a> to review the associated Amazon logistics charges over the same period.</li>
+    <li>If a seller-fulfilled RTO was refunded to the buyer and the item was not returned to you, review it in <a href="/reconcile">Reconciliation &amp; SAFE-T Finder</a>. Eligibility depends on the return status, evidence, policy and filing window.</li>
+    <li>RTO logistics charges may not be visible on the same order row. Use the <a href="/settlement-analyzer">Settlement Analyzer</a> or <a href="/trends">Trends</a> to review the associated Amazon logistics charges over the same period.</li>
   </ul></div>`;
   out.innerHTML=h; rtoWire(out,r);
 }
@@ -11382,7 +11382,7 @@ function strRenderResults(){
       <li>Rows come straight from Amazon's Stranded Inventory report — its stranded-reason and suggested-action columns are Amazon's own.</li>
       <li><b>Units</b> = fulfillable + unfulfillable quantity. <b>Days stuck</b> counts from the report's date-stranded to today.</li>
       <li><b>Value</b> = units × the listing's your-price; where the listing is gone, units × the SKU's average unit selling price from your settlements (marked *). No price in either source → "unknown", never guessed.</li>
-      <li>Stranded stock still pays monthly storage — the <a href="#/storage">Storage Fee Analyzer</a> shows what these very units cost to keep.</li>
+      <li>Stranded stock still pays monthly storage — the <a href="/storage">Storage Fee Analyzer</a> shows what these very units cost to keep.</li>
       <li>Status: <span class="st st-loss">Stuck 90+ days</span> · <span class="st st-problem">Stuck 30+ days</span> · <span class="st st-watch">Auto-removal set / Stranded</span>.</li>
     </ol>
   </div></details>`;
@@ -11390,7 +11390,7 @@ function strRenderResults(){
   h+=`<div class="panel"><h4>What should I do next?</h4><ul style="margin:8px 0 0 18px;line-height:1.9;font-size:13.5px">
     ${worst&&worst.value?`<li>Start with <b>${esc(worst.sku)}</b> — ${num(worst.units)} units${worst.value?" worth "+inr0(worst.value):""} stuck${worst.days?" for "+num(worst.days)+" days":""}. Reason: ${esc(worst.reason)}. ${esc((STR_REASON_ADVICE[worst.reason.toLowerCase()]||"Follow Amazon's suggested action in the table."))}</li>`:""}
     <li>Fixing a listing error takes minutes and needs no removal order — work the "Listing error" rows first; the stock returns to sale where it stands.</li>
-    <li>Every week stranded is another week of storage rent on stock earning nothing — cross-check these ASINs in the <a href="#/storage">Storage Fee Analyzer</a>.</li>
+    <li>Every week stranded is another week of storage rent on stock earning nothing — cross-check these ASINs in the <a href="/storage">Storage Fee Analyzer</a>.</li>
   </ul></div>`;
   out.innerHTML=h; strWire(out,r);
 }
@@ -11609,9 +11609,9 @@ function tdRenderResults(){
   const worst=r.noconv[0];
   h+=`<div style="display:flex;justify-content:flex-end;gap:8px;margin:14px 0 2px"><button type="button" class="fbtn" id="td-csv">⬇ Export CSV</button><button type="button" class="fbtn" id="td-pdf">📄 Print / Save PDF</button><button type="button" class="fbtn" id="td-share">📤 Share PDF</button></div>
   <div class="panel"><h4>What should I do next?</h4><ul style="margin:8px 0 0 18px;line-height:1.9;font-size:13.5px">
-    ${worst?`<li><b>${esc(worst.asin)}</b> had ${num(worst.sessions)} sessions but converted only ${worst.cvr.toFixed(2)}%, versus ${t.cvr.toFixed(2)}% across the account. Review its listing, price, Featured Offer status and traffic quality before increasing traffic spend — the <a href="#/listing-checker">Listing Checker</a> is one place to start.</li>`:""}
-    ${r.stars.length?`<li>The ⭐ ASINs convert above your account average on this export. If you are choosing where extra traffic goes, they are the better-evidenced candidates — see the <a href="#/ads-optimizer">Ads Optimizer</a>.</li>`:""}
-    <li>Whether the extra sales would be profitable is a margin question — check the SKUs in the <a href="#/sku-report">SKU report</a> with your product costs.</li>
+    ${worst?`<li><b>${esc(worst.asin)}</b> had ${num(worst.sessions)} sessions but converted only ${worst.cvr.toFixed(2)}%, versus ${t.cvr.toFixed(2)}% across the account. Review its listing, price, Featured Offer status and traffic quality before increasing traffic spend — the <a href="/listing-checker">Listing Checker</a> is one place to start.</li>`:""}
+    ${r.stars.length?`<li>The ⭐ ASINs convert above your account average on this export. If you are choosing where extra traffic goes, they are the better-evidenced candidates — see the <a href="/ads-optimizer">Ads Optimizer</a>.</li>`:""}
+    <li>Whether the extra sales would be profitable is a margin question — check the SKUs in the <a href="/sku-report">SKU report</a> with your product costs.</li>
   </ul></div>`;
   out.innerHTML=h; tdWire(out,r);
 }
@@ -11715,7 +11715,7 @@ function adsRenderResults(){
   </div>`;
   if(groupSku.size||beOf.size)
     h+=`<div class="banner ${r.termsWithBE?"good":"info"}">${r.termsMatched?`<b>${num(r.termsMatched)}</b> of ${num(all.length)} term rows sit in a single-SKU ad group and inherit that SKU`:"No term row could be matched to a single-SKU ad group — the two ad reports may cover different campaigns or periods"}${r.termsWithBE?`; <b>${num(r.termsWithBE)}</b> are judged against their SKU's <b>own break-even ACOS</b> (from your statements and product costs) instead of the flat ${ADS_BLEED_ACOS}% line`:beOf.size?"":groupSku.size?" — add settlement files and product costs and they get judged against each SKU's own break-even":""}.</div>`;
-  h+=`<div class="banner info">These lists read the report you dropped — nothing is estimated. ACOS here is against <b>ad-attributed sales</b>; whether that ACOS is affordable for a given SKU depends on its margin, which lives in <a href="#/ad-profit">Ad Profitability</a> (break-even ACOS per SKU).</div>`;
+  h+=`<div class="banner info">These lists read the report you dropped — nothing is estimated. ACOS here is against <b>ad-attributed sales</b>; whether that ACOS is affordable for a given SKU depends on its margin, which lives in <a href="/ad-profit">Ad Profitability</a> (break-even ACOS per SKU).</div>`;
   if(r.negate.length){
     h+=`<div class="panel"><h4>🚫 Negate these <span class="sa-sub">(${r.negate.length} — ${ADS_NEG_CLICKS}+ clicks, ₹${ADS_NEG_SPEND}+ spent, zero orders)</span></h4>
       <p class="sa-sub" style="margin:4px 0 10px">Buyers typed these, clicked your ad, and never bought — over the whole report. Add each as a <b>negative exact</b> in its campaign and that exact term stops spending (close variants may still need their own negatives). Export gives you a paste-ready list.</p>
@@ -11761,7 +11761,7 @@ function adsRenderResults(){
         <td class="num">${c.impressions>0?(c.clicks/c.impressions*100).toFixed(2)+"%":"—"}</td>
         <td class="sa-sub" style="color:${c.vk==="good"?"var(--green)":c.vk==="bad"?"var(--red)":c.vk==="warn"?"var(--orange)":"var(--muted)"}">${esc(c.verdict)}</td></tr>`).join("")}
       </tbody></table></div>
-    <p class="sa-sub" style="margin:8px 0 0">Verdicts: <b>scale</b> at ≤${ADS_CAMP_SCALE_ACOS}% ACOS with 5+ orders · <b>fix</b> at ≥${ADS_CAMP_FIX_ACOS}% · <b>check targeting</b> when there's spend and no sales at all. ACOS alone doesn't decide profit — that needs each SKU's margin, in <a href="#/ad-profit">Ad Profitability</a>.</p></div>`;
+    <p class="sa-sub" style="margin:8px 0 0">Verdicts: <b>scale</b> at ≤${ADS_CAMP_SCALE_ACOS}% ACOS with 5+ orders · <b>fix</b> at ≥${ADS_CAMP_FIX_ACOS}% · <b>check targeting</b> when there's spend and no sales at all. ACOS alone doesn't decide profit — that needs each SKU's margin, in <a href="/ad-profit">Ad Profitability</a>.</p></div>`;
   h+=`<details class="howto"><summary>How every number here is computed</summary><div class="hbody">
     <span class="htag">Formulas &amp; thresholds</span>
     <ol>
@@ -11840,6 +11840,18 @@ function route(){
   window.scrollTo(0,0);
 }
 window.addEventListener("hashchange",()=>{ if(!location.hash||location.hash.startsWith("#/")) route(); });
+document.addEventListener("click",e=>{
+  const a=e.target.closest?e.target.closest('a[href^="/"]'):null;
+  if(!a) return;
+  if(a.target||a.hasAttribute("download")||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey||e.button!==0) return;
+  const href=a.getAttribute("href");
+  if(/\.[a-z0-9]{2,5}$/i.test(href)) return;
+  if(["/terms","/privacy","/refunds","/contact"].indexOf(href)>=0) return;
+  e.preventDefault();
+  history.pushState(null,"",href);
+  route();
+  window.scrollTo(0,0);
+});
 window.addEventListener("popstate",route);
 /* Premium tools re-check entitlement when the tab regains focus, so a session
    kicked on another device locks here within seconds of the user returning. */

@@ -7,9 +7,9 @@ const pg=await (await b.newContext({viewport:{width:1440,height:900}})).newPage(
 await pg.goto(BASE+'/',{waitUntil:'domcontentloaded'}); await pg.waitForTimeout(1500);
 const tiles=await pg.evaluate(()=>{
   const o={};
-  document.querySelectorAll('a[href^="#/"]').forEach(a=>{
+  document.querySelectorAll('a[href^="#/"],a[href^="/"]').forEach(a=>{
     const h=a.querySelector('h3'), p=a.querySelector('p');
-    if(h&&p) o[a.getAttribute('href').slice(2)]={tileTitle:h.innerText.trim(),tileDesc:p.innerText.trim()};
+    if(h&&p) o[a.getAttribute('href').replace(/^#?\//,'')]={tileTitle:h.innerText.trim(),tileDesc:p.innerText.trim()};
   });
   return o;
 });

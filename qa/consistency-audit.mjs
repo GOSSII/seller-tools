@@ -14,7 +14,7 @@ await pg.goto(BASE+'/',{waitUntil:'domcontentloaded'});
 await pg.waitForTimeout(1500);
 const routes=await pg.evaluate(()=>{
   const out=new Set();
-  document.querySelectorAll('a[href^="#/"]').forEach(a=>out.add(a.getAttribute('href').slice(2)));
+  document.querySelectorAll('a[href^="#/"],a[href^="/"]').forEach(a=>out.add(a.getAttribute('href').replace(/^#?\//,'')));
   if(window.CALCS) window.CALCS.forEach(c=>out.add('/'+c.id));
   return [...out];
 });
