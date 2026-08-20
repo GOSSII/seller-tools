@@ -2436,11 +2436,11 @@ async function gatePremium(info, body){
   // Make sure this browser holds the active session first (device-limit aware).
   const okDev=await ensureSessionForPremium();
   if(!okDev) return; // device-limit panel shown
-  if(location.hash.replace(/^#\/?/,"")!==info.route) return;
+  if(currentRoute()!==info.route) return;
   let ent={plan:"free"};
   try{ ent=await getEntitlement(); }catch(e){}
   if(ent.taken) return; // session-taken panel already shown
-  if(location.hash.replace(/^#\/?/,"")!==info.route) return; // user navigated away
+  if(currentRoute()!==info.route) return; // user navigated away
   if(ent.plan==="pro"){ body(); return; }
   if(ent.plan==="starter"){
     if(info.needPro){ renderProUpgrade(info); return; } // Pro-only tool, Starter user
@@ -3210,7 +3210,7 @@ async function renderAdmin(){
   document.title="Admin — Seller Tools India";
   app.innerHTML=`<div class="wrap page"><p class="lede">Loading…</p></div>`;
   let r; try{ r=await adminCall({action:"stats"}); }catch(e){ renderNotFound(); return; }
-  if(location.hash.replace(/^#\/?/,"")!=="admin") return;
+  if(currentRoute()!=="admin") return;
   if(!r.ok){ renderNotFound(); return; }               // 401/403/anything → no hint
   const stats=await r.json().catch(()=>null);
   if(!stats){ renderNotFound(); return; }
@@ -11787,8 +11787,22 @@ function adsWire(out,r){
   });
 }
 
+/* The app navigates by hash internally (every link and location.hash
+   assignment below stays as-is); the address bar shows the clean path.
+   #/profit routes, then becomes /profit; a direct hit on /profit is
+   served index.html by a Vercel rewrite and routed from the pathname. */
+function currentRoute(){
+  if(location.hash.startsWith("#/")) return location.hash.replace(/^#\/?/,"");
+  try{ return decodeURIComponent(location.pathname).replace(/^\/+|\/+$/g,""); }
+  catch(e){ return location.pathname.replace(/^\/+|\/+$/g,""); }
+}
 function route(){
-  const h=location.hash.replace(/^#\/?/,"");
+  const h=currentRoute();
+  if(location.hash.startsWith("#/")){
+    try{ history.replaceState(null,"","/"+h+location.search); }catch(e){}
+  }
+  const can=document.querySelector('link[rel="canonical"]');
+  if(can) can.setAttribute("href","https://sellertoolsindia.com/"+h);
   renderAuthSlot();
   if(!h){renderHome();window.scrollTo(0,0);return;}
   if(h==="pricing"){renderPricing();window.scrollTo(0,0);return;}
@@ -11825,12 +11839,13 @@ function route(){
   renderCalc(h);
   window.scrollTo(0,0);
 }
-window.addEventListener("hashchange",route);
+window.addEventListener("hashchange",()=>{ if(!location.hash||location.hash.startsWith("#/")) route(); });
+window.addEventListener("popstate",route);
 /* Premium tools re-check entitlement when the tab regains focus, so a session
    kicked on another device locks here within seconds of the user returning. */
 const PREMIUM_ROUTES=["settlement-analyzer","gst-report","sku-report","sku-report/advanced","reconcile","trends","ad-profit","fee-bands","ads-optimizer","returns","storage","rto","stranded","traffic"];
 window.addEventListener("focus",()=>{
-  const h=location.hash.replace(/^#\/?/,"");
+  const h=currentRoute();
   if(!PREMIUM_ROUTES.includes(h) || !sessionUser()) return;
   resetEntitlement();
   getEntitlement().then(ent=>{
@@ -11898,7 +11913,7 @@ function sendPing(){
   if(s&&s.access_token) headers.Authorization="Bearer "+s.access_token;
   try{
     fetch("/api/ping",{method:"POST",headers,keepalive:true,
-      body:JSON.stringify({sid,route:location.hash.replace(/^#\/?/,"").slice(0,60)||"home"})}).catch(()=>{});
+      body:JSON.stringify({sid,route:currentRoute().slice(0,60)||"home"})}).catch(()=>{});
   }catch(e){}
 }
 setInterval(sendPing,60000);
@@ -11919,7 +11934,7 @@ function reportClientError(message,source,line,col){
     _errSeen.add(key); _errBudget--;
     fetch("/api/client-error",{method:"POST",headers:{"Content-Type":"application/json"},keepalive:true,
       body:JSON.stringify({message,source:String(source||"").slice(0,200),
-        line:line||0,col:col||0,route:location.hash.replace(/^#\/?/,"").slice(0,60)||"home"})}).catch(()=>{});
+        line:line||0,col:col||0,route:currentRoute().slice(0,60)||"home"})}).catch(()=>{});
   }catch(e){}
 }
 window.addEventListener("error",e=>{

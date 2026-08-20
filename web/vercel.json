@@ -1,24 +1,42 @@
 {
   "cleanUrls": true,
   "crons": [
-    { "path": "/api/cleanup", "schedule": "17 3 * * *" }
+    {
+      "path": "/api/cleanup",
+      "schedule": "17 3 * * *"
+    }
   ],
   "redirects": [
     {
       "source": "/((?!api/).*)",
-      "has": [{ "type": "host", "value": "amazonsellertools.vercel.app" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "amazonsellertools.vercel.app"
+        }
+      ],
       "destination": "https://sellertoolsindia.com/$1",
       "permanent": true
     },
     {
       "source": "/((?!api/).*)",
-      "has": [{ "type": "host", "value": "sellertoolsindia.vercel.app" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "sellertoolsindia.vercel.app"
+        }
+      ],
       "destination": "https://sellertoolsindia.com/$1",
       "permanent": true
     },
     {
       "source": "/((?!api/).*)",
-      "has": [{ "type": "host", "value": "www.sellertoolsindia.com" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "www.sellertoolsindia.com"
+        }
+      ],
       "destination": "https://sellertoolsindia.com/$1",
       "permanent": true
     }
@@ -27,14 +45,29 @@
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "SAMEORIGIN"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
         {
           "key": "Content-Security-Policy",
           "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://*.razorpay.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://*.razorpay.com; connect-src 'self' https://qlqxshtjgiunwkcffate.supabase.co https://cdn.jsdelivr.net https://*.razorpay.com; frame-src blob: https://*.razorpay.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
         }
       ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
     }
   ]
 }
