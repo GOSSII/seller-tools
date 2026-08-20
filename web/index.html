@@ -2218,18 +2218,16 @@ function authTokensInUrl(){
    immediately after the OAuth return. Skippable on purpose — a stuck
    user is worse than one Razorpay field at payment time. */
 function renderPhonePrompt(nextHash){
-  authShell("One last step","Your mobile number — UPI payment approvals go to it.",`
+  authShell("One last step","",`
     <form class="card" id="ph-form" novalidate>
       <div id="ph-msg" class="auth-msg" hidden></div>
       <div><label for="ph-phone">Mobile number</label>
         <input id="ph-phone" type="tel" autocomplete="tel-national" inputmode="numeric" maxlength="10" placeholder="10-digit mobile"></div>
       <button type="submit" class="bigbtn" id="ph-submit">Save &amp; continue</button>
-      <div class="auth-links"><a href="#" id="ph-skip">Skip for now</a></div>
     </form>`);
   const form=document.getElementById("ph-form"), msg=document.getElementById("ph-msg"),
         submit=document.getElementById("ph-submit");
   try{ document.getElementById("ph-phone").focus(); }catch(e){}
-  document.getElementById("ph-skip").addEventListener("click",e=>{ e.preventDefault(); location.hash=nextHash||"#/"; });
   form.addEventListener("submit",async e=>{
     e.preventDefault(); msg.hidden=true;
     const phone=document.getElementById("ph-phone").value.replace(/\D/g,"");
@@ -2252,6 +2250,11 @@ function renderPhonePrompt(nextHash){
 }
 async function handleAuthRedirect(){
   if(!authTokensInUrl()) return false;
+  // Paint immediately — the token exchange below takes a few seconds and
+  // the home page flashing first reads as a broken redirect.
+  payShell(`<div style="font-size:36px;line-height:1">🔐</div>
+    <h2 style="margin-top:8px">Signing you in…</h2>
+    <p class="lede">Just a moment.</p>`);
   const h=location.hash||"";
   const linkType=(h.match(/[#&?]type=([a-z_]+)/)||[])[1]||"";
   const errRaw=(h.match(/error_description=([^&]+)/)||[])[1]||"";
