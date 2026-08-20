@@ -48,9 +48,14 @@ create index if not exists entitlements_user_idx
 -- One entitlement per Razorpay payment. The webhook can be delivered twice for
 -- one charge (payment.captured + subscription.charged, or a Razorpay retry);
 -- this makes the second insert a no-op instead of a second paid period.
--- Partial: admin grants carry no payment_id and must stay unconstrained.
-create unique index if not exists entitlements_payment_uniq
-  on public.entitlements (payment_id) where payment_id is not null;
+-- A full UNIQUE constraint, not a partial index: PostgREST's
+-- on_conflict=payment_id (used by the webhook's grant insert) can only
+-- target a real constraint — with the old partial index Postgres answered
+-- 42P10 and the first live webhook grant failed forever. Admin grants keep
+-- payment_id NULL, and a UNIQUE btree allows any number of NULLs, so they
+-- stay unconstrained exactly as before.
+alter table public.entitlements
+  add constraint entitlements_payment_id_key unique (payment_id);
 
 -- ---------------------------------------------------------------------------
 -- payments: one row per Razorpay order/payment
