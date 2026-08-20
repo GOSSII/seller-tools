@@ -2034,7 +2034,7 @@ function addResendButton(id,msgEl,email){
 function authShell(title,lede,inner){
   backBtn.hidden=false;
   app.innerHTML=`<div class="wrap page"><div class="auth">
-    <h2>${esc(title)}</h2><p class="lede">${esc(lede)}</p>${inner}</div></div>`;
+    <h2>${esc(title)}</h2>${lede?`<p class="lede">${esc(lede)}</p>`:""}${inner}</div></div>`;
 }
 function authMsg(el,type,text){
   el.className="auth-msg "+type; el.textContent=text; el.hidden=false;
@@ -2233,6 +2233,7 @@ function renderPhonePrompt(nextHash){
         <input id="ph-phone" type="tel" autocomplete="tel-national" inputmode="numeric" maxlength="10" placeholder="10-digit mobile"></div>
       <button type="submit" class="bigbtn" id="ph-submit">Save &amp; continue</button>
     </form>`);
+  backBtn.hidden=true;   // a committed step — no header escape hatch
   const form=document.getElementById("ph-form"), msg=document.getElementById("ph-msg"),
         submit=document.getElementById("ph-submit");
   try{ document.getElementById("ph-phone").focus(); }catch(e){}
@@ -2269,6 +2270,7 @@ async function handleAuthRedirectInner(){
   payShell(`<div style="font-size:36px;line-height:1">🔐</div>
     <h2 style="margin-top:8px">Signing you in…</h2>
     <p class="lede">Just a moment.</p>`);
+  backBtn.hidden=true;
   const h=location.hash||"";
   const linkType=(h.match(/[#&?]type=([a-z_]+)/)||[])[1]||"";
   const errRaw=(h.match(/error_description=([^&]+)/)||[])[1]||"";
@@ -2769,6 +2771,7 @@ function renderPaymentPolling(order){
   payShell(`<div class="pay-spin" aria-hidden="true"></div>
     <h2 style="margin-top:6px">Confirming your payment…</h2>
     <p class="lede">This usually takes a few seconds. Please don't close this tab.</p>`);
+  backBtn.hidden=true;
   resetEntitlement();
   const wantRank=order.plan==="pro"?2:1;
   const started=Date.now();
