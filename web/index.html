@@ -2213,6 +2213,43 @@ function authTokensInUrl(){
   return /access_token=|error_description=|type=recovery/.test(location.hash||"")
       || /[?&]code=/.test(location.search||"");
 }
+/* Google sign-ups never pass our signup form, so the mobile number that
+   lets checkout skip Razorpay's contact screen is missing. Ask once,
+   immediately after the OAuth return. Skippable on purpose — a stuck
+   user is worse than one Razorpay field at payment time. */
+function renderPhonePrompt(nextHash){
+  authShell("One last step","Your mobile number — UPI payment approvals go to it.",`
+    <form class="card" id="ph-form" novalidate>
+      <div id="ph-msg" class="auth-msg" hidden></div>
+      <div><label for="ph-phone">Mobile number</label>
+        <input id="ph-phone" type="tel" autocomplete="tel-national" inputmode="numeric" maxlength="10" placeholder="10-digit mobile"></div>
+      <button type="submit" class="bigbtn" id="ph-submit">Save &amp; continue</button>
+      <div class="auth-links"><a href="#" id="ph-skip">Skip for now</a></div>
+    </form>`);
+  const form=document.getElementById("ph-form"), msg=document.getElementById("ph-msg"),
+        submit=document.getElementById("ph-submit");
+  try{ document.getElementById("ph-phone").focus(); }catch(e){}
+  document.getElementById("ph-skip").addEventListener("click",e=>{ e.preventDefault(); location.hash=nextHash||"#/"; });
+  form.addEventListener("submit",async e=>{
+    e.preventDefault(); msg.hidden=true;
+    const phone=document.getElementById("ph-phone").value.replace(/\D/g,"");
+    if(!/^[6-9]\d{9}$/.test(phone)){authMsg(msg,"err","Sahi 10-digit mobile number bharein — payment approval isi number par aayega.");return;}
+    submit.disabled=true; submit.textContent="Saving…";
+    try{
+      const c=await sb();
+      const {error}=await c.auth.updateUser({data:{phone}});
+      if(error){authMsg(msg,"err",authFriendly(error.message));return;}
+      // keep the locally stored session copy in step for checkout prefill
+      try{
+        const raw=localStorage.getItem(SUPABASE_AUTH_KEY); const j=JSON.parse(raw);
+        const sess=(j&&j.user)?j:(j&&j.currentSession);
+        if(sess&&sess.user){ sess.user.user_metadata=Object.assign({},sess.user.user_metadata,{phone}); localStorage.setItem(SUPABASE_AUTH_KEY,JSON.stringify(j)); }
+      }catch(e2){}
+      location.hash=nextHash||"#/";
+    }catch(err){authMsg(msg,"err",authFriendly(err.message));}
+    finally{submit.disabled=false; submit.textContent="Save & continue";}
+  });
+}
 async function handleAuthRedirect(){
   if(!authTokensInUrl()) return false;
   const h=location.hash||"";
@@ -2239,6 +2276,8 @@ async function handleAuthRedirect(){
     // If a paywall sent the user off to log in (email link or Google OAuth),
     // take them straight back to that tool.
     let next=""; try{ next=sessionStorage.getItem("auth_next")||""; sessionStorage.removeItem("auth_next"); }catch(e){}
+    const uu=sessionUser();
+    if(uu&&!(uu.user_metadata&&uu.user_metadata.phone)){ renderPhonePrompt(/^#\//.test(next)?next:""); return true; }
     if(/^#\//.test(next)){ location.hash=next; return true; }
     payShell(`<div style="font-size:40px;line-height:1">✅</div>
       <h2 style="margin-top:8px">${linkType==="signup"?"Email confirmed — you're logged in":"You're logged in"}</h2>
