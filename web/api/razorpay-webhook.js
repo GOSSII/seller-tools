@@ -48,19 +48,84 @@ function verifySignature(raw, signature, secret) {
   try { return crypto.timingSafeEqual(a, b); } catch (e) { return false; }
 }
 
-// existing: newest active {plan, expires_at(ISO)} or null. Returns ISO dates.
-function computeDates(existing, newPlan, days, nowMs) {
-  let baseMs = nowMs;
+// existing: newest active {plan, expires_at(ISO), per_day_paise?} or null.
+// Same plan → a renewal: extends 1:1 from the current expiry. Upgrade
+// (existing rank below the new plan) → the remaining time converts by
+// VALUE: the rupees left on the old plan buy days at the new plan's
+// per-day price. A 1:1 upgrade stack let ₹999 of yearly Starter turn
+// into a year of Pro; value conversion keeps every paid rupee and
+// closes that hole. Downgrades start fresh — a cheaper plan must not
+// consume a costlier one's time.
+function computeDates(existing, newPlan, days, nowMs, newPerDayPaise) {
+  let expiresMs = nowMs + days * 86400000;
   if (existing && existing.expires_at) {
     const exp = new Date(existing.expires_at).getTime();
-    // Extend only when the current plan is active AND same-or-lower rank
-    // (renewals and upgrades stack; a downgrade starts fresh).
-    if (exp > nowMs && planRank(existing.plan) <= planRank(newPlan)) baseMs = exp;
+    if (exp > nowMs) {
+      const oldRank = planRank(existing.plan), newRank = planRank(newPlan);
+      if (oldRank === newRank) expiresMs = exp + days * 86400000;
+      else if (oldRank < newRank) {
+        const ratio = (existing.per_day_paise > 0 && newPerDayPaise > 0)
+          ? Math.min(1, existing.per_day_paise / newPerDayPaise) : 0;
+        expiresMs = nowMs + days * 86400000 + Math.floor((exp - nowMs) * ratio);
+      }
+    }
   }
   return {
     starts_at: new Date(nowMs).toISOString(),
-    expires_at: new Date(baseMs + days * 86400000).toISOString()
+    expires_at: new Date(expiresMs).toISOString()
   };
+}
+
+// What one day of the buyer's CURRENT entitlement cost them: the linked
+// payment's amount over the entitlement's span, else the plan's monthly
+// rate (admin grants and rows from before payment linkage). Never a
+// retry-worthy failure — a missing number only means no upgrade bonus
+// math, so fall back rather than block the grant.
+async function perDayPaiseOf(existing) {
+  if (!existing) return null;
+  try {
+    const spanMs = (existing.starts_at && existing.expires_at)
+      ? new Date(existing.expires_at).getTime() - new Date(existing.starts_at).getTime() : 0;
+    if (existing.payment_id && spanMs > 0) {
+      const pRes = await rest('GET', '/payments?select=amount_paise&razorpay_payment_id=eq.'
+        + encodeURIComponent(existing.payment_id) + '&limit=1');
+      if (pRes.ok) {
+        const p = ((await pRes.json()) || [])[0];
+        if (p && p.amount_paise > 0) return p.amount_paise / (spanMs / 86400000);
+      }
+    }
+  } catch (e) { /* fall through */ }
+  const mk = Object.keys(PRICES).find(k => PRICES[k].plan === existing.plan && PRICES[k].period === 'monthly');
+  return mk ? PRICES[mk].amount_paise / PRICES[mk].days : null;
+}
+
+// A Pro purchase supersedes a Starter auto-renewal: the buyer's leftover
+// Starter time has just been converted into Pro days, so the old mandate
+// must stop charging — otherwise they pay for both plans every month.
+// Immediate cancel, not cycle end: the running period's value is already
+// credited. Best-effort by design — the account page still lists every
+// mandate with its own cancel button if this misses.
+async function cancelLowerSubs(userId, newPlan) {
+  const KEY = process.env.RAZORPAY_KEY_ID, SEC = process.env.RAZORPAY_KEY_SECRET;
+  if (!KEY || !SEC) return;
+  const r = await rest('GET', '/subscriptions?select=rzp_subscription_id,plan,status&user_id=eq.'
+    + encodeURIComponent(userId) + '&status=in.(active,created,authenticated)');
+  if (!r.ok) return;
+  for (const sub of (await r.json()) || []) {
+    if (!sub.rzp_subscription_id || planRank(sub.plan) >= planRank(newPlan)) continue;
+    try {
+      const c = await fetch('https://api.razorpay.com/v1/subscriptions/'
+        + encodeURIComponent(sub.rzp_subscription_id) + '/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Basic ' + Buffer.from(KEY + ':' + SEC).toString('base64') },
+        body: JSON.stringify({ cancel_at_cycle_end: 0 })
+      });
+      if (c.ok) {
+        await rest('PATCH', '/subscriptions?rzp_subscription_id=eq.'
+          + encodeURIComponent(sub.rzp_subscription_id), { status: 'cancelled' });
+      }
+    } catch (e) { /* best-effort */ }
+  }
 }
 
 function readRaw(req) {
@@ -119,7 +184,7 @@ async function recordPaidAndEntitle({ paymentId, orderId, userId, price, amountP
   // Entitlement dates: extend the FURTHEST-dated live same-or-lower plan.
   // Taking the newest-created row instead would compute a renewal from a
   // short admin top-up and silently delete months of paid time.
-  const entRes = await rest('GET', '/entitlements?select=plan,expires_at&user_id=eq.'
+  const entRes = await rest('GET', '/entitlements?select=plan,expires_at,starts_at,payment_id&user_id=eq.'
     + encodeURIComponent(userId) + '&order=expires_at.desc.nullsfirst&limit=100');
   if (!entRes.ok) return { retry: true };
   let existing = null;
@@ -129,7 +194,8 @@ async function recordPaidAndEntitle({ paymentId, orderId, userId, price, amountP
     const live = (rows || []).filter(r => !r.expires_at || new Date(r.expires_at).getTime() > now);
     existing = live.find(r => !r.expires_at) || live[0] || null;   // null expiry = perpetual
   }
-  const dates = computeDates(existing, price.plan, price.days, Date.now());
+  if (existing) existing.per_day_paise = await perDayPaiseOf(existing);
+  const dates = computeDates(existing, price.plan, price.days, Date.now(), price.amount_paise / price.days);
 
   // GRANT FIRST, then record the money. entitlements.payment_id is UNIQUE, and
   // on_conflict names it so PostgREST targets that constraint rather than the
@@ -282,6 +348,9 @@ async function handler(req, res) {
         amountPaise: pay.amount, evt, pay, source: 'razorpay_sub'
       });
       if (r.retry) return res.status(503).json({ error: 'retry' });
+      if (!r.duplicate && planRank(price.plan) > 1) {
+        try { await cancelLowerSubs(ourSub.user_id, price.plan); } catch (e) { /* best-effort */ }
+      }
       return res.status(200).json({ ok: true, duplicate: !!r.duplicate });
     }
 
@@ -365,6 +434,9 @@ async function handler(req, res) {
     });
     if (r.retry) return res.status(503).json({ error: 'retry' });
     if (r.refunded) return res.status(200).json({ ok: true, ignored: 'already_refunded' });
+    if (!r.duplicate && planRank(price.plan) > 1) {
+      try { await cancelLowerSubs(ord.user_id, price.plan); } catch (e) { /* best-effort */ }
+    }
     return res.status(200).json({ ok: true, duplicate: !!r.duplicate });
   } catch (e) {
     return res.status(500).json({ error: 'server_error' });
@@ -375,6 +447,8 @@ module.exports = handler;
 module.exports.config = { api: { bodyParser: false } };
 module.exports.verifySignature = verifySignature;
 module.exports.computeDates = computeDates;
+module.exports.perDayPaiseOf = perDayPaiseOf;
+module.exports.cancelLowerSubs = cancelLowerSubs;
 module.exports.SUB_STATUS = SUB_STATUS;
 module.exports.priceFor = priceFor;
 module.exports.amountOk = amountOk;
