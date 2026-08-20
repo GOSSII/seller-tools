@@ -2089,6 +2089,8 @@ function renderSignup(){
         <input id="su-name" type="text" autocomplete="name" placeholder="Your name"></div>
       <div><label for="su-email">Email</label>
         <input id="su-email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com"></div>
+      <div><label for="su-phone">Mobile number</label>
+        <input id="su-phone" type="tel" autocomplete="tel-national" inputmode="numeric" maxlength="10" placeholder="10-digit mobile — payment approvals go here"></div>
       <div><label for="su-pass">Password</label>
         <input id="su-pass" type="password" autocomplete="new-password" placeholder="At least 6 characters">
         <label class="showpass"><input type="checkbox" data-showpass="su-pass"> Show password</label></div>
@@ -2107,16 +2109,18 @@ function renderSignup(){
     e.preventDefault(); msg.hidden=true;
     const name=document.getElementById("su-name").value.trim();
     const email=document.getElementById("su-email").value.trim();
+    const phone=document.getElementById("su-phone").value.replace(/\D/g,"");
     const pass=document.getElementById("su-pass").value;
     const agree=document.getElementById("su-agree").checked;
     if(!name){authMsg(msg,"err","Apna naam bharein.");return;}
     if(!email){authMsg(msg,"err","Email bharein.");return;}
+    if(!/^[6-9]\d{9}$/.test(phone)){authMsg(msg,"err","Sahi 10-digit mobile number bharein — payment approval isi number par aayega.");return;}
     if(pass.length<6){authMsg(msg,"err","Password kam se kam 6 characters ka hona chahiye.");return;}
     if(!agree){authMsg(msg,"err","Aage badhne ke liye Terms aur Privacy accept karein.");return;}
     submit.disabled=true; submit.textContent="Creating…";
     try{
       const c=await sb();
-      const {data,error}=await c.auth.signUp({email,password:pass,options:{data:{name}}});
+      const {data,error}=await c.auth.signUp({email,password:pass,options:{data:{name,phone}}});
       if(error){authMsg(msg,"err",authFriendly(error.message));return;}
       if(data&&data.session){ resetEntitlement(); setStoredSessionId(""); renderAuthSlot(); try{ const cr=await claimSession(); if(cr.error==="device_limit"){ renderDeviceLimit(cr.limit); return; } }catch(e){} location.hash=authNextRoute(); }
       else { authMsg(msg,"ok","Ho gaya! Apne email ka confirmation link kholein — us link se aap seedha login ho jayenge."); form.reset(); addResendButton("su-resend",msg,email); }
@@ -2681,7 +2685,7 @@ async function startCheckout(planKey, autoRenew){
     // No Razorpay-account OTP flows: the buyer already authenticated with
     // us; checkout should only take the payment.
     remember_customer:false,
-    prefill:{ email:order.email||u.email||"" },
+    prefill:{ email:order.email||u.email||"", contact:(u.user_metadata&&u.user_metadata.phone)||"" },
     theme:{ color:"#2f5af0" },
     handler:function(){ renderPaymentPolling(order); },
     modal:{ ondismiss:function(){ /* popup closed — leave the user where they were */ } }
