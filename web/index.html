@@ -11915,6 +11915,18 @@ function route(){
   }
   const can=document.querySelector('link[rel="canonical"]');
   if(can) can.setAttribute("href","https://sellertoolsindia.com/"+h);
+  /* After the page renders (every render fn sets title/description
+     synchronously), mirror them into the social-share tags so a deep
+     link shares as itself, not as the homepage. */
+  queueMicrotask(()=>{
+    const set=(sel,v)=>{const el=document.querySelector(sel);if(el&&v)el.setAttribute("content",v);};
+    const d=(document.querySelector('meta[name="description"]')||{getAttribute:()=>""}).getAttribute("content");
+    set('meta[property="og:title"]',document.title);
+    set('meta[property="og:description"]',d);
+    set('meta[property="og:url"]',"https://sellertoolsindia.com/"+h);
+    set('meta[name="twitter:title"]',document.title);
+    set('meta[name="twitter:description"]',d);
+  });
   renderAuthSlot();
   if(!h){renderHome();window.scrollTo(0,0);return;}
   if(h==="pricing"){renderPricing();window.scrollTo(0,0);return;}
