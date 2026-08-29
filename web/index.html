@@ -7770,6 +7770,77 @@ function loadPdfLib(){
 
 const PDFJS_URL="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.min.js";
 const PDFJS_WORKER_URL="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js";
+/* Two data sets pdf.js needs but does not bundle, from the same pinned copy
+   (connect-src already allows jsdelivr):
+     standard_fonts - the base-14 metrics/outlines for fonts a PDF names but
+       does not embed. Without them pdf.js logs "failed to fetch file
+       LiberationSans-Bold.ttf" and leans on whatever the OS offers; the SKU
+       caption and the page number are the only text we draw in a
+       non-embedded font, so they are the only text that can come out wrong.
+     cmaps - character-code tables for CID-encoded fonts. Without them the
+       text layer of such a PDF reads back as raw glyph ids, which land in
+       CJK code points: unreadable SKUs pulled from a perfectly fine label. */
+const PDFJS_FONTS_URL="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/standard_fonts/";
+const PDFJS_CMAPS_URL="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/";
+function pdfjsOpen(opts){
+  return pdfjsLib.getDocument(Object.assign({
+    standardFontDataUrl:PDFJS_FONTS_URL, cMapUrl:PDFJS_CMAPS_URL, cMapPacked:true,
+  },opts));
+}
+/* ---- The font we draw with ------------------------------------------
+   A base-14 font (Helvetica, Courier...) is only NAMED by a PDF, never
+   carried in it: every viewer, printer and browser substitutes something
+   local. Amazon's label content embeds its own fonts, so it always renders;
+   the SKU caption and the page number were the only text WE draw, in a
+   base-14 font, and so the only text on the page exposed to a bad
+   substitution — which is exactly the pair that came out as another script,
+   in one browser, on the same file that read fine in another.
+   Embedding removes the dependency: the glyphs travel inside the PDF.
+   Only the characters actually used are embedded (subset: true), so a batch
+   grows by a few kB, not by a whole typeface. Liberation Sans is
+   metric-compatible with Helvetica, so every width the layouts were built
+   around stays what it was. ---- */
+const FONTKIT_URL="https://cdn.jsdelivr.net/npm/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.min.js";
+const TEXT_FONT_URL=PDFJS_FONTS_URL+"LiberationSans-Regular.ttf";
+const TEXT_FONT_BOLD_URL=PDFJS_FONTS_URL+"LiberationSans-Bold.ttf";
+let fontkitPromise=null, textFontBytes=null;
+function loadFontkit(){
+  if(window.fontkit) return Promise.resolve();
+  if(!fontkitPromise) fontkitPromise=new Promise((res,rej)=>{
+    const s=document.createElement("script");
+    s.src=FONTKIT_URL; s.onload=()=>res(); s.onerror=()=>{fontkitPromise=null;rej(new Error("load failed"));};
+    document.head.appendChild(s);
+  });
+  return fontkitPromise;
+}
+/* Both weights for `doc`, embedded when they can be. If fontkit or the font
+   files cannot be fetched (offline, CDN blocked) this returns the base-14
+   pair instead — the batch still comes out, exactly as it did before, and
+   only then is it at the mercy of the viewer's substitution. */
+async function embedTextFonts(doc){
+  try{
+    await loadFontkit();
+    if(!textFontBytes){
+      const [a,b]=await Promise.all([fetch(TEXT_FONT_URL),fetch(TEXT_FONT_BOLD_URL)]);
+      if(!a.ok||!b.ok) throw new Error("font fetch "+a.status+"/"+b.status);
+      textFontBytes=[new Uint8Array(await a.arrayBuffer()),new Uint8Array(await b.arrayBuffer())];
+    }
+    doc.registerFontkit(fontkit);
+    return {
+      font:await doc.embedFont(textFontBytes[0].slice(),{subset:true}),
+      bold:await doc.embedFont(textFontBytes[1].slice(),{subset:true}),
+      embedded:true,
+    };
+  }catch(e){
+    try{console.warn("Embedded text font unavailable, falling back to base-14:",e);}catch(_){}
+    return {
+      font:await doc.embedFont(PDFLib.StandardFonts.Helvetica),
+      bold:await doc.embedFont(PDFLib.StandardFonts.HelveticaBold),
+      embedded:false,
+    };
+  }
+}
+
 let pdfJsPromise=null;
 function loadPdfJs(){
   if(window.pdfjsLib) return Promise.resolve();
@@ -7792,13 +7863,39 @@ function loadPdfJs(){
    used (the CSP blocks it as a blob: frame on hardened deploys, and
    phones don't render PDF iframes at all); the iframe remains only as
    the fallback when pdf.js itself cannot load. */
+/* Every live preview is registered here so leaving the route can tear it
+   down. Without this the pdf.js document, its web worker and the @font-face
+   entries it registers in document.fonts stay alive for the life of the tab:
+   a session that hops between tools for a few hours accumulates hundreds of
+   them, and the tab eventually dies. Only re-rendering into the SAME element
+   used to release anything. */
+const livePreviews=new Set();
+function releasePreview(holder){
+  if(!holder||!holder._pv) return;
+  const pv=holder._pv; holder._pv=null; livePreviews.delete(holder);
+  try{pv.obs.disconnect();}catch(e){}
+  try{pv.doc.destroy();}catch(e){}
+}
+/* Blob URLs behind the download buttons. They pin the whole generated PDF in
+   memory until revoked, and nothing revoked them: one per run, for the life
+   of the tab. ownUrl() hands a URL to the current route; the previous run's
+   URLs go when the tool makes new ones, the rest when the route changes. */
+const routeUrls=new Set();
+function ownUrl(u){ routeUrls.add(u); return u; }
+function revokeUrls(list){
+  for(const u of list){ if(!u) continue; routeUrls.delete(u); try{URL.revokeObjectURL(u);}catch(e){} }
+}
+function releaseRoute(){
+  for(const h of [...livePreviews]) releasePreview(h);
+  revokeUrls([...routeUrls]);
+}
 async function pdfPreviewInto(holder,heading,bytes,url,alt){
   if(!holder) return;
-  if(holder._pv){try{holder._pv.obs.disconnect();holder._pv.doc.destroy();}catch(e){}holder._pv=null;}
+  releasePreview(holder);
   holder.innerHTML=`<div class="panel"><h4>${heading} <a class="prevlink" href="${url}" target="_blank" rel="noopener">Open full PDF ↗</a></h4><div class="prevscroll"><div class="note" style="margin:12px">Rendering preview…</div></div></div>`;
   try{
     await loadPdfJs();
-    const pdoc=await pdfjsLib.getDocument({data:bytes.slice(0)}).promise;
+    const pdoc=await pdfjsOpen({data:bytes.slice(0)}).promise;
     const total=pdoc.numPages;
     const box=holder.querySelector(".prevscroll");
     const dpr=Math.min(window.devicePixelRatio||1,2);
@@ -7843,6 +7940,7 @@ async function pdfPreviewInto(holder,heading,bytes,url,alt){
     },{root:box,rootMargin:"1400px 0px"});
     slots.forEach(s=>obs.observe(s));
     holder._pv={obs,doc:pdoc};
+    livePreviews.add(holder);
   }catch(e){
     holder.innerHTML=`<div class="panel"><h4>${heading}</h4><iframe class="pdfprev" src="${url}" title="${alt}"></iframe></div>`;
   }
@@ -7856,6 +7954,24 @@ const CROP_PRESETS={
   "custom":{name:"Custom (set % below)",left:0,top:0,width:50,height:50},
 };
 let lcFiles=[], lcBusy=false, lcPageInfo=[];
+
+/* Nothing reaches a printed caption without passing through here. pdf.js
+   returns raw glyph ids as text when a PDF's font carries no usable
+   character map, and those land in code points that read as some other
+   script - the SKU comes out as gibberish through no fault of the label.
+   The "ASIN ( seller SKU )" paths are the way in: they accept any character
+   between the parentheses, unlike the caption patterns, which are anchored
+   to ASCII. A name that is not mostly plain alphanumerics is therefore
+   treated as unread: the label then says nothing instead of something
+   wrong, the page joins the visible "(no SKU read)" group, and pdf-lib is
+   never handed a character WinAnsi cannot encode - which throws, and would
+   fail the whole batch rather than one caption. */
+function lcSkuSafe(v){
+  const t=gstinvPdfSafe(v).slice(0,60);
+  if(!t) return "";
+  const alnum=(t.match(/[A-Za-z0-9]/g)||[]).length;
+  return alnum>=Math.max(2,Math.ceil(t.replace(/\s/g,"").length*0.6))?t:"";
+}
 
 function renderLabelCropper(){ lcBody(); }
 function lcBody(){
@@ -8096,7 +8212,10 @@ function lcBody(){
         // BOTH marked and unmarked pages (see below).
         const invRe=/\btax\s+invoice\b|\bbill\s+of\s+supply\b|\boriginal\s+for\s+recipient\b|\binvoice\s+(number|no\.?|date)\b/i;
         for(let fi=0;fi<filesBytes.length;fi++){
-          const pdoc=await pdfjsLib.getDocument({data:filesBytes[fi].slice(0)}).promise;
+          const pdoc=await pdfjsOpen({data:filesBytes[fi].slice(0)}).promise;
+          // Held in try/finally: a page that throws mid-read used to leave
+          // the document, its worker and its fonts behind for good.
+          try{
           for(let p=1;p<=pdoc.numPages;p++){
             const pageObj=await pdoc.getPage(p);
             const tc=await pageObj.getTextContent();
@@ -8266,9 +8385,19 @@ function lcBody(){
             const mo=text.match(/\b(\d{3}-\d{7}-\d{7})\b/);
             if(mo) info.oid=mo[1];
           }
-          if(pdoc.destroy) pdoc.destroy();
+          }finally{ if(pdoc.destroy) await pdoc.destroy(); }
         }
       }catch(e){ detectFailed=true; }
+      for(const x of lcPageInfo){
+        x.sku=lcSkuSafe(x.sku);
+        // .cap is left as found: a caption WAS detected there (that is what
+        // drives 2-up splitting), only its name was unusable.
+        if(x.halves) for(const h of x.halves) h.sku=lcSkuSafe(h.sku);
+        if(x.items){
+          x.items=x.items.map(t=>({sku:lcSkuSafe(t.sku),qty:t.qty})).filter(t=>t.sku);
+          if(x.items.length<2) delete x.items;
+        }
+      }
       // Drop detected blank pages before any pairing or sorting.
       const blanksSkipped=lcPageInfo.filter(x=>x.blank).length;
       if(blanksSkipped) lcPageInfo=lcPageInfo.filter(x=>!x.blank);
@@ -8348,7 +8477,7 @@ function lcBody(){
       status("Cropping…");
       const labelDoc=await PDFLib.PDFDocument.create();
       const invDoc=invMode==="none"?null:await PDFLib.PDFDocument.create();
-      const skuFont=(skuPrint||dtPrint||numPrint)?await labelDoc.embedFont(PDFLib.StandardFonts.HelveticaBold):null;
+      const skuFont=(skuPrint||dtPrint||numPrint)?(await embedTextFonts(labelDoc)).bold:null;
       // Embed only the pages we will actually draw (labels + their linked
       // invoice pages). Skipped blanks stay out — pdf-lib can't even embed
       // a page whose Contents stream is missing entirely.
@@ -8517,8 +8646,7 @@ function lcBody(){
 
       // Order list / picklist page(s) — first or last per the option.
       if(olist!=="no"){
-        const font=await outDoc.embedFont(PDFLib.StandardFonts.Helvetica);
-        const fontB=await outDoc.embedFont(PDFLib.StandardFonts.HelveticaBold);
+        const {font,bold:fontB}=await embedTextFonts(outDoc);
         // Each product counts under its own SKU row — a packet holding
         // two products appears in two rows (the labels' captions carry
         // the full contents), and the Total row says how many packets
@@ -8577,14 +8705,18 @@ function lcBody(){
       }
 
       const outBytes=await outDoc.save();
-      const url=URL.createObjectURL(new Blob([outBytes],{type:"application/pdf"}));
       const dl=document.getElementById("lc-dl");
-      dl.href=url;dl.style.display="inline-block";
       const dl2=document.getElementById("lc-dl2");
+      // Cropping again replaces both links, so the previous run's PDFs are
+      // unreachable — let go of them instead of holding every batch of the
+      // session in memory.
+      revokeUrls([dl.dataset.blob,dl2.dataset.blob]);
+      const url=ownUrl(URL.createObjectURL(new Blob([outBytes],{type:"application/pdf"})));
+      dl.href=url;dl.dataset.blob=url;dl.style.display="inline-block";
       if(invMode==="separate"&&invBytes){
-        dl2.href=URL.createObjectURL(new Blob([invBytes],{type:"application/pdf"}));
-        dl2.style.display="inline-block";
-      }else dl2.style.display="none";
+        const u2=ownUrl(URL.createObjectURL(new Blob([invBytes],{type:"application/pdf"})));
+        dl2.href=u2;dl2.dataset.blob=u2;dl2.style.display="inline-block";
+      }else{ dl2.removeAttribute("href"); delete dl2.dataset.blob; dl2.style.display="none"; }
       const fmtName=fmt==="4x6"?"4×6 thermal":fmt==="a4-4up"?"A4, 4 per sheet":"A4, 1 per sheet";
       pdfPreviewInto(document.getElementById("lc-prev"),`Preview — ${labels} label(s) on ${outDoc.getPageCount()} page(s) (${fmtName})`,outBytes,url,"Cropped labels preview");
 
@@ -9229,9 +9361,10 @@ function renderFnskuLabels(){
       await loadPdfLib();
       status("Drawing barcodes…");
       const res=await fnskuGenerate(rows,fmtKey);
-      const url=URL.createObjectURL(new Blob([res.bytes],{type:"application/pdf"}));
       const dl=document.getElementById("fk-dl");
-      dl.href=url; dl.style.display="inline-block";
+      revokeUrls([dl.dataset.blob]);
+      const url=ownUrl(URL.createObjectURL(new Blob([res.bytes],{type:"application/pdf"})));
+      dl.href=url; dl.dataset.blob=url; dl.style.display="inline-block";
       pdfPreviewInto(document.getElementById("fk-prev"),`Preview — ${res.stickers} sticker(s) on ${res.pages} page(s) (${esc(res.fmtName)})`,res.bytes,url,"FNSKU sticker preview");
       status(`Done — ${res.stickers} sticker(s) on ${res.pages} page(s). Print at 100% scale (no "fit to page").`+(res.dense?" Note: long codes print quite dense on this sticker size — test-scan one sticker before printing the lot.":""));
     }catch(err){
@@ -9405,8 +9538,10 @@ async function fnskuGenerate(rows,fmtKey){
   const F=fnskuFormats();
   const fmt=F[fmtKey]||F["a4-65"];
   const doc=await PDFLib.PDFDocument.create();
-  const font=await doc.embedFont(PDFLib.StandardFonts.Helvetica);
-  const fontB=await doc.embedFont(PDFLib.StandardFonts.HelveticaBold);
+  // Everything on a sticker is drawn here, so an embedded subset is what
+  // keeps the human-readable code under the barcode legible wherever the
+  // sheet is opened or printed. See embedTextFonts().
+  const {font,bold:fontB}=await embedTextFonts(doc);
   const per=fmt.cols*fmt.rows;
   const items=[];
   for(const r of rows) for(let i=0;i<r.qty;i++) items.push(r);
@@ -9790,8 +9925,9 @@ async function gstinvGenerate(){
     await loadPdfLib();
     gstinvStatus(`Building ${invoices.length} invoice(s)…`);
     const doc=await PDFLib.PDFDocument.create();
-    const font=await doc.embedFont(PDFLib.StandardFonts.Helvetica);
-    const fontB=await doc.embedFont(PDFLib.StandardFonts.HelveticaBold);
+    // An invoice is entirely our own text, so all of it rode on the
+    // viewer's font substitution until now. See embedTextFonts().
+    const {font,bold:fontB}=await embedTextFonts(doc);
     const A4W=595.28,A4H=841.89,L=40,R=A4W-40;
     const black=PDFLib.rgb(0,0,0),grey=PDFLib.rgb(0.42,0.42,0.42),line=PDFLib.rgb(0.75,0.75,0.75);
     const today=new Date().toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"});
@@ -9925,9 +10061,10 @@ async function gstinvGenerate(){
         :"Tax charged as IGST (inter-state supply).",{x:L,y:ty,size:8,font,color:grey});
     }
     const bytes=await doc.save();
-    const url=URL.createObjectURL(new Blob([bytes],{type:"application/pdf"}));
     const dl=document.getElementById("gstinv-dl");
-    if(dl){dl.href=url;dl.style.display="inline-block";}
+    if(dl) revokeUrls([dl.dataset.blob]);
+    const url=ownUrl(URL.createObjectURL(new Blob([bytes],{type:"application/pdf"})));
+    if(dl){dl.href=url;dl.dataset.blob=url;dl.style.display="inline-block";}
     const prev=document.getElementById("gstinv-prev");
     if(prev) pdfPreviewInto(prev,`Preview — ${invoices.length} invoice(s), ${doc.getPageCount()} page(s)`,bytes,url,"GST invoices preview");
     const intraN=invoices.filter(i=>i.intra).length;
@@ -11909,6 +12046,7 @@ function currentRoute(){
   catch(e){ return location.pathname.replace(/^\/+|\/+$/g,""); }
 }
 function route(){
+  releaseRoute();
   const h=currentRoute();
   if(location.hash.startsWith("#/")){
     try{ history.replaceState(null,"","/"+h+location.search); }catch(e){}
