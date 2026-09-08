@@ -54,10 +54,19 @@ const ROUTES = [
   'label-cropper', 'order-printer', 'fnsku-labels', 'gst-invoice', 'link-builder',
   'keyword-combiner', 'listing-checker', 'payout-forecast',
   // paid reports (the logged-out paywall view is what gets pre-rendered)
-  'settlement-analyzer', 'gst-report', 'sku-report', 'reconcile', 'trends',
+  'settlement-analyzer', 'gst-report', 'sku-report', 'sku-report/advanced',
+  'reconcile', 'trends',
   'fee-bands', 'ads-optimizer', 'returns', 'storage', 'rto', 'stranded',
   'traffic', 'ad-profit',
 ];
+
+/* Routes that are a variant of another page rather than a page of their own.
+   /sku-report/advanced is the Pro deep link into the SKU report; logged out it
+   renders the identical paywall to /sku-report, so it IS a duplicate and
+   Google said so ("chose different canonical than user"). Pointing its
+   canonical at the real page agrees with that instead of arguing, and keeps
+   the route working for Pro users. Overridden routes stay out of the sitemap. */
+const CANONICAL_OF = { 'sku-report/advanced': 'sku-report' };
 
 const START = '<!--prerender:start-->';
 const END = '<!--prerender:end-->';
@@ -92,7 +101,7 @@ const escapeText = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').r
    SoftwareApplication plus a breadcrumb, and the price comes from the paywall
    the page actually rendered rather than a list that could drift. */
 function toolLd({ route, title, desc, body }) {
-  const loc = `${ORIGIN}/${route}`;
+  const loc = `${ORIGIN}/${CANONICAL_OF[route] ?? route}`;
   const name = title.replace(/\s+—\s+Seller Tools India$/, '');
   const price = /Pro feature/.test(body) ? '499' : /Starter feature/.test(body) ? '199' : '0';
   return JSON.stringify([
@@ -115,7 +124,7 @@ function toolLd({ route, title, desc, body }) {
 }
 
 function buildPage(template, { route, title, desc, body }) {
-  const loc = `${ORIGIN}/${route}`;
+  const loc = `${ORIGIN}/${CANONICAL_OF[route] ?? route}`;
   let out = template;
   out = out.replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapeText(title)}</title>`);
   out = attrSet(out, 'name="description"', 'content', desc);
@@ -141,7 +150,7 @@ function writeSitemap() {
   const day = new Date().toISOString().slice(0, 10);
   const pri = r => (r === '' ? '1.0' : ['pricing', 'profit', 'label-cropper', 'settlement-analyzer'].includes(r) ? '0.9' : '0.7');
   const rows = [
-    ...ROUTES.map(r => `  <url><loc>${ORIGIN}/${r}</loc><lastmod>${day}</lastmod><priority>${pri(r)}</priority></url>`),
+    ...ROUTES.filter(r => !CANONICAL_OF[r]).map(r => `  <url><loc>${ORIGIN}/${r}</loc><lastmod>${day}</lastmod><priority>${pri(r)}</priority></url>`),
     ...['terms', 'privacy', 'refunds', 'contact'].map(
       r => `  <url><loc>${ORIGIN}/${r}</loc><lastmod>${day}</lastmod><priority>0.4</priority></url>`),
   ];
@@ -243,6 +252,7 @@ const run = async () => {
     meta[route] = { title: snap.title, desc: snap.desc };
 
     const file = path.join(WEB, route === '' ? 'index.html' : `${route}.html`);
+    fs.mkdirSync(path.dirname(file), { recursive: true });   // nested routes, e.g. sku-report/advanced
     const next = buildPage(template, { route, ...snap });
     const prev = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
     if (prev !== next) {
