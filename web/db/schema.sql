@@ -272,7 +272,7 @@ exception when duplicate_object then null; end $$;
 
 
 -- ---------------------------------------------------------------------------
--- counters: public social-proof tallies ("N labels cropped so far").
+-- counters: public social-proof tallies ("N labels extracted so far").
 -- RLS on with no policies: PostgREST anon/authenticated can neither read nor
 -- write; our /api/counter endpoint uses the service role for both. The
 -- increment is an atomic SECURITY DEFINER function so concurrent runs never

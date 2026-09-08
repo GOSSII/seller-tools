@@ -15,7 +15,7 @@ Each prompt is self-contained. Do not skip the ground rules in section 4.
 | Auth + database | Supabase (email/password auth + Postgres). `supabase-js` from CDN in the browser; service-role key only inside `web/api/*` functions. |
 | Payments | Razorpay. Start with one-time payments for 30-day / 365-day access (checkout + webhook). Razorpay Subscriptions (auto-renew) can come later. |
 | Email | Resend (optional, later). Supabase built-in email is enough at the start. |
-| Plans | **Free**: all calculators, Label Cropper, Order Printer, Link Builder, Keyword Combiner, FBA Reimbursement, all free tools. **Starter ₹199/month or ₹999/year**: Settlement Analyzer, GST & TCS Report, SKU Report. **Pro ₹499/month or ₹2,499/year**: everything in Starter + SKU P&L with product costs, Reconciliation, multi-month Trends (built in Phase 7). |
+| Plans | **Free**: all calculators, Label Extractor, Order Printer, Link Builder, Keyword Combiner, FBA Reimbursement, all free tools. **Starter ₹199/month or ₹999/year**: Settlement Analyzer, GST & TCS Report, SKU Report. **Pro ₹499/month or ₹2,499/year**: everything in Starter + SKU P&L with product costs, Reconciliation, multi-month Trends (built in Phase 7). |
 | Session policy | One active session per user. New login kicks out the old session. |
 | Device tracking | Allowed, but it must be **disclosed** in the Privacy Policy (India DPDP Act). Never call it "secret" anywhere. We store: device fingerprint hash, browser/OS, IP, login time. Limit: 3 known devices per account (admin can reset). |
 | Old password gate | The "2023" sessionStorage gate stays working as an owner bypass until Phase 4 is live and tested. After that it is removed. |
@@ -55,7 +55,7 @@ GROUND RULES (read fully before coding):
   vanilla JS, hash router, CALCS array + custom page renderers). Vercel project
   root is web/, production deploys from main, REAL CUSTOMERS use the site daily.
 - NEVER change the maths or behaviour of existing tools (profit calculator,
-  fee engine, label cropper, settlement analyzer parsing, etc.). New code must
+  fee engine, label extractor, settlement analyzer parsing, etc.). New code must
   be additive. app/ (Expo React Native) must not be touched at all.
 - The gated tools currently use password "2023" (sessionStorage sa_unlocked).
   Keep that working unless the prompt explicitly says to remove it.
@@ -95,7 +95,7 @@ TASK: Phase 1 of docs/SAAS_PLAN.md — marketing pages. No backend, no auth yet.
      "No login needed for free tools".
    - 3 feature sections with small screenshots/illustrations (pure CSS mockups
      are fine, no external images): (a) Settlement Analyzer — paste your
-     settlement file, see where every rupee went; (b) Label Cropper — crop,
+     settlement file, see where every rupee went; (b) Label Extractor — crop,
      sort by SKU, print 4x6 with SKU on the label; (c) Calculators — profit,
      fees, GST, price bands.
    - FAQ section (5-6 questions: is it free, do you upload my files, which

@@ -353,7 +353,7 @@
   .viz-tip{position:fixed;z-index:60;background:var(--ink);color:#fff;font-size:12px;padding:6px 9px;
     border-radius:8px;pointer-events:none;display:none;white-space:nowrap;box-shadow:0 2px 10px rgba(15,26,43,.25)}
 
-  /* ---- Label cropper / order printer ---- */
+  /* ---- Label extractor / order printer ---- */
   .pdfprev{width:100%;height:480px;border:1px solid var(--line);border-radius:12px;background:#f7f9fc}
   /* OAuth return: cover everything until the token exchange finishes —
      without this the header/home paint first and the sign-in flow looks
@@ -363,7 +363,7 @@
   html.authing body::before{content:"Signing you in…";position:fixed;inset:0;display:flex;
     align-items:center;justify-content:center;font-size:19px;font-weight:700;
     color:var(--ink);background:var(--bg);z-index:999}
-  /* Flip-tile counter beside the Label Cropper title */
+  /* Flip-tile counter beside the Label Extractor title */
   .lc-h2row{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:4px}
   .lc-h2row h2{margin:0}
   .lc-odo{margin-left:auto;text-align:center}
@@ -3545,7 +3545,7 @@ function adminConfirmThen(btn,text,fn){
 
 function renderHome(){
   setMeta("Free Amazon India seller tools — profit, fees & settlement analyzer",
-    "Free calculators and tools for Amazon India sellers: true profit per SKU, FBA fees, settlement analyzer, GST report and 4×6 label cropper. Files never leave your browser.");
+    "Free calculators and tools for Amazon India sellers: true profit per SKU, FBA fees, settlement analyzer, GST report and 4×6 label extractor. Files never leave your browser.");
   backBtn.hidden=true;
   const heroBars=[34,48,28,60,44,72,52,88,64,96,70,100].map(h=>`<i style="height:${h}%"></i>`).join("");
   const minis=[{id:"link-builder",icon:"🔗",name:"Amazon Link Builder"},{id:"keyword-combiner",icon:"🔤",name:"Keyword Combiner"},{id:"listing-checker",icon:"📝",name:"Listing Quality Checker"}]
@@ -3671,7 +3671,7 @@ function renderHome(){
           <div class="row"><span>Time saved every month</span><b id="sv-hours">—</b></div>
           <div class="row"><span>Worth per year (at an assumed ₹150/hour)</span><b class="amt pos" id="sv-value">—</b></div>
         </div>
-        <div class="note" style="margin-top:10px">The <a href="/label-cropper">Label Cropper</a> and <a href="/order-printer">Order Printer</a> do all of it in one click — free, with your files never leaving your browser.</div>
+        <div class="note" style="margin-top:10px">The <a href="/label-cropper">Label Extractor</a> and <a href="/order-printer">Order Printer</a> do all of it in one click — free, with your files never leaving your browser.</div>
       </div>
 
       <section class="lp2-sec" id="tools">
@@ -3681,7 +3681,7 @@ function renderHome(){
       <div class="lp2-plan"><span class="tag free">Free forever</span><span>No login needed — click any tool to open it</span></div>
       <div class="grid" style="padding:14px 0 0">
         <a class="tile" href="/profit"><span class="pill">Popular</span><div class="ico">🧮</div><h3>Amazon Profit Calculator</h3><p>Estimate profit per unit after Amazon's 2026 referral, closing and FBA fees, your product cost and the ad spend you expect.</p></a>
-        <a class="tile" href="/label-cropper"><div class="ico">🏷️</div><h3>Amazon Label Cropper</h3><p>Crop Easy Ship A4 label PDFs to clean 4×6 thermal pages, sorted by SKU.</p></a>
+        <a class="tile" href="/label-cropper"><div class="ico">🏷️</div><h3>Amazon Label Extractor</h3><p>Extract Easy Ship A4 label PDFs into clean 4×6 thermal pages, sorted by SKU.</p></a>
         <a class="tile" href="/order-printer"><div class="ico">🖨️</div><h3>Amazon Order Printer</h3><p>Picklists and packing slips from your unshipped-orders report.</p></a>
         <a class="tile" href="/payout-forecast"><div class="ico">💸</div><h3>Payout Date Forecaster</h3><p>Your next 6 settlement closes and estimated bank-credit dates — from your cycle and daily sales.</p></a>
         <a class="tile" href="/gst-invoice"><div class="ico">🧾</div><h3>GST Invoice Generator</h3><p>Invoices for your self-ship orders — one merged A4 PDF, numbered in sequence, CGST+SGST or IGST by state.</p></a>
@@ -3717,7 +3717,7 @@ function renderHome(){
       </section>
       <div class="pr-grid" style="padding-top:16px">
         <div class="pr-card"><h3>Free</h3><div class="pr-price">₹0</div><div class="pr-alt">Forever. No login needed.</div>
-          <ul class="pr-feats"><li><span class="tick">✓</span> All 20 free calculators &amp; tools</li><li><span class="tick">✓</span> Label cropper &amp; order printer</li><li><span class="tick">✓</span> FNSKU stickers &amp; GST invoices</li><li><span class="tick">✓</span> Files never leave your browser</li></ul>
+          <ul class="pr-feats"><li><span class="tick">✓</span> All 20 free calculators &amp; tools</li><li><span class="tick">✓</span> Label extractor &amp; order printer</li><li><span class="tick">✓</span> FNSKU stickers &amp; GST invoices</li><li><span class="tick">✓</span> Files never leave your browser</li></ul>
           <button type="button" class="lp-btn sec" data-scroll="tools">Use free tools</button></div>
         <div class="pr-card pop"><span class="pr-badge">Most popular</span><h3>Starter</h3><div class="pr-price">₹199 <small>/ month</small></div><div class="pr-alt">or ₹999 / year (save ~58%)</div>
           <ul class="pr-feats"><li><span class="tick">✓</span> Everything in Free</li><li><span class="tick">✓</span> Settlement Analyzer</li><li><span class="tick">✓</span> GST &amp; TCS filing report</li><li><span class="tick">✓</span> SKU Profitability Report</li><li><span class="tick">✓</span> Multi-Month Trends</li></ul>
@@ -3729,7 +3729,7 @@ function renderHome(){
 
       <section class="lp-faq" aria-label="Frequently asked questions">
         <h2>Questions sellers ask</h2>
-        <details><summary>Is it really free?</summary><p>Yes — all 20 free tools are free with no login: every calculator, the label cropper, order printer, FNSKU barcode sticker generator, GST invoice generator, link builder and keyword combiner. The advanced reports (Settlement Analyzer, GST report, SKU report, Trends and the Pro reports) are on a paid plan from ₹199/month. The free tools stay free.</p></details>
+        <details><summary>Is it really free?</summary><p>Yes — all 20 free tools are free with no login: every calculator, the label extractor, order printer, FNSKU barcode sticker generator, GST invoice generator, link builder and keyword combiner. The advanced reports (Settlement Analyzer, GST report, SKU report, Trends and the Pro reports) are on a paid plan from ₹199/month. The free tools stay free.</p></details>
         <details><summary>Do you upload or store my files?</summary><p>No. Settlement reports and label PDFs are processed entirely in your browser — they are never uploaded to any server. That is our core promise and it will always be true. Most other label-cropping sites upload your PDFs — including your customers' names and addresses — to their servers and promise to delete them later; we never receive them in the first place.</p></details>
         <details><summary>Which marketplaces do you support?</summary><p>Amazon India (Amazon.in) only. Fees, GST and settlement formats are all specific to the India marketplace.</p></details>
         <details><summary>How do I get my settlement report?</summary><p>In Seller Central go to Payments → Reports Repository (or Date Range Reports) and download the transaction/settlement report, then paste or upload it into the Settlement Analyzer.</p></details>
@@ -3810,7 +3810,7 @@ function renderPricing(){
           <div class="pr-alt">Forever. No login needed.</div>
           <ul class="pr-feats">
             <li><span class="tick">✓</span> All calculators (profit, fees, ACOS, price bands)</li>
-            <li><span class="tick">✓</span> Label Cropper — 4×6 with SKU</li>
+            <li><span class="tick">✓</span> Label Extractor — 4×6 with SKU</li>
             <li><span class="tick">✓</span> Order Printer</li>
             <li><span class="tick">✓</span> GST Invoice Generator — self-ship invoices as one A4 PDF</li>
             <li><span class="tick">✓</span> Link Builder &amp; Keyword Combiner</li>
@@ -7751,7 +7751,7 @@ flask</textarea></div>
 }
 
 /* ============================================================
-   LABEL CROPPER
+   LABEL EXTRACTOR
    Crops Amazon's A4 label PDFs to 4x6 thermal pages, fully in
    the browser via pdf-lib (lazy-loaded only on this page; the
    PDF itself never leaves the device).
@@ -7854,7 +7854,7 @@ function loadPdfJs(){
   return pdfJsPromise;
 }
 
-/* Full scrollable PDF preview shared by the label cropper, FNSKU
+/* Full scrollable PDF preview shared by the label extractor, FNSKU
    stickers and GST invoices — every page is on screen, so the whole
    batch can be verified before printing. Pages are drawn with pdf.js
    into a scrolling viewer; each page renders as it nears the viewport
@@ -7975,7 +7975,7 @@ function lcSkuSafe(v){
 
 function renderLabelCropper(){ lcBody(); }
 function lcBody(){
-  document.title="Amazon Label Cropper — Seller Tools India";
+  document.title="Amazon Label Extractor — Seller Tools India";
   const md=document.querySelector('meta[name="description"]');
   if(md) md.setAttribute("content","Crop Amazon India Easy Ship A4 label PDFs to clean 4×6 thermal-printer pages — free, fully in your browser.");
   backBtn.hidden=false;
@@ -7992,10 +7992,10 @@ function lcBody(){
   lcFiles=[];
   app.innerHTML=`
     <div class="wrap page">
-      <div class="lc-h2row"><h2>Amazon Label Cropper</h2>
-        <div class="lc-odo" id="lc-odo" hidden aria-label="Labels cropped so far">
+      <div class="lc-h2row"><h2>Amazon Label Extractor</h2>
+        <div class="lc-odo" id="lc-odo" hidden aria-label="Labels extracted so far">
           <div class="lc-odo-digits" id="lc-odo-digits"></div>
-          <div class="lc-odo-cap">Labels cropped</div>
+          <div class="lc-odo-cap">Labels extracted</div>
         </div></div>
       <p class="lede">Drop your Amazon label PDF(s) and get clean, print-ready pages. Labels come out SKU-wise by default (unrecognised ones go last), every label carries its SKU | Qty and a page number so the stack is easy to verify, and invoice pages are detected and handled per your choice below.</p>
       ${helpHtml("label-cropper")}
@@ -8076,7 +8076,7 @@ function lcBody(){
             </select></div>
         </div>
         <div class="optrow" style="margin-bottom:0">
-          <button class="bigbtn" id="lc-go" disabled>Crop labels</button>
+          <button class="bigbtn" id="lc-go" disabled>Extract labels</button>
           <a class="bigbtn sec" id="lc-dl" style="display:none" download="labels.pdf">Download labels</a>
           <a class="bigbtn sec" id="lc-dl2" style="display:none" download="invoices.pdf">Download invoices</a>
         </div>
@@ -8130,7 +8130,7 @@ function lcBody(){
     drop.querySelector(".ico").textContent="✅";
     drop.querySelector("h3").textContent=`${lcFiles.length} file(s) loaded (${mb} MB)`;
     drop.querySelector("p").innerHTML=`${esc(names)}<br><span class="sa-change">Choose different file(s)</span>`;
-    status(`${lcFiles.length} file(s) ready — ${names}. Click "Crop labels".`);
+    status(`${lcFiles.length} file(s) ready — ${names}. Click "Extract labels".`);
   };
   drop.addEventListener("drop",ev=>take(ev.dataTransfer.files));
   file.addEventListener("change",()=>{take(file.files);file.value="";});
@@ -8474,7 +8474,7 @@ function lcBody(){
       const skippedInv=lcPageInfo.filter(x=>x.inv).length;
 
       // Stage 1: label-only 4x6 pages (masked), plus invoice pages if wanted.
-      status("Cropping…");
+      status("Extracting…");
       const labelDoc=await PDFLib.PDFDocument.create();
       const invDoc=invMode==="none"?null:await PDFLib.PDFDocument.create();
       const skuFont=(skuPrint||dtPrint||numPrint)?(await embedTextFonts(labelDoc)).bold:null;
@@ -8707,7 +8707,7 @@ function lcBody(){
       const outBytes=await outDoc.save();
       const dl=document.getElementById("lc-dl");
       const dl2=document.getElementById("lc-dl2");
-      // Cropping again replaces both links, so the previous run's PDFs are
+      // Extracting again replaces both links, so the previous run's PDFs are
       // unreachable — let go of them instead of holding every batch of the
       // session in memory.
       revokeUrls([dl.dataset.blob,dl2.dataset.blob]);
@@ -8718,7 +8718,7 @@ function lcBody(){
         dl2.href=u2;dl2.dataset.blob=u2;dl2.style.display="inline-block";
       }else{ dl2.removeAttribute("href"); delete dl2.dataset.blob; dl2.style.display="none"; }
       const fmtName=fmt==="4x6"?"4×6 thermal":fmt==="a4-4up"?"A4, 4 per sheet":"A4, 1 per sheet";
-      pdfPreviewInto(document.getElementById("lc-prev"),`Preview — ${labels} label(s) on ${outDoc.getPageCount()} page(s) (${fmtName})`,outBytes,url,"Cropped labels preview");
+      pdfPreviewInto(document.getElementById("lc-prev"),`Preview — ${labels} label(s) on ${outDoc.getPageCount()} page(s) (${fmtName})`,outBytes,url,"Extracted labels preview");
 
       // Compact detection summary — chips per SKU, no table.
       {
@@ -8735,7 +8735,7 @@ function lcBody(){
       lcCountAdd(labels);
       status(`Done — ${labels} label(s)${split===2?` (2 per page detected${autoLeft?", labels column auto-cropped":""})`:""}${skippedInv?`, ${invMode==="none"?"skipped":"paired"} ${skippedInv} invoice page(s)`:""}${blanksSkipped?`, ${blanksSkipped} blank page(s) removed`:""}, ${outDoc.getPageCount()} output page(s)${sortMode==="sku"?", sorted SKU-wise":sortMode==="qty"?", sorted by quantity":", in original order"}. Check the preview, then download.`);
     }catch(e){
-      try{console.error("Label cropper:",e);}catch(_){}
+      try{console.error("Label extractor:",e);}catch(_){}
       status("Could not process that PDF"+(String(e).includes("load failed")?" — the PDF engine failed to load (check your connection) and nothing was uploaded anywhere.":" — it may be corrupted or password-protected."));
     }
     btn.disabled=false;lcBusy=false;

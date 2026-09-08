@@ -1,5 +1,5 @@
-// Vercel serverless function — public tool counters ("N labels cropped so
-// far"). Unauthenticated by design: the Label Cropper needs no login, so its
+// Vercel serverless function — public tool counters ("N labels extracted so
+// far"). Unauthenticated by design: the Label Extractor needs no login, so its
 // counter can't either.
 //
 // Privacy: the client sends ONE integer — how many labels a finished run
