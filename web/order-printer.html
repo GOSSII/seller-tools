@@ -12069,8 +12069,13 @@ function route(){
   if(location.hash.startsWith("#/")){
     try{ history.replaceState(null,"","/"+h+location.search); }catch(e){}
   }
+  /* Routes that are a variant of another page, not a page of their own.
+     Must stay in step with CANONICAL_OF in qa/prerender.mjs: the static file
+     ships the right canonical, and without this the router would overwrite it
+     the moment the app booted — which is the rendered value Google reads. */
+  const canonicalOf={"sku-report/advanced":"sku-report"};
   const can=document.querySelector('link[rel="canonical"]');
-  if(can) can.setAttribute("href","https://sellertoolsindia.com/"+h);
+  if(can) can.setAttribute("href","https://sellertoolsindia.com/"+(canonicalOf[h]||h));
   /* After the page renders (every render fn sets title/description
      synchronously), mirror them into the social-share tags so a deep
      link shares as itself, not as the homepage. */
@@ -12116,7 +12121,11 @@ function route(){
   if(h==="listing-checker"){renderListingChecker();window.scrollTo(0,0);return;}
   if(h==="fnsku-labels"){renderFnskuLabels();window.scrollTo(0,0);return;}
   if(h==="gst-invoice"){renderGstInvoice();window.scrollTo(0,0);return;}
-  renderCalc(h);
+  /* Unknown slug: renderCalc used to bounce to the home page, which left
+     renderNotFound() unreachable and made every bad URL look like a second
+     home page. Vercel now answers these with a real 404 (no catch-all
+     rewrite, 404.html), so the screen should say so too. */
+  if(CALCMAP[h]) renderCalc(h); else renderNotFound();
   window.scrollTo(0,0);
 }
 window.addEventListener("hashchange",()=>{ if(AUTH_REDIRECT_ACTIVE) return; if(!location.hash||location.hash.startsWith("#/")) route(); });

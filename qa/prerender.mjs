@@ -68,6 +68,16 @@ const ROUTES = [
    the route working for Pro users. Overridden routes stay out of the sitemap. */
 const CANONICAL_OF = { 'sku-report/advanced': 'sku-report' };
 
+/* Routes that need a file so a direct hit resolves, but must never carry
+   pre-rendered content or be indexed: the auth and account screens, plus the
+   404 page. Without a file each would fall to Vercel's 404 once the catch-all
+   rewrite is gone — and /login 404ing would break sign-in. They ship as the
+   pristine shell (empty #app) so the SPA paints them exactly as before,
+   with noindex in the markup to match the X-Robots-Tag header in vercel.json.
+   Auth callbacks redirect to origin + "/", so none of them is a landing URL. */
+const SHELL_ROUTES = ['login', 'signup', 'reset', 'new-password', 'account',
+                      'admin', 'whoami', '404'];
+
 const START = '<!--prerender:start-->';
 const END = '<!--prerender:end-->';
 
@@ -226,6 +236,24 @@ function writeLlms(meta) {
   return true;
 }
 
+/* The SPA shell, unindexed. `404.html` is what Vercel serves — with a real
+   404 status — for anything unmatched once the catch-all rewrite is removed;
+   the router then paints its own "Page not found" screen on top. */
+function writeShells(template) {
+  const noindex = '<meta name="robots" content="noindex, follow">\n';
+  const shell = template.replace(/(<meta name="description"[^>]*>\n)/i, `$1${noindex}`);
+  if (!shell.includes('name="robots"')) throw new Error('could not insert robots meta');
+  let n = 0;
+  for (const route of SHELL_ROUTES) {
+    const file = path.join(WEB, `${route}.html`);
+    const prev = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+    if (prev === shell) continue;
+    if (!CHECK) fs.writeFileSync(file, shell);
+    n++;
+  }
+  return n;
+}
+
 const run = async () => {
   await new Promise(r => server.listen(PORT, r));
   const browser = await chromium.launch({ channel: 'chrome' });
@@ -273,6 +301,8 @@ const run = async () => {
   await browser.close();
   server.close();
 
+  const shells = writeShells(template);
+  if (shells) { if (CHECK) stale.push(`${shells} shell page(s)`); else written.push(`${shells} shells`); }
   if (writeSitemap() && CHECK) stale.push('sitemap.xml');
   if (writeLlms(meta) && CHECK) stale.push('llms.txt');
 
