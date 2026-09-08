@@ -1,14 +1,11 @@
 User-agent: *
 Allow: /
 
-# Auth and account screens hold nothing worth indexing and would only split
-# crawl budget away from the tool pages.
-Disallow: /login
-Disallow: /signup
-Disallow: /reset
-Disallow: /new-password
-Disallow: /account
-Disallow: /admin
+# The auth and account screens are kept out of the index with an
+# X-Robots-Tag: noindex header (see web/vercel.json), NOT with Disallow —
+# they are linked from the header on every page, and a blocked-but-linked URL
+# can still be indexed as a bare URL because Google never fetches it to find
+# the noindex. Only /api/ is blocked outright; nothing there is a page.
 Disallow: /api/
 
 # --- AI answer engines -------------------------------------------------
