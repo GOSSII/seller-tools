@@ -114,7 +114,7 @@
   /* Calculator page */
   .page{padding:20px 0 48px}
   @media(min-width:600px){.page{padding:24px 0 64px}}
-  .page h2{font-size:clamp(20px,5.2vw,24px);letter-spacing:-.02em;margin-bottom:5px}
+  .page h1,.page h2{font-size:clamp(20px,5.2vw,24px);letter-spacing:-.02em;margin-bottom:5px}
   .page .lede{color:var(--muted);font-size:14px;margin-bottom:18px}
   /* Single column until there is genuinely room for a 400 px form beside the
      results. minmax() lets the form give way rather than force a scrollbar. */
@@ -367,7 +367,7 @@
     color:var(--ink);background:var(--bg);z-index:999}
   /* Flip-tile counter beside the Label Extractor title */
   .lc-h2row{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:4px}
-  .lc-h2row h2{margin:0}
+  .lc-h2row h1,.lc-h2row h2{margin:0}
   .lc-odo{margin-left:auto;text-align:center}
   .lc-odo-digits{display:flex;gap:5px;justify-content:flex-end}
   .lc-digit{width:34px;height:44px;border-radius:9px;background:var(--blue);overflow:hidden;position:relative;box-shadow:0 2px 6px rgba(47,90,240,.35)}
@@ -813,7 +813,7 @@
 
 <main id="app"><!--prerender:start-->
     <div class="wrap page">
-      <h2>Amazon Keyword Combiner</h2>
+      <h1>Amazon Keyword Combiner</h1>
       <p class="lede">Paste up to three word lists (one term per line). Every combination is generated in order — A × B × C — ready to paste into a PPC campaign. List C is optional.</p>
       <details class="howto"><summary>How to use this tool &amp; where to get the input</summary><div class="hbody">
     <span class="htag">Input — from your Amazon seller account</span><div>Best source words: <b>Advertising console → Sponsored ads reports → Search term report</b> — the words customers actually type.</div>
@@ -2539,7 +2539,7 @@ async function getEntitlement(){
 /* Premium gating. A paid plan from /api/entitlement is the only unlock
    and needs no network or Supabase at all. Otherwise ask the server. */
 async function gatePremium(info, body){
-  app.innerHTML=`<div class="wrap page"><h2>${esc(info.title)}</h2><p class="lede">Checking your access…</p></div>`;
+  app.innerHTML=`<div class="wrap page"><h1>${esc(info.title)}</h1><p class="lede">Checking your access…</p></div>`;
   // Make sure this browser holds the active session first (device-limit aware).
   const okDev=await ensureSessionForPremium();
   if(!okDev) return; // device-limit panel shown
@@ -2561,7 +2561,7 @@ function renderProUpgrade(info){
   backBtn.hidden=false;
   app.innerHTML=`
     <div class="wrap page">
-      <h2>${esc(info.title)}</h2>
+      <h1>${esc(info.title)}</h1>
       <div class="panel" style="border-color:var(--blue-line);background:var(--blue-soft);max-width:620px">
         <h4>${esc(info.title)} is a Pro feature</h4>
         <p class="sa-sub">You're on Starter (₹199/month). Upgrade to <b>Pro (₹499/month — just ₹300 more)</b> for all nine Pro reports — Reconciliation &amp; SAFE-T, Ads Optimizer, Ad Profitability, Returns, RTO, Storage, Stranded, Fee Bands and Traffic Doctor — plus SKU P&amp;L with your product costs.</p>
@@ -2579,7 +2579,7 @@ function renderPaywall(info){
   const feats=(info.feats||[]).map(f=>`<li><span class="tick">✓</span><span>${esc(f)}</span></li>`).join("");
   app.innerHTML=`
     <div class="wrap page">
-      <h2 class="pw-title">${esc(info.title)}</h2>
+      <h1 class="pw-title">${esc(info.title)}</h1>
       <div class="paywall">
         <div class="pw-left">
           <div class="pw-mock-label">Sample — what you'll see</div>
@@ -3293,7 +3293,7 @@ function renderNotFound(){
   document.title="Not found — Seller Tools India";
   app.innerHTML=`<div class="wrap page"><div class="auth" style="text-align:center">
     <div style="font-size:34px;line-height:1">🔍</div>
-    <h2 style="margin-top:8px">Page not found</h2>
+    <h1 style="margin-top:8px">Page not found</h1>
     <p class="lede">The page you're looking for doesn't exist.</p>
     <a class="lp-btn" href="/">Go home</a></div></div>`;
 }
@@ -3827,7 +3827,7 @@ function renderPricing(){
   app.innerHTML=`
     <div class="wrap page">
       <div class="pr-head">
-        <h2>Simple pricing for Amazon India sellers</h2>
+        <h1>Simple pricing for Amazon India sellers</h1>
         <p>Start free. Upgrade when the paid reports save you more than they cost.</p>
       </div>
       <div class="pr-period">
@@ -3962,7 +3962,7 @@ function renderCalc(id){
 
   app.innerHTML=`
     <div class="wrap page">
-      <h2>${esc(c.name)}</h2>
+      <h1>${esc(c.name)}</h1>
       <p class="lede">${esc(c.desc)}</p>
       ${helpHtml(c.id)}
       <div class="cols">
@@ -4423,7 +4423,7 @@ function renderSettlementAnalyzer(){
 function saAnalyzerBody(){
   app.innerHTML=`
     <div class="wrap page">
-      <h2>Amazon Settlement Analyzer</h2>
+      <h1>Amazon Settlement Analyzer</h1>
       <p class="lede">Drop the settlement report you exported from Seller Central (Payments → All Statements → download the flat-file V2). It's parsed right here in your browser and broken down into every fee, tax and deduction.</p>
       ${helpHtml("settlement-analyzer")}
       <label class="sa-drop" id="sa-drop">
@@ -5170,7 +5170,7 @@ function renderGstReport(){
 function gstReportBody(){
   app.innerHTML=`
     <div class="wrap page">
-      <h2>GST &amp; TCS Report</h2>
+      <h1>GST &amp; TCS Report</h1>
       <p class="lede">Drop a settlement report and get the tax numbers you need at filing time: TCS withheld by Amazon (to claim in GSTR-2A/8A), TDS under Section 194-O (visible in Form 26AS), GST charged on Amazon's fees (claimable as input tax credit), and the output GST Amazon collected on your sales.</p>
       ${helpHtml("gst-report")}
       <label class="sa-drop" id="gst-drop">
@@ -5345,7 +5345,7 @@ function renderSkuReport(){
 function skuReportBody(){
   app.innerHTML=`
     <div class="wrap page">
-      <h2>SKU Profitability Report</h2>
+      <h1>SKU Profitability Report</h1>
       <p class="lede">Drop a settlement report and see your business per product: each SKU's sales, refunds, the Amazon fees attributable to it, and its settlement contribution — before product cost.</p>
       ${helpHtml("sku-report")}
       <label class="sa-drop" id="sku-drop">
@@ -6363,7 +6363,7 @@ function renderReconcile(){
 function recBody(){
   app.innerHTML=`
     <div class="wrap page">
-      <h2>Reconciliation &amp; SAFE-T Finder</h2>
+      <h1>Reconciliation &amp; SAFE-T Finder</h1>
       <p class="lede">Upload your settlement reports — and the matching MTR if you have it — to check for fee discrepancies, seller-fulfilled refunds that may need SAFE-T review, and payments that may need reconciliation. Confirmed discrepancies are kept separate from cases that need more evidence.</p>
       ${helpHtml("reconcile")}
       <label class="sa-drop" id="rec-drop">
@@ -6887,7 +6887,7 @@ function renderFeeBands(){
 function fbBody(){
   app.innerHTML=`
     <div class="wrap page">
-      <h2>Fee Band Optimizer</h2>
+      <h1>Fee Band Optimizer</h1>
       <p class="lede">Amazon's referral fee steps at fixed prices and its weight handling steps at fixed weights. Drop your settlement files and this finds the SKUs sitting just the wrong side of a step — what the step costs you, what moving under it gives up, and whether the trade is worth making.</p>
       ${helpHtml("fee-bands")}
       <label class="sa-drop" id="fb-drop">
@@ -7394,7 +7394,7 @@ function renderTrends(){
 function trendsBody(){
   app.innerHTML=`
     <div class="wrap page">
-      <h2>Multi-Month Trends</h2>
+      <h1>Multi-Month Trends</h1>
       <p class="lede">Drop every settlement file you have — they're combined into month-by-month charts of sales, fees, refund rate and net payout, overall and per SKU. The more statements, the better the picture.</p>
       ${helpHtml("trends")}
       <label class="sa-drop" id="tr-drop">
@@ -7676,7 +7676,7 @@ function renderLinkBuilder(){
   backBtn.hidden=false;
   app.innerHTML=`
     <div class="wrap page">
-      <h2>Amazon Link Builder</h2>
+      <h1>Amazon Link Builder</h1>
       <p class="lede">Enter your ASIN and target keyword to generate the link formats sellers use for external traffic, ranking campaigns and ads — built entirely in your browser.</p>
       ${helpHtml("link-builder")}
       <div class="card">
@@ -7731,7 +7731,7 @@ function renderKeywordCombiner(){
   backBtn.hidden=false;
   app.innerHTML=`
     <div class="wrap page">
-      <h2>Amazon Keyword Combiner</h2>
+      <h1>Amazon Keyword Combiner</h1>
       <p class="lede">Paste up to three word lists (one term per line). Every combination is generated in order — A × B × C — ready to paste into a PPC campaign. List C is optional.</p>
       ${helpHtml("keyword-combiner")}
       <div class="card">
@@ -8025,7 +8025,7 @@ function lcBody(){
   lcFiles=[];
   app.innerHTML=`
     <div class="wrap page">
-      <div class="lc-h2row"><h2>Amazon Label Extractor</h2>
+      <div class="lc-h2row"><h1>Amazon Label Extractor</h1>
         <div class="lc-odo" id="lc-odo" hidden aria-label="Labels extracted so far">
           <div class="lc-odo-digits" id="lc-odo-digits"></div>
           <div class="lc-odo-cap">Labels extracted</div>
@@ -8823,7 +8823,7 @@ function opBody(){
   backBtn.hidden=false;
   app.innerHTML=`
     <div class="wrap page">
-      <h2>Amazon Order Printer</h2>
+      <h1>Amazon Order Printer</h1>
       <p class="lede">Export your <b>unshipped orders report</b> from Seller Central (Orders → Order Reports → Unshipped Orders), drop it here, and print a picklist (total units per SKU) plus a packing slip for every order.</p>
       ${helpHtml("order-printer")}
       <label class="sa-drop" id="op-drop">
@@ -8917,7 +8917,7 @@ function renderPayoutForecast(){
   const s=pfcLoad();
   app.innerHTML=`
     <div class="wrap page">
-      <h2>Payout Date Forecaster</h2>
+      <h1>Payout Date Forecaster</h1>
       <p class="lede">Enter your last settlement date and cycle, and see when the next six Amazon payouts should close and land in your bank — with a rough deposit amount for each.</p>
       ${helpHtml("payout-forecast")}
       <div class="cols">
@@ -9082,7 +9082,7 @@ function renderListingChecker(){
   backBtn.hidden=false;
   app.innerHTML=`
     <div class="wrap page">
-      <h2>Amazon Listing Quality Checker</h2>
+      <h1>Amazon Listing Quality Checker</h1>
       <p class="lede">Paste your listing text and get a live, scored checklist against Amazon's style rules — title limits, bullet formatting, promotional phrases that can suppress a listing, and target-keyword coverage. Pure text analysis in your browser; nothing is uploaded.</p>
       ${helpHtml("listing-checker")}
       <div class="card">
@@ -9327,7 +9327,7 @@ function renderFnskuLabels(){
   const th='style="text-align:left;font-size:12px;font-weight:600;color:#667;padding:0 8px 6px 0;white-space:nowrap"';
   app.innerHTML=`
     <div class="wrap page">
-      <h2>FNSKU Barcode Sticker Generator</h2>
+      <h1>FNSKU Barcode Sticker Generator</h1>
       <p class="lede">Type or paste your FNSKUs and get a print-ready PDF of Code 128 barcode stickers — for A4 sticker sheets (65, 40 or 24 per page) or a 4×6 thermal printer. Each sticker carries the barcode, the code in text, the product name and the condition — the layout Amazon expects on every FBA unit.</p>
       ${helpHtml("fnsku-labels")}
       <div class="sa-priv">🔒 Private by design — stickers are generated entirely in your browser; your codes and product names never leave this device.</div>
@@ -9603,7 +9603,7 @@ function renderGstInvoice(){
   const s=gstinvLoadSeller();
   app.innerHTML=`
     <div class="wrap page">
-      <h2>GST Invoice Generator</h2>
+      <h1>GST Invoice Generator</h1>
       <p class="lede">Self-ship (merchant-fulfilled) sellers must issue their own GST invoices. Drop your <b>unshipped orders report</b> (Seller Central → Orders → Order Reports → Unshipped Orders) and get <b>one merged A4 PDF</b> — a TAX INVOICE page per order, with CGST+SGST or IGST worked out from the buyer's state.</p>
       ${helpHtml("gst-invoice")}
       <div class="card" style="margin-top:14px">
@@ -10209,7 +10209,7 @@ function renderAdProfit(){
 function adpBody(){
   app.innerHTML=`
     <div class="wrap page">
-      <h2>Ad Profitability by SKU</h2>
+      <h1>Ad Profitability by SKU</h1>
       <p class="lede">Your settlement says what each SKU earned. Your advertising report says what each SKU cost to promote. Combine both, then add your product cost, to see <b>which SKUs remain profitable after Amazon's charges, advertising and COGS</b>. It needs all three before it will call anything profitable; with fewer inputs it says exactly what it cannot yet know.</p>
       ${helpHtml("ad-profit")}
       <label class="sa-drop" id="adp-drop">
@@ -10818,7 +10818,7 @@ function renderReturnsAnalyzer(){
 function rtBody(){
   app.innerHTML=`
     <div class="wrap page">
-      <h2>Returns Analyzer</h2>
+      <h1>Returns Analyzer</h1>
       <p class="lede">Refunds are a third of many Indian sellers' gross. This reads what they actually cost per SKU, how much stock comes back <b>sellable</b>, what share is courier RTO rather than the product's fault, and Amazon's own return reasons — grouped into things you can act on.</p>
       ${helpHtml("returns")}
       <label class="sa-drop" id="rt-drop">
@@ -11084,7 +11084,7 @@ function renderStorageFees(){
 function stoBody(){
   app.innerHTML=`
     <div class="wrap page">
-      <h2>Storage Fee Analyzer</h2>
+      <h1>Storage Fee Analyzer</h1>
       <p class="lede">FBA storage is billed per cubic metre, every month, whether the product sells or not. This reads Amazon's own storage-fee report and answers the question behind the bill: <b>which stock is paying rent without paying its way?</b></p>
       ${helpHtml("storage")}
       <label class="sa-drop" id="sto-drop">
@@ -11319,7 +11319,7 @@ function renderRtoRadar(){
 function rtoBody(){
   app.innerHTML=`
     <div class="wrap page">
-      <h2>RTO Radar</h2>
+      <h1>RTO Radar</h1>
       <p class="lede">Returned-to-origin shipments can create forward and return logistics costs and may reduce the value you recover from the order. Amazon records the outcome in the All Orders report but never totals it up. RTO Radar shows where undelivered returns are appearing — <b>by state, by pincode and SKU</b>.</p>
       ${helpHtml("rto")}
       <label class="sa-drop" id="rto-drop">
@@ -11581,7 +11581,7 @@ function renderStranded(){
 function strBody(){
   app.innerHTML=`
     <div class="wrap page">
-      <h2>Stranded Inventory</h2>
+      <h1>Stranded Inventory</h1>
       <p class="lede">Stranded stock is in Amazon's warehouse, paying storage rent, and <b>cannot sell</b> — the listing is broken, deleted or under review. Amazon's report names the fix for every row; this adds what it's worth and how long it has been stuck.</p>
       ${helpHtml("stranded")}
       <label class="sa-drop" id="str-drop">
@@ -11786,7 +11786,7 @@ function renderTraffic(){
 function tdBody(){
   app.innerHTML=`
     <div class="wrap page">
-      <h2>Traffic Doctor</h2>
+      <h1>Traffic Doctor</h1>
       <p class="lede">When a SKU underperforms, this report helps you see <b>where to investigate first</b>: low traffic, weak conversion, or low Featured Offer share. These metrics identify the <b>symptom, not necessarily the root cause</b> — Traffic Doctor turns them into a practical starting point.</p>
       ${helpHtml("traffic")}
       <label class="sa-drop" id="td-drop">
@@ -11923,7 +11923,7 @@ function renderAdsOptimizer(){
 function adsBody(){
   app.innerHTML=`
     <div class="wrap page">
-      <h2>Ads Optimizer</h2>
+      <h1>Ads Optimizer</h1>
       <p class="lede">The Search Term report is the only place Amazon shows <b>what buyers actually typed</b>. Drop it here and get the four lists that matter: spend going to words that did not convert in this report, winners that deserve their own exact-match bid, terms converting at a loss, and a campaign scoreboard.</p>
       ${helpHtml("ads-optimizer")}
       <label class="sa-drop" id="ads-drop">
@@ -12203,7 +12203,7 @@ const CHANGELOG=[
 function renderChangelog(){
   setMeta("What's new — Seller Tools India","Every shipped change to the Seller Tools India calculators and reports, newest first.");
   backBtn.hidden=false;
-  app.innerHTML=`<div class="wrap page"><h2>What's new</h2>
+  app.innerHTML=`<div class="wrap page"><h1>What's new</h1>
     <p class="lede">Every shipped change a seller can feel, newest first.</p>
     ${CHANGELOG.map(c=>`<div class="panel"><h4>${esc(c.t)} <span class="sa-sub">— ${esc(fmtDate(c.d))}</span></h4>
       <p class="sa-sub" style="margin:6px 0 0;font-size:13.5px;line-height:1.65">${esc(c.n)}</p></div>`).join("")}

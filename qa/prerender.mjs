@@ -76,15 +76,23 @@ const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '
   '.png': 'image/png', '.svg': 'image/svg+xml', '.xml': 'application/xml',
   '.txt': 'text/plain', '.json': 'application/json' };
 
+/* Every route is served from index.html, NEVER from a previously generated
+   twin. Serving the twins would re-snapshot yesterday's output: the twin
+   carries its own frozen copy of the inline script, so a change to
+   index.html's render functions would be invisible here and the generator
+   would cheerfully rewrite each file with stale content. Only real assets
+   (images, xml, txt, css, js) come off disk. */
+const ASSETS = new Set(['.png', '.svg', '.xml', '.txt', '.json', '.css', '.js', '.ico', '.webmanifest']);
+
 const server = http.createServer((req, res) => {
   const p = decodeURIComponent(req.url.split('?')[0]);
-  let file = path.join(WEB, p === '/' ? 'index.html' : p);
+  const ext = path.extname(p);
+  let file = path.join(WEB, p);
   if (!file.startsWith(WEB)) return res.writeHead(403).end('no');
-  if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) {
-    if (fs.existsSync(file + '.html')) file += '.html';      // cleanUrls
-    else file = path.join(WEB, 'index.html');                 // catch-all rewrite
+  if (!ASSETS.has(ext) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+    file = path.join(WEB, 'index.html');
   }
-  res.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream' });
+  res.writeHead(200, { 'Content-Type': TYPES[ext] || 'text/html; charset=utf-8' });
   res.end(fs.readFileSync(file));
 });
 
