@@ -1,0 +1,10 @@
+# Pre-rendered route twins built by qa/prerender.mjs from web/index.html.
+# Each is a full copy of the 800 KB app with one route's content baked into
+# <main id="app">, so their diffs are enormous and meaningless — collapse them
+# in review and keep them out of language stats.
+web/*.html linguist-generated=true
+web/index.html -linguist-generated
+web/terms.html -linguist-generated
+web/privacy.html -linguist-generated
+web/refunds.html -linguist-generated
+web/contact.html -linguist-generated

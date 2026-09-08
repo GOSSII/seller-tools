@@ -1,4 +1,67 @@
 User-agent: *
 Allow: /
 
+# Auth and account screens hold nothing worth indexing and would only split
+# crawl budget away from the tool pages.
+Disallow: /login
+Disallow: /signup
+Disallow: /reset
+Disallow: /new-password
+Disallow: /account
+Disallow: /admin
+Disallow: /api/
+
+# --- AI answer engines -------------------------------------------------
+# Named explicitly because "User-agent: *" is easy to misread as a default
+# deny, and because these crawlers do NOT execute JavaScript: every public
+# page is pre-rendered so they can read it (qa/prerender.mjs).
+
+# OpenAI — ChatGPT search results and citations
+User-agent: OAI-SearchBot
+Allow: /
+
+# OpenAI — fetches a page when a user asks ChatGPT about a link
+User-agent: ChatGPT-User
+Allow: /
+
+# OpenAI — training crawler
+User-agent: GPTBot
+Allow: /
+
+# Anthropic
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-User
+Allow: /
+
+User-agent: Claude-SearchBot
+Allow: /
+
+# Perplexity
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Perplexity-User
+Allow: /
+
+# Google's AI surfaces (Gemini, AI Overviews grounding)
+User-agent: Google-Extended
+Allow: /
+
+# Microsoft Copilot / Bing's AI answers
+User-agent: Bingbot
+Allow: /
+
+# Apple Intelligence
+User-agent: Applebot
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+# Common Crawl — the corpus many smaller AI products build on
+User-agent: CCBot
+Allow: /
+
 Sitemap: https://sellertoolsindia.com/sitemap.xml

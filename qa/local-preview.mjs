@@ -41,7 +41,13 @@ const build = () => {
 function copyStatics() {
   for (const f of fs.readdirSync(WEB)) {
     const s = path.join(WEB, f);
-    if (fs.statSync(s).isFile() && f !== 'index.html') fs.copyFileSync(s, path.join(OUT, f));
+    if (!fs.statSync(s).isFile() || f === 'index.html') continue;
+    // The pre-rendered route twins (qa/prerender.mjs) are copies of index.html
+    // WITHOUT the gatePremium patch above. Copying them would let /trends and
+    // friends bypass the unlock and render the paywall instead of the tool, so
+    // they are skipped and the catch-all falls back to the patched index.html.
+    if (f.endsWith('.html') && fs.readFileSync(s, 'utf8').includes('<!--prerender:start-->')) continue;
+    fs.copyFileSync(s, path.join(OUT, f));
   }
 }
 build();
