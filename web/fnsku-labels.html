@@ -3549,6 +3549,7 @@ async function adminShowUser(uid,flash){
       <div class="adm-act">
         <label>Danger</label>
         <div class="adm-row-inline"><button type="button" class="lp-btn sec" data-adm="revoke" style="color:var(--red);border-color:var(--red-line)">Revoke plan now</button></div>
+        <div class="adm-row-inline" style="margin-top:8px"><button type="button" class="lp-btn sec" data-adm="delete_user" style="color:var(--red);border-color:var(--red-line)">Delete account</button></div>
       </div>
     </div>
     ${ents?`<h4 style="margin:18px 0 8px;font-size:14px">Entitlements</h4><div class="pay-wrap"><table class="pay-table"><thead><tr><th>Plan</th><th>Source</th><th>Starts</th><th>Expires</th></tr></thead><tbody>${ents}</tbody></table></div>`:""}
@@ -3564,12 +3565,35 @@ async function adminShowUser(uid,flash){
     if(rr.ok && j.ok!==false){ const s=document.getElementById("adm-search"); adminLoadUsers(s?s.value.trim():""); adminShowUser(uid,"Done."); }
     else authMsg(msg,"err","Action failed"+(j.error?": "+j.error:"")+".");
   };
+  /* run() reloads the detail pane afterwards, which is impossible once the
+     account it describes no longer exists — so deletion gets its own path:
+     clear the pane, say what went, and refresh the list behind it. */
+  const runDelete=async(email)=>{
+    msg.hidden=true;
+    let rr; try{ rr=await adminCall({action:"delete_user",user_id:uid,confirm_email:email}); }catch(e){ authMsg(msg,"err","Network error."); return; }
+    const j=await rr.json().catch(()=>({}));
+    if(rr.ok&&j.ok){
+      host.innerHTML=`<p class="lede">Deleted ${esc(j.email||email)} — account, payments and history are gone.</p>`;
+      const s=document.getElementById("adm-search"); adminLoadUsers(s?s.value.trim():"");
+      return;
+    }
+    authMsg(msg,"err",
+      j.error==="cannot_delete_self"?"You can't delete the account you're signed in as — do that one from Supabase."
+      :j.error==="email_mismatch"?"This row is out of date. Reload the list and open the user again."
+      :j.error==="user_not_found"?"That account no longer exists."
+      :"Delete failed"+(j.error?": "+j.error:"")+".");
+  };
   host.querySelectorAll("[data-adm]").forEach(btn=>btn.addEventListener("click",()=>{
     const a=btn.dataset.adm;
     if(a==="grant") run("grant",{plan:document.getElementById("adm-grant-plan").value,days:parseInt(document.getElementById("adm-grant-days").value,10)});
     else if(a==="set_device_limit") run("set_device_limit",{limit:parseInt(document.getElementById("adm-limit").value,10)});
     else if(a==="reset_devices") adminConfirmThen(btn,"Reset all devices for this user?",()=>run("reset_devices",{}));
     else if(a==="revoke") adminConfirmThen(btn,"Revoke this user's plan now?",()=>run("revoke",{}));
+    else if(a==="delete_user"){
+      const paid=(d.payments||[]).filter(x=>x.status==="paid").reduce((sum,x)=>sum+(x.amount_paise||0),0);
+      adminConfirmThen(btn,`Permanently delete ${p.email||uid}? Payments${paid?" ("+money0(paid)+" of revenue)":""}, entitlements, devices and login history go with it. No undo.`,
+        ()=>runDelete(p.email||""));
+    }
   }));
 }
 /* Inline confirm: turns a button into a Yes/Cancel pair (no blocking dialog). */

@@ -13,6 +13,7 @@
 //   revoke { user_id }                           → expire active entitlements now
 //   reset_devices { user_id }                    → delete devices + clear active session
 //   set_device_limit { user_id, limit }          → update profiles.device_limit
+//   delete_user { user_id, confirm_email }       → erase the account for good
 const { userFromToken, rest, bearer, auth } = require('./_lib/supa');
 
 // Basic shape check — GoTrue does the real validation on invite.
@@ -387,6 +388,36 @@ module.exports = async (req, res) => {
       await audit('revoke:' + uid + (r.ok ? '' : ':FAILED'));
       if (!r.ok) return res.status(502).json({ error: 'db_error' });
       return res.status(200).json({ ok: true });
+    }
+
+    // Erase an account for good. Every user table cascades from auth.users, so
+    // this also destroys the profile, entitlements, PAYMENTS, login history,
+    // devices and subscriptions — and the dashboard's revenue drops by whatever
+    // that user paid. Nothing here is recoverable, so the caller has to echo
+    // back the email the panel showed: a stale row or a mistyped id then fails
+    // closed instead of deleting a stranger who happens to sit at that uuid.
+    if (action === 'delete_user') {
+      const uid = String(body.user_id || '');
+      if (!uid) return res.status(400).json({ error: 'user_id_required' });
+      // Deleting yourself revokes your own admin in one click and leaves no way
+      // back into this panel — that one has to be done from Supabase.
+      if (uid === user.id) return res.status(400).json({ error: 'cannot_delete_self' });
+
+      const who = await rest('GET', '/profiles?select=email&id=eq.' + encodeURIComponent(uid) + '&limit=1');
+      const row = ((await jsonOf(who)) || [])[0];
+      if (!who.ok || !row) return res.status(404).json({ error: 'user_not_found' });
+      const email = String(row.email || '');
+      if (String(body.confirm_email || '').trim().toLowerCase() !== email.trim().toLowerCase()) {
+        return res.status(400).json({ error: 'email_mismatch' });
+      }
+
+      const del = await auth('DELETE', '/admin/users/' + encodeURIComponent(uid));
+      // Audit rows are keyed to the ADMIN's user_id, so this line survives the
+      // cascade that wipes everything belonging to the deleted account. Keep the
+      // email in it: the uuid stops resolving to anything the moment it is gone.
+      await audit('delete_user:' + email + ':' + uid + (del.ok ? '' : ':FAILED'));
+      if (!del.ok) return res.status(502).json({ error: 'delete_failed' });
+      return res.status(200).json({ ok: true, email });
     }
 
     if (action === 'reset_devices') {
