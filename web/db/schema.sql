@@ -150,11 +150,15 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into public.profiles (id, email, name)
-  values (new.id, new.email, coalesce(new.raw_user_meta_data->>'name', ''))
+  -- phone: the signup form and the post-Google prompt both write it to
+  -- user_metadata (auth.updateUser), so it reaches us through this trigger.
+  insert into public.profiles (id, email, name, phone)
+  values (new.id, new.email, coalesce(new.raw_user_meta_data->>'name', ''),
+          nullif(new.raw_user_meta_data->>'phone', ''))
   on conflict (id) do update
     set email = excluded.email,
-        name  = coalesce(nullif(excluded.name, ''), public.profiles.name);
+        name  = coalesce(nullif(excluded.name, ''), public.profiles.name),
+        phone = coalesce(excluded.phone, public.profiles.phone);
   return new;
 end;
 $$;
@@ -167,10 +171,21 @@ create trigger on_auth_user_change
 -- ---------------------------------------------------------------------------
 -- One-time backfill for any users that already exist (harmless if none)
 -- ---------------------------------------------------------------------------
-insert into public.profiles (id, email, name)
-select u.id, u.email, coalesce(u.raw_user_meta_data->>'name', '')
+insert into public.profiles (id, email, name, phone)
+select u.id, u.email, coalesce(u.raw_user_meta_data->>'name', ''),
+       nullif(u.raw_user_meta_data->>'phone', '')
 from auth.users u
 on conflict (id) do nothing;
+
+-- profiles.phone existed from Phase 2 but the trigger never filled it, so every
+-- number given before the trigger learned about phones sits only in
+-- user_metadata. Copy those across once (re-running touches nothing).
+update public.profiles p
+   set phone = nullif(u.raw_user_meta_data->>'phone', '')
+  from auth.users u
+ where u.id = p.id
+   and p.phone is null
+   and nullif(u.raw_user_meta_data->>'phone', '') is not null;
 
 -- ============================================================================
 -- Phase 4b: auto-renewal via Razorpay Subscriptions
