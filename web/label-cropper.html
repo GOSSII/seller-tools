@@ -709,8 +709,7 @@
   .adm-row-inline .lp-btn{min-height:40px;padding:0 14px;font-size:13.5px}
   .adm-confirm{display:inline-flex;gap:8px;align-items:center;font-size:13px;color:var(--ink);flex-wrap:wrap}
   .adm-kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:16px 0}
-  @media(min-width:700px){.adm-kpis{grid-template-columns:repeat(3,1fr)}}
-  @media(min-width:1000px){.adm-kpis{grid-template-columns:repeat(6,1fr)}}
+  @media(min-width:700px){.adm-kpis{grid-template-columns:repeat(4,1fr)}}
   .adm-kpi{border:1px solid var(--line);border-radius:12px;padding:12px 13px;background:#fff;min-width:0}
   .adm-kpi .k{font-size:10.5px;font-weight:700;letter-spacing:.06em;color:var(--faint);text-transform:uppercase;margin-bottom:4px}
   .adm-kpi .v{font-size:19px;font-weight:800;letter-spacing:-.02em;overflow-wrap:anywhere}
@@ -718,9 +717,12 @@
   .adm-kpi .d.up{color:var(--green)}
   .adm-kpi.blue{background:var(--blue-soft);border-color:var(--blue-line)} .adm-kpi.blue .v{color:var(--blue)}
   .adm-kpi.green{background:var(--green-soft);border-color:var(--green-line)} .adm-kpi.green .v{color:var(--green)}
+  .adm-kpi.orange{background:var(--orange-soft);border-color:var(--orange-line)} .adm-kpi.orange .v{color:#c2410c}
   .adm-charts2{display:grid;grid-template-columns:1fr;gap:12px;margin-bottom:16px}
-  @media(min-width:860px){.adm-charts2{grid-template-columns:1fr 1fr}}
+  @media(min-width:860px){.adm-charts2{grid-template-columns:1fr 1fr}.adm-charts2>.adm-wide{grid-column:1/-1}}
+  @media(min-width:1060px){.adm-charts2{grid-template-columns:1fr 1fr 1fr}.adm-charts2>.adm-wide{grid-column:auto}}
   .adm-cols2{display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:16px;align-items:start}
+  .adm-cols2>*{min-width:0} /* else the Live-now table's min-width stretches the column past a phone screen */
   @media(min-width:900px){.adm-cols2{grid-template-columns:1.35fr 1fr}}
   .adm-stack{display:flex;flex-direction:column;gap:14px}
   .adm-item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px dashed var(--line);font-size:13px;flex-wrap:wrap}
@@ -3416,6 +3418,17 @@ async function renderAdmin(){
   if(!stats){ renderNotFound(); return; }
   const chart=saBarChart("Signups · last 30 days",(stats.signups||[]),"count","var(--blue)",n=>String(n));
   const revChart=saBarChart("Revenue · last 30 days",(stats.revenue_days||[]),"paise","var(--green)",p=>money0(p));
+  const vis=stats.visits_available?stats.visitors:null;
+  const visChart=vis?saBarChart("Visitors · last 30 days",vis.days||[],"count","var(--orange)",n=>num(n)):"";
+  const visMonthName=k=>new Date(k+"-01T00:00:00Z").toLocaleDateString("en-IN",{month:"short",timeZone:"UTC"});
+  const visTiles=vis?`
+      <div class="adm-kpi orange"><div class="k">Visitors · today</div><div class="v">${num(vis.today)}</div><div class="d">${vis.today_new?num(vis.today_new)+" new · ":""}${num(vis.yesterday)} yesterday</div></div>
+      <div class="adm-kpi"><div class="k">Visitors · this month</div><div class="v">${num(vis.month)}</div><div class="d">${num(vis.prev_month)} in ${esc(visMonthName(vis.prev_month_key))}</div></div>
+      <div class="adm-kpi"><div class="k">Visitors · all time</div><div class="v">${num(vis.total)}</div><div class="d">${vis.since?"since "+esc(saFmtDay(vis.since)):"counting from today"}</div></div>`
+    :`
+      <div class="adm-kpi"><div class="k">Visitors · today</div><div class="v">—</div><div class="d">re-run schema.sql</div></div>
+      <div class="adm-kpi"><div class="k">Visitors · this month</div><div class="v">—</div><div class="d">re-run schema.sql</div></div>
+      <div class="adm-kpi"><div class="k">Visitors · all time</div><div class="v">—</div><div class="d">re-run schema.sql</div></div>`;
   const signups7=(stats.signups||[]).slice(-7).reduce((s,x)=>s+(x.count||0),0);
   const conv=stats.users_total?Math.round((stats.paid_count||0)/stats.users_total*100):0;
   const cur=stats.revenue_month_paise||0, prev=stats.revenue_prev_month_paise||0;
@@ -3442,10 +3455,11 @@ async function renderAdmin(){
       <div class="adm-kpi green"><div class="k">Paid · active</div><div class="v">${num(stats.paid_count)}</div><div class="d">${conv}% of users</div></div>
       <div class="adm-kpi"><div class="k">Revenue · this month</div><div class="v">${money0(cur)}</div>${revDelta}</div>
       <div class="adm-kpi"><div class="k">Revenue · total</div><div class="v">${money0(stats.revenue_total_paise)}</div><div class="d">${num(stats.payments_total||0)} payment${(stats.payments_total||0)===1?"":"s"}</div></div>
-      <div class="adm-kpi green"><div class="k">Online now</div><div class="v">${num(stats.online_now||0)}</div><div class="d">${num(stats.sessions_24h||0)} sessions · 24h</div></div>
-      <div class="adm-kpi"><div class="k">Avg session · 24h</div><div class="v">${stats.avg_session_min||0} min</div></div>
+${visTiles}
+      <div class="adm-kpi green"><div class="k">Online now</div><div class="v">${num(stats.online_now||0)}</div><div class="d">${num(stats.sessions_24h||0)} sessions · avg ${stats.avg_session_min||0} min · 24h</div></div>
     </div>
     <div class="adm-charts2">
+      <div class="adm-wide">${visChart||`<div class="viz"><div class="viz-title">Visitors · last 30 days</div><p class="lede" style="margin-top:8px">${vis?"No visitors counted yet — the count starts with the first visit after this update.":"The <code>visits_daily</code> table does not exist yet — re-run <code>web/db/schema.sql</code> in Supabase and visitors start counting."}</p></div>`}</div>
       <div>${chart||'<div class="viz"><div class="viz-title">Signups · last 30 days</div><p class="lede" style="margin-top:8px">No signups yet.</p></div>'}</div>
       <div>${revChart||'<div class="viz"><div class="viz-title">Revenue · last 30 days</div><p class="lede" style="margin-top:8px">No payments in the last 30 days.</p></div>'}</div>
     </div>
@@ -12363,6 +12377,19 @@ function renderChangelog(){
     <div class="banner info">Something broken, or something you wish existed? Tell us: <a href="/contact">contact</a>.</div>
   </div>`;
 }
+/* Visitor count for the admin panel (disclosed in privacy.html). The browser
+   remembers one thing — the last IST day it was counted — and its first ping
+   of a new day carries three 0/1 flags: first visit today, this month, ever.
+   No id leaves the browser. The day is marked done only once the server says
+   the count landed, so a failed or throttled ping is simply retried. */
+function visitFlags(){
+  try{
+    const day=new Date(Date.now()+19800000).toISOString().slice(0,10);
+    const last=localStorage.getItem("sa_vday")||"";
+    if(last===day) return null;
+    return {day,m:last.slice(0,7)!==day.slice(0,7)?1:0,f:last?0:1};
+  }catch(e){ return null; }
+}
 function sendPing(){
   const sid=presenceSid(); if(!sid) return;
   if(document.visibilityState!=="visible") return;
@@ -12371,9 +12398,14 @@ function sendPing(){
   const s=storedSession();
   const headers={"Content-Type":"application/json"};
   if(s&&s.access_token) headers.Authorization="Bearer "+s.access_token;
+  const visit=visitFlags();
   try{
     fetch("/api/ping",{method:"POST",headers,keepalive:true,
-      body:JSON.stringify({sid,route:currentRoute().slice(0,60)||"home"})}).catch(()=>{});
+      body:JSON.stringify({sid,route:currentRoute().slice(0,60)||"home",
+        visit:visit?{d:1,m:visit.m,f:visit.f}:undefined})})
+      .then(r=>r.ok?r.json():null)
+      .then(j=>{ if(visit&&j&&j.counted){ try{ localStorage.setItem("sa_vday",visit.day); }catch(e){} } })
+      .catch(()=>{});
   }catch(e){}
 }
 setInterval(sendPing,60000);
