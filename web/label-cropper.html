@@ -2331,22 +2331,38 @@ function authTokensInUrl(){
   return /access_token=|error_description=|type=recovery/.test(location.hash||"")
       || /[?&]code=/.test(location.search||"");
 }
-/* Google sign-ups never pass our signup form, so the mobile number that
-   lets checkout skip Razorpay's contact screen is missing. Ask once,
-   immediately after the OAuth return. Skippable on purpose — a stuck
-   user is worse than one Razorpay field at payment time. */
+/* Every signed-in account needs a mobile number on file: checkout prefills
+   it (payment approvals go there) and the admin panel calls or WhatsApps
+   users on it. The signup form already requires one; this screen catches
+   everyone else — Google sign-ups right after OAuth, and via phoneGate() in
+   route() anyone who signed up before 20 Aug 2026, closed this screen, or
+   came in through an admin invite. There is no skip: the only way past
+   without a number is logging out. */
+function sessionHasPhone(u){ return !!(u&&u.user_metadata&&u.user_metadata.phone); }
+function storeSessionPhone(phone){
+  // keep the locally stored session copy in step for checkout prefill
+  try{
+    const raw=localStorage.getItem(SUPABASE_AUTH_KEY); const j=JSON.parse(raw);
+    const sess=(j&&j.user)?j:(j&&j.currentSession);
+    if(sess&&sess.user){ sess.user.user_metadata=Object.assign({},sess.user.user_metadata,{phone}); localStorage.setItem(SUPABASE_AUTH_KEY,JSON.stringify(j)); }
+  }catch(e){}
+}
 function renderPhonePrompt(nextHash){
-  authShell("One last step","",`
+  authShell("Add your mobile number","Needed once for your account. Payment approvals and account updates come to this number.",`
     <form class="card" id="ph-form" novalidate>
       <div id="ph-msg" class="auth-msg" hidden></div>
       <div><label for="ph-phone">Mobile number</label>
         <input id="ph-phone" type="tel" autocomplete="tel-national" inputmode="numeric" maxlength="10" placeholder="10-digit mobile"></div>
       <button type="submit" class="bigbtn" id="ph-submit">Save &amp; continue</button>
-    </form>`);
+    </form>
+    <div class="auth-links">Not your account? <a href="/" id="ph-logout">Log out</a></div>`);
   backBtn.hidden=true;   // a committed step — no header escape hatch
   const form=document.getElementById("ph-form"), msg=document.getElementById("ph-msg"),
         submit=document.getElementById("ph-submit");
   try{ document.getElementById("ph-phone").focus(); }catch(e){}
+  // stopPropagation: the document-level link router would otherwise
+  // pushState("/") and re-route while doLogout is still signing out
+  document.getElementById("ph-logout").addEventListener("click",e=>{ e.preventDefault(); e.stopPropagation(); doLogout(); });
   form.addEventListener("submit",async e=>{
     e.preventDefault(); msg.hidden=true;
     const phone=document.getElementById("ph-phone").value.replace(/\D/g,"");
@@ -2356,16 +2372,41 @@ function renderPhonePrompt(nextHash){
       const c=await sb();
       const {error}=await c.auth.updateUser({data:{phone}});
       if(error){authMsg(msg,"err",authFriendly(error.message));return;}
-      // keep the locally stored session copy in step for checkout prefill
-      try{
-        const raw=localStorage.getItem(SUPABASE_AUTH_KEY); const j=JSON.parse(raw);
-        const sess=(j&&j.user)?j:(j&&j.currentSession);
-        if(sess&&sess.user){ sess.user.user_metadata=Object.assign({},sess.user.user_metadata,{phone}); localStorage.setItem(SUPABASE_AUTH_KEY,JSON.stringify(j)); }
-      }catch(e2){}
-      location.hash=nextHash||"#/";
+      storeSessionPhone(phone);
+      // The gate renders in place, so the URL may already be nextHash's
+      // route; assigning an identical hash fires no hashchange.
+      const target=nextHash||"#/";
+      if(target.replace(/^#\/?/,"")===currentRoute()) route(); else location.hash=target;
     }catch(err){authMsg(msg,"err",authFriendly(err.message));}
     finally{submit.disabled=false; submit.textContent="Save & continue";}
   });
+}
+/* Called from route() for a signed-in user whose stored session has no
+   phone. The stored copy can be stale (number saved on another device), so
+   ask the server before blocking. A failed check lets this page load through
+   rather than trapping someone behind a network error or a dead session. */
+const PHONE_GATE_EXEMPT=["new-password","login","signup","reset"];
+// Account the server check has already cleared this page load. Keyed by id,
+// so a different account signing in on the same tab is still checked.
+let phoneGateClearedFor="";
+function phoneGateApplies(h){
+  const u=sessionUser();
+  return !!u && !sessionHasPhone(u) && phoneGateClearedFor!==u.id && PHONE_GATE_EXEMPT.indexOf(h)<0;
+}
+async function phoneGate(h){
+  backBtn.hidden=true;
+  app.innerHTML=`<div class="wrap page"><p class="lede">Loading…</p></div>`;
+  let phone="", ok=false;
+  try{
+    const c=await sb();
+    const {data,error}=await c.auth.getUser();
+    if(!error&&data&&data.user){ ok=true; phone=(data.user.user_metadata&&data.user.user_metadata.phone)||""; }
+  }catch(e){}
+  if(currentRoute()!==h) return;          // navigated away meanwhile
+  // Cleared either way before re-routing: if the stored copy can't be
+  // patched, route() would otherwise land straight back here, forever.
+  if(phone||!ok){ const u=sessionUser(); phoneGateClearedFor=u?u.id:""; if(phone) storeSessionPhone(phone); route(); return; }
+  renderPhonePrompt("#/"+h);
 }
 let AUTH_REDIRECT_ACTIVE=false;
 async function handleAuthRedirect(){
@@ -12206,6 +12247,7 @@ function route(){
     set('meta[name="twitter:description"]',d);
   });
   renderAuthSlot();
+  if(phoneGateApplies(h)){phoneGate(h);window.scrollTo(0,0);return;}
   if(!h){renderHome();window.scrollTo(0,0);return;}
   if(h==="pricing"){renderPricing();window.scrollTo(0,0);return;}
   if(h==="login"){renderLogin();window.scrollTo(0,0);return;}
