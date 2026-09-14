@@ -4,7 +4,7 @@
 // service_role key. Every action is audited into login_events.
 //
 // Actions (POST { action, ... }):
-//   stats                                        → dashboard numbers + signups
+//   stats                                        → dashboard numbers + signups + visitors
 //   list_users { q }                             → users (phone/plan/expiry/devices/last login);
 //                                                  q = email fragment or mobile number
 //   user_detail { user_id }                      → phone/entitlements/payments/logins/devices
@@ -91,6 +91,41 @@ function revenuePrevMonthPaise(payments, nowMs) {
     return (t.getUTCFullYear() === y && t.getUTCMonth() === m) ? sum + (p.amount_paise || 0) : sum;
   }, 0);
 }
+// visits_daily rows → the panel's visitor numbers. Rows and "today" are IST
+// calendar days. today/yesterday are that day's visitors; month and total are
+// unique visitors, summed from the first-of-month / first-ever columns (see
+// schema.sql) — adding up daily visitors would count a regular once per day.
+const IST_OFFSET_MS = 5.5 * 3600000;
+function visitorStats(rows, nowMs, nDays) {
+  const dayOf = ms => new Date(ms + IST_OFFSET_MS).toISOString().slice(0, 10);
+  const today = dayOf(nowMs), yesterday = dayOf(nowMs - 86400000);
+  const month = today.slice(0, 7);
+  const pm = new Date(month + '-01T00:00:00Z'); pm.setUTCMonth(pm.getUTCMonth() - 1);
+  const prevMonth = pm.toISOString().slice(0, 7);
+  const by = {};
+  let total = 0, monthV = 0, prevMonthV = 0, since = null;
+  (rows || []).forEach(r => {
+    const d = String(r.day || '').slice(0, 10);
+    if (!d) return;
+    by[d] = r;
+    total += r.first_ever || 0;
+    if (!since || d < since) since = d;
+    if (d.slice(0, 7) === month) monthV += r.month_new || 0;
+    else if (d.slice(0, 7) === prevMonth) prevMonthV += r.month_new || 0;
+  });
+  const days = [];
+  for (let i = (nDays || 30) - 1; i >= 0; i--) {
+    const d = dayOf(nowMs - i * 86400000);
+    days.push({ d, count: by[d] ? (by[d].visitors || 0) : 0 });
+  }
+  const t = by[today] || {}, y = by[yesterday] || {};
+  return {
+    today: t.visitors || 0, today_new: t.first_ever || 0, today_sessions: t.sessions || 0,
+    yesterday: y.visitors || 0, month: monthV, prev_month: prevMonthV, prev_month_key: prevMonth,
+    total, since, days
+  };
+}
+
 // Subscription statuses that mean "will charge again on its own".
 const SUB_RENEWING = ['authenticated', 'active', 'pending'];
 function subStatusOf(subs, userId) {
@@ -138,14 +173,16 @@ module.exports = async (req, res) => {
     }).catch(() => {});
 
     if (action === 'stats') {
-      const [pRes, eRes, payRes, prRes, ceRes, subRes] = await Promise.all([
+      const [pRes, eRes, payRes, prRes, ceRes, subRes, visRes] = await Promise.all([
         rest('GET', '/profiles?select=id,created_at&order=created_at.desc&limit=2000'),
         rest('GET', '/entitlements?select=user_id,plan,expires_at&limit=5000'),
         rest('GET', '/payments?select=user_id,plan,period,amount_paise,status,created_at&status=eq.paid&order=created_at.desc&limit=5000'),
         rest('GET', '/presence?select=user_id,route,started_at,last_seen_at&order=last_seen_at.desc&limit=2000'),
         // client_errors may not exist until schema.sql is re-run — degrade, don't 500
         rest('GET', '/client_errors?select=at,route,message,source,line&order=at.desc&limit=50').catch(() => null),
-        rest('GET', '/subscriptions?select=user_id,status&limit=5000').catch(() => null)
+        rest('GET', '/subscriptions?select=user_id,status&limit=5000').catch(() => null),
+        // visits_daily too — missing until schema.sql is re-run
+        rest('GET', '/visits_daily?select=day,visitors,month_new,first_ever,sessions&order=day.desc&limit=1000').catch(() => null)
       ]);
       const profiles = (await jsonOf(pRes)) || [], ents = (await jsonOf(eRes)) || [], pays = (await jsonOf(payRes)) || [];
       const presence = (await jsonOf(prRes)) || [];
@@ -245,6 +282,20 @@ module.exports = async (req, res) => {
         recentErrors = recentErrors.slice(0, 15);
       }
 
+      // Visitors. One row per day, so the first page covers ~2.7 years; the
+      // all-time total needs every row, which PostgREST hands out 1000 at a time.
+      let visitsAvailable = false, visitors = null;
+      if (visRes && visRes.ok) {
+        visitsAvailable = true;
+        let visRows = (await jsonOf(visRes)) || [];
+        for (let page = 1, last = visRows.length; last === 1000 && page < 20; page++) {
+          const more = await rest('GET', '/visits_daily?select=day,visitors,month_new,first_ever,sessions&order=day.desc&limit=1000&offset=' + (page * 1000));
+          const got = more.ok ? ((await jsonOf(more)) || []) : [];
+          visRows = visRows.concat(got); last = got.length;
+        }
+        visitors = visitorStats(visRows, now, 30);
+      }
+
       // Top routes in the last 24h (by session count).
       const routeCounts = {};
       day.forEach(r => { const rt = r.route || '—'; routeCounts[rt] = (routeCounts[rt] || 0) + 1; });
@@ -274,6 +325,8 @@ module.exports = async (req, res) => {
         sessions_24h: day.length,
         avg_session_min: Math.round(avgSessionMin * 10) / 10,
         online_list: onlineList,
+        visits_available: visitsAvailable,
+        visitors,
         errors_available: errorsAvailable,
         errors_24h: errors24h,
         recent_errors: recentErrors
@@ -479,3 +532,4 @@ module.exports.revenueByDay = revenueByDay;
 module.exports.revenuePrevMonthPaise = revenuePrevMonthPaise;
 module.exports.subStatusOf = subStatusOf;
 module.exports.userSearchFilter = userSearchFilter;
+module.exports.visitorStats = visitorStats;

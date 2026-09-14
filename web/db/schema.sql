@@ -302,3 +302,34 @@ create or replace function public.counter_add(k text, n bigint) returns bigint
 language sql security definer set search_path = public as
 $$ update counters set value = value + n where key = k returning value; $$;
 revoke all on function public.counter_add(text, bigint) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- visits_daily (owner request 2026-09-14): how many people visit the site, per
+-- day, for the admin panel only. Counts, never visitors: no row identifies
+-- anyone, so these totals are kept for good while presence (above) is purged
+-- after 2 days. Days are IST calendar days.
+--   visitors    browsers seen that day (each browser counted once a day)
+--   month_new   …of which this was the first visit of the calendar month, so
+--               a month's unique visitors = sum(month_new) over its days
+--   first_ever  …of which this was the browser's first visit since counting
+--               began, so all-time visitors = sum(first_ever)
+--   sessions    tab sessions started that day (a visitor may open several)
+-- The browser only remembers the last day it was counted (localStorage); the
+-- server gets 0/1 flags, never an id. RLS on with no policies and the
+-- increment revoked from client roles: /api/ping writes and /api/admin reads,
+-- both with the service role. (idempotent — re-run this whole file)
+create table if not exists public.visits_daily (
+  day         date primary key,
+  visitors    integer not null default 0,
+  month_new   integer not null default 0,
+  first_ever  integer not null default 0,
+  sessions    integer not null default 0
+);
+alter table public.visits_daily enable row level security;
+create or replace function public.visit_add(d date, v integer, m integer, f integer, s integer) returns void
+language sql security definer set search_path = public as
+$$ insert into visits_daily as t (day, visitors, month_new, first_ever, sessions) values (d, v, m, f, s)
+   on conflict (day) do update set visitors = t.visitors + excluded.visitors,
+     month_new = t.month_new + excluded.month_new, first_ever = t.first_ever + excluded.first_ever,
+     sessions = t.sessions + excluded.sessions; $$;
+revoke all on function public.visit_add(date, integer, integer, integer, integer) from public, anon, authenticated;
