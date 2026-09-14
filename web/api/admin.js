@@ -5,8 +5,9 @@
 //
 // Actions (POST { action, ... }):
 //   stats                                        → dashboard numbers + signups
-//   list_users { q }                             → users (plan/expiry/devices/last login)
-//   user_detail { user_id }                      → entitlements/payments/logins/devices
+//   list_users { q }                             → users (phone/plan/expiry/devices/last login);
+//                                                  q = email fragment or mobile number
+//   user_detail { user_id }                      → phone/entitlements/payments/logins/devices
 //   grant { user_id, plan, days }                → insert entitlement (source 'admin')
 //   invite { email, plan, days }                 → invite by email (or grant if they
 //                                                  already have an account) + entitle
@@ -46,6 +47,21 @@ function signupsByDay(profiles, nowMs, nDays) {
     out.push({ d: day, count: counts[day] || 0 });
   }
   return out;
+}
+// The users search box takes an email fragment or a mobile number. Anything
+// that is only digits once spaces, dashes, brackets and a + are dropped could
+// be either ("rahul1990@…"), so it matches both — with a leading 91 dropped
+// from 12 digits, since profiles store the bare 10. Only digits ever reach
+// the or=() list, where a comma or bracket from user input would rewrite it.
+function userSearchFilter(q) {
+  q = String(q || '').trim();
+  if (!q) return '';
+  const digits = q.replace(/[\s\-()+]/g, '');
+  if (/^\d{3,}$/.test(digits)) {
+    const national = digits.length === 12 && digits.startsWith('91') ? digits.slice(2) : digits;
+    return '&or=(phone.like.*' + national + '*,email.ilike.*' + digits + '*)';
+  }
+  return '&email=ilike.' + encodeURIComponent('%' + q + '%');
 }
 function isActive(ent, nowMs) {
   return (ent.plan === 'starter' || ent.plan === 'pro') && (!ent.expires_at || new Date(ent.expires_at).getTime() > nowMs);
@@ -266,8 +282,7 @@ module.exports = async (req, res) => {
 
     if (action === 'list_users') {
       const q = String(body.q || '').trim();
-      const filter = q ? '&email=ilike.' + encodeURIComponent('%' + q + '%') : '';
-      const pRes = await rest('GET', '/profiles?select=id,email,name,is_admin,device_limit,created_at&order=created_at.desc&limit=50' + filter);
+      const pRes = await rest('GET', '/profiles?select=id,email,name,phone,is_admin,device_limit,created_at&order=created_at.desc&limit=50' + userSearchFilter(q));
       const profiles = (await jsonOf(pRes)) || [];
       const ids = profiles.map(p => p.id);
       let ents = [], devs = [], logins = [], subs = [], pays = [];
@@ -290,7 +305,7 @@ module.exports = async (req, res) => {
         const live = actives.find(x => x.plan === 'pro') || actives[0];
         const lastLogin = logins.filter(x => x.user_id === p.id)[0];
         return {
-          id: p.id, email: p.email, name: p.name, is_admin: p.is_admin, device_limit: p.device_limit,
+          id: p.id, email: p.email, name: p.name, phone: p.phone || null, is_admin: p.is_admin, device_limit: p.device_limit,
           plan: live ? live.plan : 'free', expires_at: live ? live.expires_at : null,
           devices: devs.filter(x => x.user_id === p.id).length,
           last_login: lastLogin ? lastLogin.at : null,
@@ -312,13 +327,23 @@ module.exports = async (req, res) => {
         rest('GET', '/payments?select=created_at,plan,period,amount_paise,status,razorpay_payment_id&user_id=eq.' + enc + '&order=created_at.desc&limit=50'),
         rest('GET', '/login_events?select=at,user_agent,device_hash,kicked_previous&user_id=eq.' + enc + '&device_hash=not.like.admin-action:*&order=at.desc&limit=20'),
         rest('GET', '/devices?select=label,device_hash,first_seen,last_seen&user_id=eq.' + enc + '&order=last_seen.desc&limit=50'),
-        rest('GET', '/profiles?select=email,name,is_admin,device_limit,active_session_id&id=eq.' + enc + '&limit=1')
+        rest('GET', '/profiles?select=email,name,phone,is_admin,device_limit,active_session_id&id=eq.' + enc + '&limit=1')
       ]);
-      // This returns a customer's email, payments and login history — the
-      // most sensitive read in the system. It must leave a trace.
+      const profile = ((await jsonOf(p)) || [])[0] || {};
+      // user_metadata is where the number is actually written; profiles.phone
+      // is a mirror that stays empty until schema.sql's trigger is re-run.
+      // One user, one call — so read the source rather than show a blank.
+      if (!profile.phone) {
+        const au = await auth('GET', '/admin/users/' + enc).catch(() => null);
+        const aj = au && au.ok ? await jsonOf(au) : null;
+        const ph = aj && aj.user_metadata && aj.user_metadata.phone;
+        if (ph) profile.phone = String(ph);
+      }
+      // This returns a customer's email, phone, payments and login history —
+      // the most sensitive read in the system. It must leave a trace.
       await audit('user_detail:' + uid);
       return res.status(200).json({
-        profile: ((await jsonOf(p)) || [])[0] || {},
+        profile,
         entitlements: (await jsonOf(e)) || [],
         payments: (await jsonOf(pay)) || [],
         login_events: (await jsonOf(l)) || [],
@@ -453,3 +478,4 @@ module.exports.signupsByDay = signupsByDay;
 module.exports.revenueByDay = revenueByDay;
 module.exports.revenuePrevMonthPaise = revenuePrevMonthPaise;
 module.exports.subStatusOf = subStatusOf;
+module.exports.userSearchFilter = userSearchFilter;
