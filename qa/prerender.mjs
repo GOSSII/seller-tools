@@ -105,6 +105,18 @@ const DATE_SHAPES = [
 ];
 const maskDates = html => DATE_SHAPES.reduce((s, re) => s.replace(re, '@DATE@'), html);
 
+/* "restock-planner is stale" is not actionable on a 846 KB file, least of all
+   in a CI log. Show the first place the two actually diverge. */
+function firstDiff(a, b) {
+  let i = 0;
+  while (i < a.length && i < b.length && a[i] === b[i]) i++;
+  let j = 0;
+  while (j < a.length - i && j < b.length - i && a[a.length - 1 - j] === b[b.length - 1 - j]) j++;
+  const ctx = 40;
+  const cut = (s, from, to) => s.slice(Math.max(0, from - ctx), to + ctx).replace(/\s+/g, ' ');
+  return `    committed: …${cut(a, i, a.length - j)}…\n    rendered:  …${cut(b, i, b.length - j)}…`;
+}
+
 /* ---------- a plain static server: no gatePremium patch, no banner ---------- */
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css',
   '.png': 'image/png', '.svg': 'image/svg+xml', '.xml': 'application/xml',
@@ -286,6 +298,7 @@ const run = async () => {
   const errors = [];
   const stale = [];
   const undeclared = [];   // differs only by dates, but not declared CLOCK_DEPENDENT
+  const diffs = [];        // first divergence per stale route, for the log
   const written = [];
   const meta = {};
 
@@ -320,12 +333,13 @@ const run = async () => {
       if (!CHECK) { fs.writeFileSync(file, next); written.push(route || '/'); }
       else if (CLOCK_DEPENDENT.has(route)) {
         // Declared: dates alone are expected to move, anything else is drift.
-        if (maskDates(prev) !== maskDates(next)) stale.push(route || '/');
+        if (maskDates(prev) !== maskDates(next)) { stale.push(route || '/'); diffs.push(firstDiff(prev, next)); }
       } else {
         // Undeclared: byte-exact. A date-only diff is called out separately —
         // it is either an edited date in static content or a route that has
         // started painting the clock, and the two need different fixes.
         (maskDates(prev) === maskDates(next) ? undeclared : stale).push(route || '/');
+        diffs.push(firstDiff(prev, next));
       }
     }
     process.stdout.write(`  ${(route || '/').padEnd(22)} ${String(snap.body.length).padStart(7)} B  ${snap.title}\n`);
@@ -346,11 +360,13 @@ const run = async () => {
       + '\n  one of two things:'
       + '\n    - a date edited in static content  -> run: node qa/prerender.mjs'
       + '\n    - the route now paints TODAY       -> add it to CLOCK_DEPENDENT in'
-      + '\n      qa/prerender.mjs, or it fails this check every day from now on.');
+      + '\n      qa/prerender.mjs, or it fails this check every day from now on.'
+      + '\n' + diffs.join('\n'));
     process.exit(1);
   }
   if (CHECK && stale.length) {
-    console.error(`\nSTALE (${stale.length}): ${stale.join(', ')}\n  run: node qa/prerender.mjs`);
+    console.error(`\nSTALE (${stale.length}): ${stale.join(', ')}\n  run: node qa/prerender.mjs\n`
+      + diffs.slice(0, 3).join('\n'));
     process.exit(1);
   }
   console.log(CHECK ? '\nall pre-rendered pages current' : `\nwrote ${written.length} of ${ROUTES.length} pages`);
