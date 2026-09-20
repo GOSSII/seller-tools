@@ -454,3 +454,4 @@ module.exports.priceFor = priceFor;
 module.exports.amountOk = amountOk;
 module.exports.REFUND_EVENTS = REFUND_EVENTS;
 module.exports.refundedPaymentId = refundedPaymentId;
+module.exports.isFullRefund = isFullRefund;
