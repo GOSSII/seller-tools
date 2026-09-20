@@ -27,7 +27,10 @@ function istDay(nowMs) { return new Date(nowMs + IST_OFFSET_MS).toISOString().sl
 // Search-engine renderers, Lighthouse and headless test browsers run our JS and
 // would ping like anyone else. They are not visitors. A real browser always
 // sends a user-agent, so an empty one is treated the same way.
-const BOT_UA_RE = /bot|crawl|spider|slurp|headless|lighthouse|pagespeed|prerender|playwright|puppeteer/i;
+// `page\s?speed` rather than `pagespeed`: PageSpeed Insights identifies itself
+// as "Google Page Speed Insights", with spaces, so the un-spaced spelling never
+// matched the one tool it was written for and every PSI run counted as a visit.
+const BOT_UA_RE = /bot|crawl|spider|slurp|headless|lighthouse|page\s?speed|prerender|playwright|puppeteer/i;
 function isBotUa(ua) { return !ua || BOT_UA_RE.test(String(ua)); }
 // What this ping adds to today's row, or null for nothing. The flags nest — a
 // browser's first visit ever is also its first this month and today — so a

@@ -61,7 +61,16 @@ function userSearchFilter(q) {
     const national = digits.length === 12 && digits.startsWith('91') ? digits.slice(2) : digits;
     return '&or=(phone.like.*' + national + '*,email.ilike.*' + digits + '*)';
   }
-  return '&email=ilike.' + encodeURIComponent('%' + q + '%');
+  return '&email=ilike.' + encFilter('%' + q + '%');
+}
+// encodeURIComponent escapes the characters that would actually break out of a
+// PostgREST filter (& = , #) but leaves ( ) * ! ' alone. None of those is
+// structural in a bare `column=ilike.value`, so this is belt-and-braces — but
+// it makes the rule total and easy to check: no PostgREST metacharacter ever
+// reaches the query string unescaped, whatever the filter is embedded in next.
+// Percent-encoding is transparent to PostgREST, so matching is unchanged.
+function encFilter(s) {
+  return encodeURIComponent(s).replace(/[()*!']/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase());
 }
 function isActive(ent, nowMs) {
   return (ent.plan === 'starter' || ent.plan === 'pro') && (!ent.expires_at || new Date(ent.expires_at).getTime() > nowMs);

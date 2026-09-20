@@ -152,3 +152,13 @@ for (const w of worstTap) {
 }
 const langMissing = results.filter((r) => !r.error && !r.lang).length;
 console.log(`\nrows missing <html lang>: ${langMissing}/${results.length}`);
+
+// RELEASE_CHECKLIST expects "0 layout problems, 0 missing <html lang>" from
+// this script, but it exited 0 whatever it found, so CI could not enforce it.
+// Only the two documented gates fail the run: the tap-target and unnamed-control
+// counts above are a standing backlog, not a regression signal, and failing on
+// them would make this red on every commit.
+if (bad.length || langMissing) {
+  console.error(`\nFAILED: ${bad.length} layout problem(s), ${langMissing} row(s) missing <html lang>`);
+  process.exit(1);
+}

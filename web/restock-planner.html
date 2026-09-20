@@ -832,7 +832,7 @@
     <input id="f-cover" data-k="cover" data-dec="0" inputmode="numeric" value="30"></div>
           </div>
         </div>
-        <div id="out"><div class="stats"><div class="stat green"><div class="k">Days of cover</div><div class="v">30 days</div></div><div class="stat "><div class="k">Projected stockout</div><div class="v">14 Oct 2026</div></div><div class="stat "><div class="k">Order by</div><div class="v">29 Sept 2026</div></div><div class="stat blue"><div class="k">Reorder at</div><div class="v">45 units left</div></div><div class="stat "><div class="k">Suggested order qty</div><div class="v">90 units</div></div></div><div class="banner good">At 3 units a day, stock reaches the reorder point of 45 units around 29 Sept 2026 — that leaves 10 days for the supplier plus a 5-day buffer before the projected stockout on 14 Oct 2026. All dates assume the sales rate holds.</div><div class="note">Tip: get your real daily sales rate from the SKU Profitability Report — units sold ÷ days in the settlement period. FBA sellers should add Amazon inbound/check-in time to the supplier lead time.</div><div class="rows"><div class="r    ">
+        <div id="out"><div class="stats"><div class="stat green"><div class="k">Days of cover</div><div class="v">30 days</div></div><div class="stat "><div class="k">Projected stockout</div><div class="v">20 Oct 2026</div></div><div class="stat "><div class="k">Order by</div><div class="v">5 Oct 2026</div></div><div class="stat blue"><div class="k">Reorder at</div><div class="v">45 units left</div></div><div class="stat "><div class="k">Suggested order qty</div><div class="v">90 units</div></div></div><div class="banner good">At 3 units a day, stock reaches the reorder point of 45 units around 5 Oct 2026 — that leaves 10 days for the supplier plus a 5-day buffer before the projected stockout on 20 Oct 2026. All dates assume the sales rate holds.</div><div class="note">Tip: get your real daily sales rate from the SKU Profitability Report — units sold ÷ days in the settlement period. FBA sellers should add Amazon inbound/check-in time to the supplier lead time.</div><div class="rows"><div class="r    ">
        <span class="rl">Current stock</span>
        <span class="rv ">90 units</span>
      </div><div class="r mut   ">
@@ -2771,9 +2771,19 @@ const FB_INFO={route:"fee-bands",title:"Fee Band Optimizer",plan:"Pro",needPro:t
   feats:["SKUs priced just over a referral or closing-fee step","What the step costs, net of the revenue you'd give up","Weight bands your parcels have already shipped in — and are no longer billed at","Read from fees Amazon actually charged, not from a category you type in"],
   mock:PW_MOCKS.feebands};
 
+/* A bare "YYYY-MM-DD" parses as UTC midnight, and toLocaleDateString then
+   renders it in the VIEWER's timezone — so every changelog entry showed a day
+   early to anyone behind UTC, and the pre-rendered twin baked one such render
+   in for everybody, crawlers included. A date-only value names a calendar day
+   and must read as that day everywhere, so pin it to UTC. Timestamps (an
+   expiry, a payment, a device last-seen) carry a real instant and stay local,
+   which is what a seller wants to see. */
 function fmtDate(d){
   if(!d) return "—";
-  try{return new Date(d).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"});}
+  const dateOnly=typeof d==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(d);
+  const opt={day:"numeric",month:"short",year:"numeric"};
+  if(dateOnly) opt.timeZone="UTC";
+  try{return new Date(d).toLocaleDateString("en-IN",opt);}
   catch(e){return "—";}
 }
 function daysLeft(exp){

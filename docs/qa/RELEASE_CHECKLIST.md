@@ -19,16 +19,33 @@ node qa/local-preview.mjs   # serves the build on :8899 — NOBANNER=1 matches p
 
 ## 1 · Automated gates — all must pass
 
-| Command | Expect | Fails if |
-|---|---|---|
-| `python3 qa/syncheck.py` | `SYNTAX OK` | JS syntax broken |
-| `node qa/tests/run-tests.mjs --real` | **75 passed, 0 failed** | any behaviour regression |
-| `node qa/responsive-audit.mjs` | **0 layout problems**, 0 missing `<html lang>` | horizontal scroll at 390 px |
-| `node qa/consistency-audit.mjs` | 38 routes, **0 page errors** | a route throws |
-| `node qa/tests/perf.mjs` | 100k rows **< 300 ms**, heap **< 120 MB** | parser regression |
-| `python3 qa/reference-calculations/settlement_ref.py <files>` | matches the site to the paisa | classification drift |
+**Most of these now run in CI** (`.github/workflows/ci.yml`) on every push and PR, so a red
+check is the first thing you will see on the branch. The table stays because CI runs a subset:
+the `--real` suite needs `qa-data/`, which is gitignored and stays that way.
 
-Current baseline: 100k rows parse in **203 ms**, total **277 ms**, heap **~98 MB**.
+| Command | Expect | Fails if | In CI |
+|---|---|---|---|
+| `python3 qa/syncheck.py` | `SYNTAX OK` | JS syntax broken | ✅ |
+| `node qa/tests/api-tests.mjs` | **222 passed, 0 failed** | a billing/entitlement/session regression | ✅ |
+| `node qa/tests/run-tests.mjs --real` | **75 passed, 0 failed** | any behaviour regression | ✅ (without `--real`: 54) |
+| `node qa/responsive-audit.mjs` | **0 layout problems**, 0 missing `<html lang>` | horizontal scroll at 390 px | ✅ |
+| `node qa/prerender.mjs --check` | `all pre-rendered pages current` | a twin in `web/*.html` is stale | ✅ |
+| `node qa/consistency-audit.mjs` | 38 routes, **0 page errors** | a route throws | ✗ needs the preview server |
+| `node qa/tests/perf.mjs` | 100k rows **< 300 ms**, heap **< 120 MB** | parser regression | ✗ prints only, never fails |
+| `python3 qa/reference-calculations/settlement_ref.py <files>` | matches the site to the paisa | classification drift | ✗ needs real files |
+
+Current baseline: 100k rows parse in **215 ms**, total **292 ms**, heap **~98 MB**.
+
+> ### Re-run the pre-render after ANY edit to `web/index.html`.
+> Every file in `web/` except the legal pages is a generated twin carrying its own frozen copy
+> of the app. Forget this and the site serves yesterday's copy to Google and to the AI crawlers
+> that do not run JavaScript at all. `--check` is the gate; `node qa/prerender.mjs` is the fix.
+>
+> Two routes — **restock-planner** and **payout-forecast** — paint today's date into their worked
+> example, so their output changes daily on its own. They are listed in `CLOCK_DEPENDENT` in
+> `qa/prerender.mjs` and compared with dates masked. If a new route starts doing this, `--check`
+> says `DATE-ONLY DRIFT` and names it: add it to that set, or the gate goes red every day and
+> stops being read.
 
 > ### `node --check` is not sufficient. Never treat it as the syntax gate.
 > A top-level `const` referencing constants declared later in the file is **valid syntax** and a

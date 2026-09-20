@@ -825,7 +825,7 @@
         <div class="card">
           <div class="fields">
             <div class="f-full"><label for="pfc-last">Date of last settlement / deposit</label>
-              <input type="date" id="pfc-last" value="2026-09-14"></div>
+              <input type="date" id="pfc-last" value="2026-09-20"></div>
             <div class="f-full"><label for="pfc-cycle">Settlement cycle</label>
               <select id="pfc-cycle">
                 <option value="7" selected="">Every 7 days (standard)</option>
@@ -844,7 +844,7 @@
           <div class="note" style="margin-top:12px;margin-bottom:0">Reserve ⓘ — Amazon holds back a slice of each settlement (unshipped orders + A-to-Z claim reserve) and releases it in the following one.</div>
         </div>
         <div id="pfc-out">
-    <div class="banner good" style="font-size:15px"><b>Next deposit: ~₹27,300</b> on <b>Wed, 23 Sept, 2026</b> (in 9 days).</div>
+    <div class="banner good" style="font-size:15px"><b>Next deposit: ~₹27,300</b> on <b>Tue, 29 Sept, 2026</b> (in 9 days).</div>
     
     <div class="chips" style="margin-bottom:14px">
       <span class="chip">Gross / cycle: ₹35,000</span>
@@ -854,7 +854,7 @@
     </div>
     <div class="tblwrap"><table class="sa" style="min-width:520px">
       <thead><tr><th>#</th><th>Settlement closes</th><th>Est. bank credit</th><th class="num">Est. deposit</th></tr></thead>
-      <tbody><tr><td>1</td><td>Mon, 21 Sept, 2026</td><td>Wed, 23 Sept, 2026</td><td class="num">₹27,300.00</td></tr><tr><td>2</td><td>Mon, 28 Sept, 2026</td><td>Wed, 30 Sept, 2026</td><td class="num">₹27,300.00</td></tr><tr><td>3</td><td>Mon, 5 Oct, 2026</td><td>Wed, 7 Oct, 2026</td><td class="num">₹27,300.00</td></tr><tr><td>4</td><td>Mon, 12 Oct, 2026</td><td>Wed, 14 Oct, 2026</td><td class="num">₹27,300.00</td></tr><tr><td>5</td><td>Mon, 19 Oct, 2026</td><td>Wed, 21 Oct, 2026</td><td class="num">₹27,300.00</td></tr><tr><td>6</td><td>Mon, 26 Oct, 2026</td><td>Wed, 28 Oct, 2026</td><td class="num">₹27,300.00</td></tr></tbody>
+      <tbody><tr><td>1</td><td>Sun, 27 Sept, 2026</td><td>Tue, 29 Sept, 2026</td><td class="num">₹27,300.00</td></tr><tr><td>2</td><td>Sun, 4 Oct, 2026</td><td>Tue, 6 Oct, 2026</td><td class="num">₹27,300.00</td></tr><tr><td>3</td><td>Sun, 11 Oct, 2026</td><td>Tue, 13 Oct, 2026</td><td class="num">₹27,300.00</td></tr><tr><td>4</td><td>Sun, 18 Oct, 2026</td><td>Tue, 20 Oct, 2026</td><td class="num">₹27,300.00</td></tr><tr><td>5</td><td>Sun, 25 Oct, 2026</td><td>Tue, 27 Oct, 2026</td><td class="num">₹27,300.00</td></tr><tr><td>6</td><td>Sun, 1 Nov, 2026</td><td>Tue, 3 Nov, 2026</td><td class="num">₹27,300.00</td></tr></tbody>
     </table></div>
     <div class="note" style="margin-top:10px">Estimates only — actual settlement timing, cycle changes and reserve amounts are controlled by Amazon and can shift with unshipped orders, claims and bank holidays (only weekends are skipped here). Deposits assume steady daily sales, so each cycle's new holdback is offset by the previous cycle's release.</div></div>
       </div>
@@ -2780,9 +2780,19 @@ const FB_INFO={route:"fee-bands",title:"Fee Band Optimizer",plan:"Pro",needPro:t
   feats:["SKUs priced just over a referral or closing-fee step","What the step costs, net of the revenue you'd give up","Weight bands your parcels have already shipped in — and are no longer billed at","Read from fees Amazon actually charged, not from a category you type in"],
   mock:PW_MOCKS.feebands};
 
+/* A bare "YYYY-MM-DD" parses as UTC midnight, and toLocaleDateString then
+   renders it in the VIEWER's timezone — so every changelog entry showed a day
+   early to anyone behind UTC, and the pre-rendered twin baked one such render
+   in for everybody, crawlers included. A date-only value names a calendar day
+   and must read as that day everywhere, so pin it to UTC. Timestamps (an
+   expiry, a payment, a device last-seen) carry a real instant and stay local,
+   which is what a seller wants to see. */
 function fmtDate(d){
   if(!d) return "—";
-  try{return new Date(d).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"});}
+  const dateOnly=typeof d==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(d);
+  const opt={day:"numeric",month:"short",year:"numeric"};
+  if(dateOnly) opt.timeZone="UTC";
+  try{return new Date(d).toLocaleDateString("en-IN",opt);}
   catch(e){return "—";}
 }
 function daysLeft(exp){

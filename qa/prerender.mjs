@@ -81,6 +81,42 @@ const SHELL_ROUTES = ['login', 'signup', 'reset', 'new-password', 'account',
 const START = '<!--prerender:start-->';
 const END = '<!--prerender:end-->';
 
+/* Two routes paint TODAY into their worked example — the Payout Forecaster's
+   deposit schedule and the Restock Planner's stockout dates. Their output
+   therefore changes on its own every day, so `--check` reported them STALE
+   every day whether or not anything had drifted. A gate that is always red is
+   a gate nobody reads, which is how a genuinely stale twin ships.
+
+   So `--check` compares these two with dates masked, exactly the way
+   writeSitemap() ignores <lastmod>. A full run still rewrites them, so the
+   dates a crawler sees refresh on every real prerender.
+
+   Scoped deliberately: /changelog also carries `3 Aug 2026`-shaped dates, but
+   those are static content, so it is NOT in this set and stays byte-guarded.
+   A route that starts painting the clock without being declared here is
+   reported by name rather than silently masked — see the check below. */
+const CLOCK_DEPENDENT = new Set(['restock-planner', 'payout-forecast']);
+
+const MONTH = '(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sept|Sep|Oct|Nov|Dec)';
+const DATE_SHAPES = [
+  new RegExp(`\\b(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun), \\d{1,2} ${MONTH}, \\d{4}\\b`, 'g'), // Tue, 29 Sept, 2026
+  new RegExp(`\\b\\d{1,2} ${MONTH},? \\d{4}\\b`, 'g'),                                  // 20 Oct 2026
+  /\bvalue="\d{4}-\d{2}-\d{2}"/g,                                                       // <input type="date">
+];
+const maskDates = html => DATE_SHAPES.reduce((s, re) => s.replace(re, '@DATE@'), html);
+
+/* "restock-planner is stale" is not actionable on a 846 KB file, least of all
+   in a CI log. Show the first place the two actually diverge. */
+function firstDiff(a, b) {
+  let i = 0;
+  while (i < a.length && i < b.length && a[i] === b[i]) i++;
+  let j = 0;
+  while (j < a.length - i && j < b.length - i && a[a.length - 1 - j] === b[b.length - 1 - j]) j++;
+  const ctx = 40;
+  const cut = (s, from, to) => s.slice(Math.max(0, from - ctx), to + ctx).replace(/\s+/g, ' ');
+  return `    committed: …${cut(a, i, a.length - j)}…\n    rendered:  …${cut(b, i, b.length - j)}…`;
+}
+
 /* ---------- a plain static server: no gatePremium patch, no banner ---------- */
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css',
   '.png': 'image/png', '.svg': 'image/svg+xml', '.xml': 'application/xml',
@@ -261,6 +297,8 @@ const run = async () => {
   const template = pristine(fs.readFileSync(path.join(WEB, 'index.html'), 'utf8'));
   const errors = [];
   const stale = [];
+  const undeclared = [];   // differs only by dates, but not declared CLOCK_DEPENDENT
+  const diffs = [];        // first divergence per stale route, for the log
   const written = [];
   const meta = {};
 
@@ -292,8 +330,17 @@ const run = async () => {
     const next = buildPage(template, { route, ...snap });
     const prev = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
     if (prev !== next) {
-      if (CHECK) stale.push(route || '/');
-      else { fs.writeFileSync(file, next); written.push(route || '/'); }
+      if (!CHECK) { fs.writeFileSync(file, next); written.push(route || '/'); }
+      else if (CLOCK_DEPENDENT.has(route)) {
+        // Declared: dates alone are expected to move, anything else is drift.
+        if (maskDates(prev) !== maskDates(next)) { stale.push(route || '/'); diffs.push(firstDiff(prev, next)); }
+      } else {
+        // Undeclared: byte-exact. A date-only diff is called out separately —
+        // it is either an edited date in static content or a route that has
+        // started painting the clock, and the two need different fixes.
+        (maskDates(prev) === maskDates(next) ? undeclared : stale).push(route || '/');
+        diffs.push(firstDiff(prev, next));
+      }
     }
     process.stdout.write(`  ${(route || '/').padEnd(22)} ${String(snap.body.length).padStart(7)} B  ${snap.title}\n`);
   }
@@ -307,8 +354,19 @@ const run = async () => {
   if (writeLlms(meta) && CHECK) stale.push('llms.txt');
 
   if (errors.length) { console.error('\nFAILED:\n' + errors.join('\n')); process.exit(1); }
+  if (CHECK && undeclared.length) {
+    console.error(`\nDATE-ONLY DRIFT (${undeclared.length}): ${undeclared.join(', ')}`
+      + '\n  These differ from the committed twin by dates and nothing else, which is'
+      + '\n  one of two things:'
+      + '\n    - a date edited in static content  -> run: node qa/prerender.mjs'
+      + '\n    - the route now paints TODAY       -> add it to CLOCK_DEPENDENT in'
+      + '\n      qa/prerender.mjs, or it fails this check every day from now on.'
+      + '\n' + diffs.join('\n'));
+    process.exit(1);
+  }
   if (CHECK && stale.length) {
-    console.error(`\nSTALE (${stale.length}): ${stale.join(', ')}\n  run: node qa/prerender.mjs`);
+    console.error(`\nSTALE (${stale.length}): ${stale.join(', ')}\n  run: node qa/prerender.mjs\n`
+      + diffs.slice(0, 3).join('\n'));
     process.exit(1);
   }
   console.log(CHECK ? '\nall pre-rendered pages current' : `\nwrote ${written.length} of ${ROUTES.length} pages`);
