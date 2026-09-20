@@ -1,0 +1,98 @@
+# Automated gates for every push and pull request.
+#
+# These are the checks docs/qa/RELEASE_CHECKLIST.md already called mandatory.
+# They were mandatory and manual, which meant they were mandatory and skippable:
+# they depend on a Playwright install that lives in a scratch directory, so the
+# cost of running them fell on whoever remembered. Now they run here.
+#
+# The repo has no package.json at its root, and deliberately so — Vercel's root
+# directory is `web/`, and a stray manifest at the top level changes how the
+# deploy is built. So CI reproduces the documented local trick instead: install
+# Playwright in a scratch directory and symlink node_modules in. `node_modules/`
+# is gitignored, so nothing here can reach a commit.
+#
+# Two jobs on purpose. `unit` needs no browser and finishes in seconds, so a
+# syntax error or a billing regression fails fast and cheap; `browser` is the
+# slow pass. Not included: qa/tests/perf.mjs and qa/consistency-audit.mjs, which
+# only print and cannot fail a build, and qa/tests/run-tests.mjs --real, which
+# needs the real seller files in qa-data/ (gitignored, and it must stay that way).
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: Syntax + API unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # The app is one big inline <script>; this extracts and node --checks it.
+      # Necessary, not sufficient — see the warning in the script itself.
+      - name: JS syntax (web/index.html)
+        run: python3 qa/syncheck.py
+
+      # Pure functions from web/api/*: signatures, prices, entitlement dates,
+      # refunds, device limits, retention. No network, no env, no browser.
+      - name: API unit tests
+        run: node qa/tests/api-tests.mjs
+
+  browser:
+    name: Calculations + layout + pre-render
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # The qa scripts drive real Google Chrome (`channel: 'chrome'`), not
+      # Playwright's bundled Chromium — keep it that way, because it is the
+      # browser the fixes were verified against. Installing the full
+      # `playwright` package also provides `playwright-core`, which
+      # qa/prerender.mjs imports by that name.
+      - name: Install Playwright + Chrome
+        run: |
+          mkdir -p "$RUNNER_TEMP/pw"
+          cd "$RUNNER_TEMP/pw"
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright
+          npx playwright install --with-deps chrome
+          ln -sfn "$RUNNER_TEMP/pw/node_modules" "$GITHUB_WORKSPACE/node_modules"
+
+      # 54 assertions against the SHIPPED window.* functions, with expected
+      # values derived independently by qa/reference-calculations/*.py.
+      - name: Calculation regression suite
+        run: node qa/tests/run-tests.mjs
+
+      # 140 route x width combinations. Fails on horizontal scroll, overflow,
+      # unwrapped tables or a missing <html lang> — not on the tap-target count.
+      - name: Responsive audit
+        run: node qa/responsive-audit.mjs
+
+      # web/*.html are generated twins of index.html. Stale twins mean crawlers
+      # and AI answer engines are served yesterday's copy of the site.
+      - name: Pre-rendered pages are current
+        run: node qa/prerender.mjs --check
+
+      - name: Upload audit output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: responsive-audit
+          path: qa/out/responsive-audit.json
+          if-no-files-found: ignore
