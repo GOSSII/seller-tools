@@ -1802,7 +1802,7 @@ const HELP={
   "keyword-combiner":{input:`Best source words: <b>Advertising console → Sponsored ads reports → Search term report</b> — the words customers actually type.`,
     steps:["Paste word lists into A, B and (optionally) C — one term per line.","Pick broad / \"phrase\" / [exact] wrapping; enable reversed A↔B if word order matters.","Copy all combinations into your PPC campaign."]},
   "label-cropper":{input:`<b>Orders → Manage Orders</b> → tick your unshipped Easy Ship orders → <b>Print label &amp; invoice</b> — Amazon downloads the label PDF. Drop that file here (several files at once is fine).`,
-    steps:["Drop the PDF — labels come out SKU-wise by default (switch to Qty or original order if you prefer), and invoice pages are recognised.","Pick the output: 4×6 thermal, or A4 with 1 or 4 labels per sheet; choose whether invoices are skipped, attached, or a separate PDF.","Keep \"SKU | Qty on label\" and \"Page numbers\" on — packers see the product, and 1 / 2 / 3… makes the printed stack easy to count and verify (put the number at the bottom if your printer cuts off the top edge). The SKU | Qty prints after the invoice table (like Amazon's own caption) by default, or in a top/bottom strip; add the Order List page first or last.","Check the preview, download, print."]},
+    steps:["Drop the PDF — labels come out SKU-wise by default, with Qty 2, 3… orders at the top of each SKU (switch to Qty or original order if you prefer), and invoice pages are recognised.","Pick the output: 4×6 thermal, or A4 with 1 or 4 labels per sheet; choose whether invoices are skipped, attached, or a separate PDF.","Keep \"SKU | Qty on label\" and \"Page numbers\" on — packers see the product, and 1 / 2 / 3… makes the printed stack easy to count and verify (put the number at the bottom if your printer cuts off the top edge). The SKU | Qty prints after the invoice table (like Amazon's own caption) by default, or in a top/bottom strip; add the Order List page first or last.","Check the preview, download, print."]},
   "order-printer":{input:`<b>Orders → Order Reports → Unshipped Orders</b> → Request report → Download (a .txt file). If you want customer addresses on packing slips, enable the address columns in the report settings on that page.`,
     steps:["Drop the report file.","Print the picklist — total units per SKU, one trip to the shelf.","Print packing slips — one per order, each on its own page."]},
   "settlement-analyzer":{input:`<b>Payments → All Statements</b> → pick a closed settlement → <b>Download Flat File V2</b> (a .txt file). Any completed settlement period works.`,
@@ -8162,7 +8162,7 @@ function lcBody(){
             </select></div>
           <div><label for="lc-sort">Sorting</label>
             <select id="lc-sort">
-              <option value="sku"${(saved.sort||"sku")==="sku"?" selected":""}>SKU-wise (A→Z)</option>
+              <option value="sku"${(saved.sort||"sku")==="sku"?" selected":""}>SKU-wise (A→Z), bigger Qty first</option>
               <option value="qty"${saved.sort==="qty"?" selected":""}>Qty — high to low</option>
               <option value="orig"${saved.sort==="orig"?" selected":""}>Original order</option>
             </select></div>
@@ -8592,11 +8592,13 @@ function lcBody(){
         }
       }
       // Labels only. SKU-wise is the default sort; unrecognised SKUs go
-      // last in their original order.
+      // last in their original order. Within one SKU, bigger quantities
+      // come first (Qty 3, Qty 2, then the Qty 1s), so the packer handles
+      // the multi-unit parcels while that SKU is still on the table.
       const orderList=lcPageInfo.filter(x=>!x.inv);
       if(sortMode==="sku") orderList.sort((a,b)=>{
         const ka=a.sku||"￿", kb=b.sku||"￿";
-        return ka<kb?-1:ka>kb?1:(a.f-b.f)||(a.i-b.i);
+        return ka<kb?-1:ka>kb?1:((b.qty||0)-(a.qty||0))||(a.f-b.f)||(a.i-b.i);
       });
       else if(sortMode==="qty") orderList.sort((a,b)=>(b.qty||0)-(a.qty||0)||(a.f-b.f)||(a.i-b.i));
       const skippedInv=lcPageInfo.filter(x=>x.inv).length;
@@ -12297,6 +12299,7 @@ function pingNow(){ _lastPing=0; try{ sendPing(); }catch(e){} }
    entry per shipped change a seller can actually feel.
    ============================================================ */
 const CHANGELOG=[
+  {d:"2026-10-13",t:"Label Cropper: multi-quantity orders first in each SKU",n:"In SKU-wise order, labels for Qty 2, 3 or more now print at the top of their SKU, followed by the Qty 1 labels — so the bigger parcels are packed while that product is still on the table."},
   {d:"2026-10-13",t:"Label Cropper: page number at the top or bottom",n:"Some thermal printers cut off the top edge of the label, and the page number with it. The Page numbers option now lets you print it at the bottom instead."},
   {d:"2026-08-06",t:"Traffic Doctor — a new Pro tool",n:"The Business Report's sessions, conversion and Buy Box share per ASIN, turned into a diagnosis: traffic-wasters judged against your own account average, winners that deserve more ads, invisible ASINs that need search fixes — and a clearly-labelled units-lost estimate."},
   {d:"2026-08-05",t:"Stranded Inventory — a new Pro tool",n:"Stock in Amazon's warehouse that cannot sell: every stranded listing with its value (priced from your settlements when the listing is gone), days stuck, Amazon's own reason and suggested fix, and auto-removal warnings."},
