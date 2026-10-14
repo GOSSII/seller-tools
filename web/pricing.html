@@ -8152,8 +8152,10 @@ function lcBody(){
   // "no" values (saved on every run before there was a real default)
   // migrate once; choices made after this keep sticking via olist2.
   const olistSaved=saved.olist2||(saved.olist==="first"||saved.olist==="yes"?"first":"last");
-  // Legacy "yes" (before the top/bottom option) was always the top strip.
-  const pnumSaved=!saved.pnum||saved.pnum==="yes"?"top":saved.pnum;
+  // pnum2: page numbers default to the bottom now. Every run saved the old
+  // "top" default implicitly, so those values (and the legacy "yes") migrate
+  // once; an explicit "No" is kept, and choices made after this stick via pnum2.
+  const pnumSaved=saved.pnum2||(saved.pnum==="no"?"no":"bot");
   lcFiles=[];
   app.innerHTML=`
     <div class="wrap page">
@@ -8214,8 +8216,8 @@ function lcBody(){
             </select></div>
           <div><label for="lc-pagenum">Page numbers</label>
             <select id="lc-pagenum">
-              <option value="top"${pnumSaved==="top"?" selected":""}>Yes — top</option>
               <option value="bot"${pnumSaved==="bot"?" selected":""}>Yes — bottom</option>
+              <option value="top"${pnumSaved==="top"?" selected":""}>Yes — top</option>
               <option value="no"${pnumSaved==="no"?" selected":""}>No</option>
             </select></div>
           <div><label for="lc-olist">Order list page</label>
@@ -8347,7 +8349,7 @@ function lcBody(){
       const blankSkip=document.getElementById("lc-blank").value!=="keep";
       // One stamp for the whole batch, e.g. "30 Jul 2026, 6:45 am".
       const dtStamp=new Date().toLocaleString("en-IN",{day:"numeric",month:"short",year:"numeric",hour:"numeric",minute:"2-digit",hour12:true});
-      try{localStorage.setItem("lc_crop",JSON.stringify({preset:presetKey,custom:crop,fmt,invMode,invPos,skuPrint:skuPos,sort:sortMode,pnum:numPos,olist2:olist,split:splitSel,dt:dtPrint?"yes":"no",blank:blankSkip?"skip":"keep"}));}catch(e){}
+      try{localStorage.setItem("lc_crop",JSON.stringify({preset:presetKey,custom:crop,fmt,invMode,invPos,skuPrint:skuPos,sort:sortMode,pnum2:numPos,olist2:olist,split:splitSel,dt:dtPrint?"yes":"no",blank:blankSkip?"skip":"keep"}));}catch(e){}
       const A4W=595.28,A4H=841.89;
       const white=()=>PDFLib.rgb(1,1,1);
 
@@ -8389,10 +8391,25 @@ function lcBody(){
             const pageH=pageObj.view[3]-pageObj.view[1];
             const pageW=pageObj.view[2]-pageObj.view[0];
             const posItems=tc.items.map(x=>({s:x.str,y:x.transform[5],x:x.transform[4]}));
-            const items=posItems.map(x=>x.s);
-            const text=items.join(" ");
             const info=lcPageInfo.find(x=>x.f===fi&&x.i===p-1);
             if(!info) continue;
+            // A 4×6 PDF this tool already made, run through again: its old
+            // page number / SKU strips (the 16pt bands at the top and bottom
+            // edge) are wiped before new ones are drawn, so the label does
+            // not end up with two of each. The "N / M" prefix is taken off
+            // the strip text first so it can't pollute the SKU read below.
+            const is4x6=Math.abs(pageW-288)<2&&Math.abs(pageH-432)<2;
+            const bandOf=t=>!is4x6?"":t.y>=pageH-16?"top":t.y<=16?"bot":"";
+            for(const t of posItems){
+              const b=bandOf(t);
+              if(!b) continue;
+              const bare=t.s.replace(/^\s*\d+\s*\/\s*\d+\s*(?:·\s*)?/,"");
+              if(bare!==t.s||/\|\s*Qty\b/i.test(t.s)){ info[b==="top"?"wipeTop":"wipeBot"]=true; t.s=bare; }
+            }
+            const items=posItems.map(x=>x.s);
+            const text=items.join(" ");
+            // This tool's own Order List page, from an earlier run.
+            if(posItems.some(t=>t.s.trim()==="Order List")&&/Total package:/.test(text)){ info.skip=true; continue; }
             // Blank pages (Amazon sometimes pads the PDF): a page with no
             // text is only "blank" if it also draws no images or shapes —
             // the operator check keeps image-only labels safe.
@@ -8469,11 +8486,17 @@ function lcBody(){
             // on one sheet, as some label tools produce).
             info.pageW=pageW;
             info.halves=[{cap:false,sku:"",qty:0,oid:"",capX:0},{cap:false,sku:"",qty:0,oid:"",capX:0}];
+            // A caption that will still show on the cropped label (inside the
+            // crop, outside a wiped strip) is "kept": the label already says
+            // its SKU, so no second caption is drawn over it.
+            const inCrop=t=>t.x>=crop.left/100*pageW-2&&t.x<=(crop.left+crop.width)/100*pageW
+              &&t.y>=pageH*(1-(crop.top+crop.height)/100)-2&&t.y<=pageH*(1-crop.top/100)+2;
             let cap=null;
             for(const it of posItems){
               const half=info.halves[it.y>=pageH/2?0:1];
               const c=it.s.match(capRe1)||it.s.match(capRe2);
               if(c&&!half.cap){half.cap=true;half.sku=c[1].trim();half.qty=parseInt(c[2],10)||0;half.capX=it.x;}
+              if(c&&!bandOf(it)&&inCrop(it)){half.kept=true;info.capKept=true;}
               if(!half.oid){const mo2=it.s.match(/\b(\d{3}-\d{7}-\d{7})\b/);if(mo2)half.oid=mo2[1];}
               if(c&&!cap) cap=c;
             }
@@ -8517,8 +8540,36 @@ function lcBody(){
               if(skus.length){colSku=skus[0];colQty=ints[0]||0;}
               if(skus.length>1) info.items=skus.map((s2,i2)=>({sku:s2,qty:ints[i2]||0}));
             }
-            // 1) explicit "SKU: xyz" marker (raw Amazon labels/invoices)
-            const m=text.match(/\bSKU\b\s*[:#\-]?\s*([A-Za-z0-9][A-Za-z0-9_\-\/\.]{1,39})/i);
+            // Meesho labels: a "Product Details" table with the headers
+            // SKU | Size | Qty | Color | Order No. and one product per row
+            // under them, read by column position. A long SKU wraps: a line
+            // with no qty belongs to the product next to it.
+            const hSku=!colSku&&posItems.find(t=>t.s.trim()==="SKU");
+            const hRow=hSku?posItems.filter(t=>Math.abs(t.y-hSku.y)<3&&t.x>hSku.x+4).sort((a,b)=>a.x-b.x):[];
+            const hQ=hRow.find(t=>/^Qty$/i.test(t.s.trim()));
+            if(hQ){
+              const skuEnd=hRow[0].x, qEnd=(hRow.find(t=>t.x>hQ.x)||{x:Infinity}).x;
+              const stop=posItems.reduce((mm,t)=>t.y<hSku.y&&/TAX INVOICE|BILL TO/i.test(t.s)?Math.max(mm,t.y):mm,hSku.y-80);
+              const body=posItems.filter(t=>t.y<hSku.y-2&&t.y>stop&&t.s.trim()).sort((a,b)=>(b.y-a.y)||(a.x-b.x));
+              const prods=[];
+              let lineY=null,line=null,pre="";
+              const flush=()=>{
+                if(!line) return;
+                if(/^\d{1,4}$/.test(line.qty)){prods.push({sku:(pre+" "+line.sku).trim(),qty:parseInt(line.qty,10)});pre="";}
+                else if(line.sku){ if(prods.length) prods[prods.length-1].sku+=" "+line.sku; else pre+=" "+line.sku; }
+              };
+              for(const t of body){
+                if(lineY===null||lineY-t.y>3){flush();lineY=t.y;line={sku:"",qty:""};}
+                if(t.x>=hSku.x-2&&t.x<skuEnd-2) line.sku+=(line.sku?" ":"")+t.s.trim();
+                else if(t.x>=hQ.x-2&&t.x<qEnd-2) line.qty+=t.s.trim();
+              }
+              flush();
+              if(prods.length){colSku=prods[0].sku;colQty=prods[0].qty;}
+              if(prods.length>1) info.items=prods;
+            }
+            // 1) explicit "SKU: xyz" marker (raw Amazon labels/invoices) —
+            // never a neighbouring column header (Meesho's "SKU Size Qty").
+            const m=text.match(/\bSKU\b\s*[:#\-]?\s*(?!(?:Size|Qty|Quantity|Colou?r|Order)\b)([A-Za-z0-9][A-Za-z0-9_\-\/\.]{1,39})/i);
             if(m) info.sku=m[1];
             else if(cap) info.sku=cap[1].trim();
             else if(colSku) info.sku=colSku.slice(0,60);
@@ -8565,7 +8616,9 @@ function lcBody(){
           if(x.items.length<2) delete x.items;
         }
       }
-      // Drop detected blank pages before any pairing or sorting.
+      // Drop an earlier run's Order List page, and detected blank pages,
+      // before any pairing or sorting.
+      lcPageInfo=lcPageInfo.filter(x=>!x.skip);
       const blanksSkipped=lcPageInfo.filter(x=>x.blank).length;
       if(blanksSkipped) lcPageInfo=lcPageInfo.filter(x=>!x.blank);
       // If EVERY page carries invoice markers, this is the combined
@@ -8600,7 +8653,7 @@ function lcBody(){
           if(splitSel==="2"||both){
             for(let r=0;r<2;r++){
               const h=x.halves?x.halves[r]:{sku:"",qty:0,oid:""};
-              units.push({f:x.f,i:x.i,region:r,side:sideOf(h),sku:h.sku||"",oid:h.oid||"",qty:h.qty||0,inv:false,invs:[]});
+              units.push({f:x.f,i:x.i,region:r,side:sideOf(h),sku:h.sku||"",oid:h.oid||"",qty:h.qty||0,capKept:!!h.kept,inv:false,invs:[]});
             }
           }else{
             x.side=sideOf(x.halves&&(x.halves[0].cap?x.halves[0]:x.halves[1]));
@@ -8690,11 +8743,15 @@ function lcBody(){
           page.drawRectangle({x:288-dx,y:0,width:dx,height:432,color:white()});}
         if(dy>0.1){page.drawRectangle({x:0,y:0,width:288,height:dy,color:white()});
           page.drawRectangle({x:0,y:432-dy,width:288,height:dy,color:white()});}
+        // An earlier run's strips on a re-processed 4×6 page.
+        for(const [on,y0] of [[info.wipeBot,0],[info.wipeTop,H-16]]){
+          if(on) page.drawRectangle({x:0,y:dy+(y0-cy)*scale,width:288,height:16*scale,color:white()});
+        }
         if(numPos==="top"||dtPrint||skuPos==="top"){
           page.drawRectangle({x:0,y:416,width:288,height:16,color:white()});
           const parts=[];
           if(numPos==="top") parts.push((labels+1)+" / "+orderList.length);
-          if(skuPos==="top"&&(info.sku||info.qty)) parts.push(
+          if(skuPos==="top"&&!info.capKept&&(info.sku||info.qty)) parts.push(
             info.items&&info.items.length>1
               ? info.items.map(t=>t.sku+(t.qty?" x"+t.qty:"")).join(" + ")
               : (info.sku||"")+(info.sku&&info.qty?" | ":"")+(info.qty?"Qty - "+info.qty:""));
@@ -8713,7 +8770,8 @@ function lcBody(){
           page.drawRectangle({x:0,y:0,width:288,height:numBand,color:white()});
           page.drawText((labels+1)+" / "+orderList.length,{x:8,y:5,size:9,font:skuFont,color:PDFLib.rgb(0,0,0)});
         }
-        if(skuPrint&&skuPos!=="top"&&(info.sku||info.qty)){
+        // A label that already carries its caption gets no second one.
+        if(skuPrint&&skuPos!=="top"&&!info.capKept&&(info.sku||info.qty)){
           // Multi-item orders print one line per product so the packer
           // fills the parcel completely.
           const capLines=info.items&&info.items.length>1
