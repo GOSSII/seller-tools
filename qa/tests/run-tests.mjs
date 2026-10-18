@@ -153,6 +153,10 @@ console.log('\n== fee engine vs real Amazon charges (observed in live settlement
     close499: closingFee(499, 'easyship', 'home-kitchen'),
     close250: closingFee(250, 'easyship', 'home-kitchen'),
     close1500: closingFee(1500, 'easyship', 'home-kitchen'),
+    close799: closingFee(799, 'easyship', 'home-kitchen'),
+    close799fba: closingFee(799, 'fba', 'home-kitchen'),
+    prevEasyShip: JSON.stringify(CLOSING_PREV.easyship),
+    selfUnchanged: JSON.stringify(CLOSING_BY_CHANNEL.self),
     es04: esWeightHandling(0.4, 'standard'),
     es09: esWeightHandling(0.9, 'standard'),
     es19: esWeightHandling(1.9, 'standard'),
@@ -160,22 +164,32 @@ console.log('\n== fee engine vs real Amazon charges (observed in live settlement
     ref1500: refRate('home-kitchen', 1500),
     settle499: (function () {
       const c = CALCS.find((x) => x.id === 'profit');
+      // gstreg 'no': the "proceeds after Amazon fees" card is GST-neutral either way
       const v = { sp: 499, cost: 0, cat: 'home-kitchen', kg: 0.9, L: 1, W: 1, H: 1,
-        ful: 'easyship', zone: 'local', pack: 0, acos: 0, ret: 0, gstreg: 0 };
+        ful: 'easyship', zone: 'local', pack: 0, acos: 0, ret: 0, gstreg: 'no' };
       const r = c.compute(v);
       return Number(String(r.stats[0].v).replace(/[^0-9.]/g, ''));
     })(),
   }));
-  eq('closing fee at Rs 399 (Amazon charged Rs 22.00)', fe.close399, 22);
-  eq('closing fee at Rs 499 (Amazon charged Rs 22.00)', fe.close499, 22);
-  eq('closing fee at Rs 250', fe.close250, 1);
-  eq('closing fee above Rs 1,000', fe.close1500, 76);
+  /* From 7 Sep 2026 Amazon added Rs 1 (up to Rs 500) / Rs 3 (above) on Easy
+     Ship, Seller Flex and FBA. Observed on a real account: Rs 449 charged 23,
+     Rs 149 charged 2, Rs 799 charged 48 — where the same items paid 22 / 1 / 45
+     before the change. The earlier card stays as CLOSING_PREV. */
+  eq('closing fee at Rs 399 (Rs 23 since 7 Sep 2026)', fe.close399, 23);
+  eq('closing fee at Rs 499 (Rs 23 since 7 Sep 2026)', fe.close499, 23);
+  eq('closing fee at Rs 250 (Rs 2 since 7 Sep 2026)', fe.close250, 2);
+  eq('closing fee at Rs 799 (Amazon charged Rs 48.00)', fe.close799, 48);
+  eq('closing fee above Rs 1,000 (76 + 3)', fe.close1500, 79);
+  eq('FBA closing fee at Rs 799 (27 + 3)', fe.close799fba, 30);
+  eq('the 10 June card is kept for older statements', fe.prevEasyShip, '[1,22,45,76]');
+  eq('Self Ship was not part of the 7 Sep change', fe.selfUnchanged, '[20,26,51,101]');
   eq('Easy Ship 0.4 kg (Amazon charged Rs 55.00)', fe.es04, 55);
   eq('Easy Ship 0.9 kg (Amazon charged Rs 75.00)', fe.es09, 75);
   eq('Easy Ship 1.9 kg', fe.es19, 112);
   eq('referral 0% below Rs 1,000 (no referral line in the real settlement)', fe.ref399, 0);
   eq('referral above Rs 1,000', fe.ref1500, 0.125);
-  eq('profit calc settlement for the real Rs 499 order (Amazon paid Rs 384.54)', fe.settle499, 384.54);
+  // Amazon paid Rs 384.54 on this order under the Rs 22 closing fee; Rs 23 now.
+  eq('profit calc settlement for a Rs 499 Easy Ship order (Rs 384.54 before 7 Sep, 383.36 now)', fe.settle499, 383.36);
 }
 
 console.log('\n== calculator edge cases ==');
@@ -220,6 +234,75 @@ console.log('\n== calculator edge cases ==');
   eq('PRIV-1 clearToolData removes saved GSTIN and product costs', c.privClear, 'cleared');
   eq('target price: unreachable target says so', c.targetUnreachable, '—');
   eq('storage: zero sales gives no months-of-cover', c.storageZeroSales, '—');
+}
+
+console.log('\n== fixes from the 18 Oct 2026 real-account audit ==');
+{
+  const fx = fs.readFileSync(path.join(FIX, 'settlement-safet-shipping.txt'), 'utf8');
+  const a = await page.evaluate((t) => {
+    const p = window.parseSettlement(t);
+    const agg = window.saAggregate(p);
+    const flow = window.saFlow(p.records);
+    const kinds = {};
+    for (const rec of p.records) for (const l of rec.amounts) kinds[l.amountDescription] = window.saLineKind(l, rec.transactionType);
+    const rec = window.recCompute([p], [], {});
+    const sku = window.skuCompute(p).find((s) => s.sku === 'TEST-BP');
+    const calc = (id, v) => { const c = CALCS.find((x) => x.id === id); const d = {}; c.fields.forEach((f) => (d[f.k] = f.d)); return c.compute(Object.assign(d, v)); };
+    const num = (s) => Number(String(s).replace(/[^0-9.-]/g, ''));
+    const prof = calc('profit', { sp: 799, cost: 358, cat: 'personal-care', kg: 0.3, L: 15, W: 10, H: 8, pack: 0, acos: 0, retcost: 0, stmon: 0, ful: 'easyship', zone: 'national', gstreg: 'yes', gstrate: '18' });
+    const profNo = calc('profit', { sp: 799, cost: 358, cat: 'personal-care', kg: 0.3, L: 15, W: 10, H: 8, pack: 0, acos: 0, retcost: 0, stmon: 0, ful: 'easyship', zone: 'national', gstreg: 'no' });
+    const be = calc('break-even-acos', { price: 799, cost: 358, fees: 121.54, cvr: 6.4, target: 15, gstrate: '18' });
+    const terms = [
+      { camp: 'c', group: 'g', term: 'fidget toys adults', match: 'AUTO', orders: 0, clicks: 47, spend: 86.47, sales: 0, impressions: 900 },
+      { camp: 'c', group: 'g', term: 'bitronix belly fat burner machine', match: 'PHRASE', orders: 0, clicks: 6, spend: 113.63, sales: 0, impressions: 300 },
+      { camp: 'c', group: 'g', term: 'thin term', match: 'AUTO', orders: 0, clicks: 3, spend: 20, sales: 0, impressions: 90 },
+      { camp: 'c', group: 'g', term: 'winner', match: 'AUTO', orders: 3, clicks: 30, spend: 60, sales: 900, impressions: 800 },
+    ];
+    const ads = window.adsCompute(terms, {});
+    const fh = document.createElement('div'); fh.innerHTML = fieldHtml({ k: 'spend', label: 'Ad Spend (₹)', t: 'num', d: 0 }, 0);
+    return {
+      allSum: +agg.allSum.toFixed(2), deposit: p.summary.totalAmount, unknown: +agg.unknown.toFixed(2),
+      kCancel: kinds['Order Cancellation Charge'], kInbound: kinds['FBAInboundTransportationFee'],
+      kFeeAdj: kinds['Fee Adjustment'], kShip: kinds['Shipping'],
+      gross: +flow.B.gross.toFixed(2), shipPaid: +flow.B.shipPaid.toFixed(2),
+      amazonFees: +agg.amazonFees.toFixed(2), promo: +agg.promo.toFixed(2),
+      safetOrders: rec.issues.safeT.map((x) => x.orderId).join(','), safetPaid: rec.notes.safeTPaidN,
+      skuSales: +sku.sales.toFixed(2), skuTaxes: +sku.taxes.toFixed(2),
+      profitAfterGst: num(prof.stats[1].v), profitNoGst: num(profNo.stats[1].v),
+      beAcos: num(be.stats[0].v),
+      negate: ads.negate.map((x) => x.term).sort().join('|'), noOrderSpend: +ads.noOrderSpend.toFixed(2),
+      ceilEasyShip: recClosingCeiling(799, false, true), ceilMfn: recClosingCeiling(799, false, false), ceilFba: recClosingCeiling(799, true),
+      rtBadDesc: rtBucketOf('AMZ-PG-BAD-DESC'), rtTooSmall: rtBucketOf('AMZ-PG-APP-TOO-SMALL'),
+      decRupee: fh.querySelector('input').dataset.dec,
+      capsBrand: lqcAllCaps('RAAGOS Digital Wrist BP Monitor', true).join(','),
+      capsLoud: lqcAllCaps('RAAGOS BEST Monitor', true).join(','),
+    };
+  }, fx);
+  eq('fixture reconciles to its deposit', a.allSum, a.deposit);
+  eq('Order Cancellation Charge is a fee, not unrecognised', a.kCancel, 'fee');
+  eq('FBAInboundTransportationFee is a fee (written as one word)', a.kInbound, 'fee');
+  eq('Fee Adjustment is a fee line (its sign does not decide)', a.kFeeAdj, 'fee');
+  eq('buyer-paid Shipping is order money, not unrecognised', a.kShip, 'principal');
+  eq('nothing in the fixture is left unrecognised', a.unknown, 0);
+  eq('buyer shipping stays out of gross product sales', a.gross, 803.39);
+  eq('buyer shipping shows on its own line (paid, then refunded)', a.shipPaid, 0);
+  eq('Amazon fees exclude nothing that is not a fee', a.promo, 0);
+  eq('SAFE-T: an order Amazon already reimbursed is not a case to file', a.safetOrders, '171-0000000-0000002');
+  eq('SAFE-T: the reimbursed order is counted as excluded', a.safetPaid, 1);
+  eq('SKU sales exclude buyer shipping', a.skuSales, 677.12);
+  eq('profit calc: ₹799 BP Monitor after GST (real settlement: 677.12 − 103 − 358)', a.profitAfterGst, 216.12);
+  eq('profit calc: not GST-registered keeps the old basis', a.profitNoGst, 319.46);
+  eq('break-even ACOS after GST for the ₹799 BP Monitor', a.beAcos, 27.05);
+  eq('ads optimizer: 10+ clicks OR ₹100+ spend with no order is a negate', a.negate, 'bitronix belly fat burner machine|fidget toys adults');
+  eq('ads optimizer: every rupee on zero-order terms is reported', a.noOrderSpend, 220.1);
+  eq('fee check: Easy Ship ₹799 ceiling is the Easy Ship fee', a.ceilEasyShip, 48);
+  eq('fee check: unknown MFN channel keeps the dearer Self Ship ceiling', a.ceilMfn, 51);
+  eq('fee check: FBA ceiling on the new card', a.ceilFba, 30);
+  eq('returns: AMZ-PG-BAD-DESC is a listing problem', a.rtBadDesc, 'listing');
+  eq('returns: AMZ-PG-APP-TOO-SMALL is a listing problem', a.rtTooSmall, 'listing');
+  eq('a ₹ field accepts a decimal point', a.decRupee, '1');
+  eq('listing checker: a brand in capitals is not an ALL-CAPS fault', a.capsBrand, '');
+  eq('listing checker: other ALL-CAPS words are still caught', a.capsLoud, 'BEST');
 }
 
 if (useReal && fs.existsSync(REAL)) {
