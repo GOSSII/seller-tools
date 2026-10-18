@@ -824,8 +824,9 @@
       <div class="cols">
         <div class="card">
           <div class="fields">
-            <div class="f-full"><label for="pfc-last">Date of last settlement / deposit</label>
-              <input type="date" id="pfc-last" value="2026-10-14"></div>
+            <div class="f-full"><label for="pfc-last">Date your last statement closed</label>
+              <input type="date" id="pfc-last" value="2026-10-18">
+              <div class="f-hint">The <b>end date</b> of the last closed period in Payments → All Statements (e.g. 13 Oct for "6/10 – 13/10"). Not the day the money reached your bank — that comes about 2 days later and is added below; entering it here would push every forecast late.</div></div>
             <div class="f-full"><label for="pfc-cycle">Settlement cycle</label>
               <select id="pfc-cycle">
                 <option value="7" selected="">Every 7 days (standard)</option>
@@ -844,7 +845,7 @@
           <div class="note" style="margin-top:12px;margin-bottom:0">Reserve ⓘ — Amazon holds back a slice of each settlement (unshipped orders + A-to-Z claim reserve) and releases it in the following one.</div>
         </div>
         <div id="pfc-out">
-    <div class="banner good" style="font-size:15px"><b>Next deposit: ~₹27,300</b> on <b>Fri, 23 Oct, 2026</b> (in 9 days).</div>
+    <div class="banner good" style="font-size:15px"><b>Next deposit: ~₹27,300</b> on <b>Tue, 27 Oct, 2026</b> (in 9 days).</div>
     
     <div class="chips" style="margin-bottom:14px">
       <span class="chip">Gross / cycle: ₹35,000</span>
@@ -854,7 +855,7 @@
     </div>
     <div class="tblwrap"><table class="sa" style="min-width:520px">
       <thead><tr><th>#</th><th>Settlement closes</th><th>Est. bank credit</th><th class="num">Est. deposit</th></tr></thead>
-      <tbody><tr><td>1</td><td>Wed, 21 Oct, 2026</td><td>Fri, 23 Oct, 2026</td><td class="num">₹27,300.00</td></tr><tr><td>2</td><td>Wed, 28 Oct, 2026</td><td>Fri, 30 Oct, 2026</td><td class="num">₹27,300.00</td></tr><tr><td>3</td><td>Wed, 4 Nov, 2026</td><td>Fri, 6 Nov, 2026</td><td class="num">₹27,300.00</td></tr><tr><td>4</td><td>Wed, 11 Nov, 2026</td><td>Fri, 13 Nov, 2026</td><td class="num">₹27,300.00</td></tr><tr><td>5</td><td>Wed, 18 Nov, 2026</td><td>Fri, 20 Nov, 2026</td><td class="num">₹27,300.00</td></tr><tr><td>6</td><td>Wed, 25 Nov, 2026</td><td>Fri, 27 Nov, 2026</td><td class="num">₹27,300.00</td></tr></tbody>
+      <tbody><tr><td>1</td><td>Sun, 25 Oct, 2026</td><td>Tue, 27 Oct, 2026</td><td class="num">₹27,300.00</td></tr><tr><td>2</td><td>Sun, 1 Nov, 2026</td><td>Tue, 3 Nov, 2026</td><td class="num">₹27,300.00</td></tr><tr><td>3</td><td>Sun, 8 Nov, 2026</td><td>Tue, 10 Nov, 2026</td><td class="num">₹27,300.00</td></tr><tr><td>4</td><td>Sun, 15 Nov, 2026</td><td>Tue, 17 Nov, 2026</td><td class="num">₹27,300.00</td></tr><tr><td>5</td><td>Sun, 22 Nov, 2026</td><td>Tue, 24 Nov, 2026</td><td class="num">₹27,300.00</td></tr><tr><td>6</td><td>Sun, 29 Nov, 2026</td><td>Tue, 1 Dec, 2026</td><td class="num">₹27,300.00</td></tr></tbody>
     </table></div>
     <div class="note" style="margin-top:10px">Estimates only — actual settlement timing, cycle changes and reserve amounts are controlled by Amazon and can shift with unshipped orders, claims and bank holidays (only weekends are skipped here). Deposits assume steady daily sales, so each cycle's new holdback is offset by the previous cycle's release.</div></div>
       </div>
@@ -882,6 +883,23 @@
    SHARED FEE DATA — single source of truth
    ============================================================ */
 const GST = 0.18;
+/* GST on the SALE. An Amazon.in selling price includes the GST the buyer
+   paid; a GST-registered seller owes that to the government, less the GST
+   Amazon charged on its own fees (input tax credit). Treating the whole
+   price as the seller's money overstated profit by ~13–15% of price: a ₹799
+   item at 18% carries ₹121.88 of GST. "0" = not registered (or a nil-rated
+   item): no GST to pay, and the GST on fees stays a cost. */
+const SALE_GST_OPTS=[{v:"18",l:"18% GST"},{v:"12",l:"12% GST"},{v:"5",l:"5% GST"},{v:"28",l:"28% GST"},{v:"0",l:"Not GST-registered / 0%"}];
+const saleGstField=(full)=>({k:"gstrate",label:"GST on your product",t:"sel",o:SALE_GST_OPTS,d:"18",full:full?1:0,
+  hint:"Your price includes GST that you pay to the government, less the GST on Amazon's fees you claim back. Pick “Not GST-registered” if neither applies to you."});
+/* price = buyer price incl. GST; feeBase = Amazon fees BEFORE their 18% GST.
+   Returns the GST collected, the credit on fees and what is actually due. */
+function saleGst(price,feeBase,rate){
+  rate=Number(rate)||0;
+  if(rate<=0||price<=0) return {rate:0,out:0,itc:0,due:0};
+  const out=price*rate/(100+rate), itc=Math.max(0,feeBase)*GST;
+  return {rate,out,itc,due:out-itc};
+}
 
 const CATS = [
   // Each row names the exact Amazon fee category it is priced from. Where our
@@ -923,27 +941,39 @@ const CATS = [
 ].map(([key,name,referral,b,tacos,amzCat,verified,closeGroup])=>({key,name,referral,bench:{low:b[0],median:b[1],high:b[2]},tacos,amzCat,verified:!!verified,closeGroup:closeGroup||"std"}));
 
 const CATMAP = Object.fromEntries(CATS.map(c=>[c.key,c]));
-/* Closing fees, Amazon.in fee schedule effective 10 Jun 2026 (Table 1 for
-   Easy Ship / Self-Ship / Seller Flex, Table 2 for fulfilment centre). Bands
-   are on item price including shipping charges. FBA "select fee categories"
-   pay less in the two lowest bands; we apply the Standard Fee column. */
+/* Closing fees (Table 1 for Easy Ship / Self-Ship / Seller Flex, Table 2 for
+   fulfilment centre). Bands are on item price including shipping charges.
+   FBA "select fee categories" pay less in the two lowest bands; we apply the
+   Standard Fee column.
+   From 7 Sep 2026 Amazon added Rs 1 per item up to Rs 500 and Rs 3 above
+   Rs 500 on Easy Ship, Seller Flex and fulfilment-centre orders (fuel and
+   logistics costs); Self Ship was not part of that change. Real settlements
+   confirm it: Rs 1 / 22 / 45 before, Rs 2 / 23 / 48 after, on Easy Ship. The
+   10 June card is kept as CLOSING_PREV so statements from before the change
+   still read correctly. */
 const CLOSING_BANDS=[300,500,1000,null];
+const CLOSING_EFFECTIVE="7 Sep 2026";
 const CLOSING_BY_CHANNEL={
-  easyship:[1,22,45,76],
+  easyship:[2,23,48,79],
   self:[20,26,51,101],
-  fba:[26,22,27,52],           // Standard Fee column
+  fba:[27,23,30,55],           // Standard Fee column
 };
 /* At a fulfilment centre Amazon discounts the two lowest bands for "select
-   fee categories". Groups A and C are one category list (Rs 20 / Rs 18),
-   B and D another (Rs 13 / Rs 14); a fourth list pays Rs 72 above Rs 1,000.
+   fee categories". Groups A and C are one category list (Rs 21 / Rs 19),
+   B and D another (Rs 14 / Rs 15); a fourth list pays Rs 75 above Rs 1,000.
    Each of our categories carries the group its Amazon fee category sits in. */
 const CLOSING_FBA_GROUPS={
-  std:[26,22,27,52],
-  ac:[20,18,27,52],
-  bd:[13,14,27,52],
-  b:[13,22,27,52],             // in the Rs 0-300 list only
-  d:[26,14,27,52],             // in the Rs 301-500 list only, standard below that
-  big:[26,22,27,72],           // Refrigerators, Chimneys, Major Appliances, Home Entertainment
+  std:[27,23,30,55],
+  ac:[21,19,30,55],
+  bd:[14,15,30,55],
+  b:[14,23,30,55],             // in the Rs 0-300 list only
+  d:[27,15,30,55],             // in the Rs 301-500 list only, standard below that
+  big:[27,23,30,75],           // Refrigerators, Chimneys, Major Appliances, Home Entertainment
+};
+/* The card in force 10 Jun – 6 Sep 2026, for reading older statements. */
+const CLOSING_PREV={
+  easyship:[1,22,45,76], self:[20,26,51,101],
+  fba:{std:[26,22,27,52],ac:[20,18,27,52],bd:[13,14,27,52],b:[13,22,27,52],d:[26,14,27,52],big:[26,22,27,72]},
 };
 const SLABS = [
   {max:.5,esL:43,esN:65,fbL:35,fbN:55},{max:1,esL:55,esN:82,fbL:45,fbN:70},
@@ -1085,6 +1115,8 @@ const CALCS = [
     {k:"stmon",label:"Months held in FBA storage",t:"num",dec:1,d:1,full:1,
       hint:"Only applies in FBA mode. Storage is billed monthly against the account, not against this order — this apportions it per unit so you can see the holding cost. Amazon's rate also rises in the Oct–Dec peak; the Storage Fee Calculator models that."},
     {k:"gstreg",label:"GST Registered (claim ITC)",t:"seg",o:[{v:"yes",l:"Yes"},{v:"no",l:"No"}],d:"yes",full:1},
+    {k:"gstrate",label:"GST rate on your product",t:"sel",o:SALE_GST_OPTS.filter(o=>o.v!=="0"),d:"18",full:1,
+      hint:"Only used when GST Registered is Yes. The selling price includes this GST; you pay it to the government less the GST on Amazon's fees."},
   ],
   compute(v){
     const sp=v.sp, rate=refRate(v.cat,sp);
@@ -1111,18 +1143,20 @@ const CALCS = [
        default inputs -- a correct-looking percentage on the wrong base. */
     const mkt=sp*v.acos/100;
     const ret=Math.max(0,Number(v.retcost)||0);
-    const net=settle-landed-st-mkt-ret;
+    const cat=CATMAP[v.cat];
+    const gstReg=v.gstreg!=="no";
+    /* A registered seller pays the GST inside the price and claims back the
+       GST on Amazon's fees; an unregistered one does neither. */
+    const sg=gstReg?saleGst(sp,feeSum,v.gstrate||18):saleGst(0,0,0);
+    const itc=sg.itc;
+    const net=settle-landed-st-mkt-ret-sg.due;
     const margin=sp>0?net/sp*100:0;
     const inv=landed+mkt+ret;
     const roi=inv>0?net/inv*100:0;
     /* What share of the selling price can go on ads before this unit stops
        making money, given every other cost entered. */
-    const beAcos=sp>0?Math.max(0,(settle-landed-st-ret))/sp*100:0;
+    const beAcos=sp>0?Math.max(0,(settle-landed-st-ret-sg.due))/sp*100:0;
     const loss=net<0;
-    const cat=CATMAP[v.cat];
-    const gstReg=v.gstreg!=="no";
-    const itc=gstReg?gst:0;         // GST on Amazon fees, recoverable as input tax credit
-    const netItc=net+itc;
 
     const seg=[
       ["cost","Your product cost","#64748b",v.cost],
@@ -1135,6 +1169,7 @@ const CALCS = [
       ["gst","GST on Amazon fees","#8b5cf6",gst],
       ["mkt","Advertising (ACOS of price)","#6366f1",mkt],
       ["rt","Expected return cost","#a855f7",ret],
+      ["gsto","GST you pay on the sale (after fee credit)","#7c3aed",sg.due],
       ["np",loss?"Net loss":"Net profit kept","#22c55e",Math.max(0,net)],
     ].filter(s=>s[3]>0||s[0]==="np");
 
@@ -1155,15 +1190,13 @@ const CALCS = [
         {l:"Selling Price",v:inr0(sp)},
         {l:`Amazon Fees (${sp>0?(fees/sp*100).toFixed(2):"0.00"}% of SP)`,v:"-"+inr(fees),neg:1,mut:1},
         {l:"Settlement from Amazon",v:inr(settle),hl:1},
-        {l:"Product + Packaging",v:"-"+inr0(landed),neg:1,mut:1},
+        {l:"Product + Packaging",v:"-"+inr(landed),neg:1,mut:1},
         ...(st>0?[{l:`FBA storage while it sits (${stMonths} month${stMonths===1?"":"s"} at Amazon's standard rate)`,v:"-"+inr(st),neg:1,mut:1}]:[]),
         {l:`Advertising at ${v.acos}% ACOS of the selling price`,v:"-"+inr(mkt),neg:1,mut:1},
         ...(ret>0?[{l:"Expected return cost you entered",v:"-"+inr(ret),neg:1,mut:1}]:[]),
-        {l:`Estimated ${loss?"loss":"profit"} per unit`,v:inr(net),fin:1,loss:loss},
+        ...(gstReg&&sp>0?[{l:`GST you pay: ${inr(sg.out)} in the price (${sg.rate}%) − ${inr(itc)} GST on Amazon's fees you claim back`,v:(sg.due>=0?"-":"+")+inr(Math.abs(sg.due)),neg:sg.due>0,mut:1}]:[]),
+        {l:`Estimated ${loss?"loss":"profit"} per unit${gstReg?" after GST":""}`,v:inr(net),fin:1,loss:loss},
         {l:"Break-even ACOS — ad share of price before this unit stops making money",v:pc(beAcos),mut:1},
-        ...(gstReg?[
-          {l:"GST on Amazon fees potentially eligible for ITC",v:inr(itc),mut:1},
-        ]:[]),
       ],
       note: [
         // Say which Amazon fee category the rate came from — the app offers 23
@@ -1180,8 +1213,8 @@ const CALCS = [
           ? "FBA fulfilment uses Amazon's published fee table for a Standard STEP tier, on billing weight plus 100 g packaging rounded up to the next 500 g. Amazon prices standard-size weight handling as Regional or National only — there is no Local rate — so \"Local\" here is charged at the Regional rate. Premium and Advanced sellers pay a little less, Basic a little more."
           : null,
         gstReg
-          ? "If eligible, the 18% GST Amazon charges on its fees may be available as input tax credit against your GST liability. Eligibility conditions apply, so it is shown separately and is NOT added to the profit figure above." 
-          : null,
+          ? "Profit is after GST: the GST inside your selling price goes to the government, and the 18% GST Amazon charges on its fees is set off against it as input tax credit. If you also buy stock on GST bills, enter the product cost without that GST — you claim it back too." 
+          : "Not GST-registered: no GST is taken from the selling price, and the GST on Amazon's fees stays a cost.",
       ].filter(Boolean).join(" "),
       split:{title:`Where every ${inr0(sp)} goes`,total:sp||1,
         items:seg.map(s=>({key:s[0],nm:s[1],color:s[2],val:(s[0]==="np"&&loss)?net:s[3]}))},
@@ -1371,9 +1404,13 @@ const CALCS = [
     {k:"cvr",label:"Conversion Rate (%)",t:"num",dec:1,d:10},
     {k:"target",label:"Target profit margin (%)",t:"num",dec:1,d:15,full:1,
       hint:"Your own target — the default is a starting point, not a recommended margin."},
+    saleGstField(true),
   ],
   compute(v){
-    const profit=v.price-v.cost-v.fees;
+    /* Fees are entered as Amazon bills them (GST included, as the Profit
+       Calculator shows them); the GST inside the price is not the seller's. */
+    const sg=saleGst(v.price,v.fees/(1+GST),v.gstrate);
+    const profit=v.price-v.cost-v.fees-sg.due;
     const cvr=v.cvr/100;
     const beAcos=v.price>0?profit/v.price*100:0;
     const beCpc=profit*cvr;
@@ -1395,6 +1432,7 @@ const CALCS = [
       rows:[
         {l:"Selling price",v:inr0(v.price),mut:1},
         {l:"Less product cost + Amazon fees",v:"-"+inr(v.cost+v.fees),neg:1,mut:1},
+        ...(sg.rate?[{l:`Less GST you pay (${inr(sg.out)} in the price − ${inr(sg.itc)} credit on fees)`,v:"-"+inr(sg.due),neg:1,mut:1}]:[]),
         {l:"Profit before ads (per unit)",v:inr(profit),hl:1},
         {l:"Break-even ACOS",v:pc(beAcos),mut:1},
         {l:"Break-even CPC",v:inr(beCpc),mut:1},
@@ -1464,20 +1502,20 @@ const CALCS = [
     return {
       stats:[
         {k:"Monthly Ad Budget",v:inr(monthly),t:"blue"},
-        {k:"Daily Budget",v:inr(monthly/30),t:"green"},
-        {k:"Weekly Budget",v:inr(monthly/4.345)},
+        {k:"Daily Budget",v:inr(monthly*12/365),t:"green"},
+        {k:"Weekly Budget",v:inr(monthly*12/365*7)},
         {k:"TACoS used",v:tacos+"%"+(own?"":" (placeholder)")},
       ],
       banner:{t:own?"info":"warn",
         x:own
-          ? `At your own ${tacos}% TACoS, a ${inr0(v.revenue)} monthly revenue target implies about ${inr(monthly/30)} of ad spend per day. This is arithmetic on your figure, not a forecast — it does not say the spend will produce that revenue.`
+          ? `At your own ${tacos}% TACoS, a ${inr0(v.revenue)} monthly revenue target implies about ${inr(monthly*12/365)} of ad spend per day. This is arithmetic on your figure, not a forecast — it does not say the spend will produce that revenue.`
           : `No TACoS entered, so this uses ${tacos}% as a rough starting figure for the category. That is a placeholder, not a researched benchmark — enter your own TACoS from Multi-Month Trends or your ad reports before budgeting from it.`},
       rows:[
         {l:"Revenue target",v:inr0(v.revenue),hl:1},
         {l:own?"Your TACoS":"TACoS placeholder for this category",v:tacos+"%",mut:1},
         {l:"Monthly budget",v:inr(monthly),mut:1},
-        {l:"Weekly budget",v:inr(monthly/4.345),mut:1},
-        {l:"Daily budget",v:inr(monthly/30),fin:1},
+        {l:"Weekly budget",v:inr(monthly*12/365*7),mut:1},
+        {l:"Daily budget",v:inr(monthly*12/365),fin:1},
       ],
       split:{title:"Revenue split",total:v.revenue||1,items:[
         {key:"ad",nm:"Ad spend",color:"#6366f1",val:monthly},
@@ -1537,16 +1575,19 @@ const CALCS = [
     {k:"cost",label:"Product Cost (₹)",t:"num",d:400},
     {k:"fees",label:"Amazon Fees (₹/unit)",t:"num",dec:1,d:169,full:1,
       hint:"Type your own, or get the exact figure for this SKU from the Amazon Profit Calculator — the default is only a placeholder."},
+    saleGstField(true),
   ],
   compute(v){
     const dp=v.price*(1-v.disc/100);
+    // GST is due on what the buyer actually pays, so the discount lowers it too.
+    const gDue=p=>saleGst(p,v.fees/(1+GST),v.gstrate).due;
     const orders=v.base*(1+v.uplift/100);
     const incr=orders-v.base;
     const discCost=orders*(v.price-dp);
     const cFees=orders*v.fee;
-    const mpu=dp-v.cost-v.fees;
+    const mpu=dp-v.cost-v.fees-gDue(dp);
     const contrib=orders*mpu-cFees;
-    const baseContrib=v.base*(v.price-v.cost-v.fees);
+    const baseContrib=v.base*(v.price-v.cost-v.fees-gDue(v.price));
     const net=contrib-baseContrib;
     const worth=net>0;
     // break-even uplift: uplift where contrib == baseContrib
@@ -1572,7 +1613,7 @@ const CALCS = [
         {l:`Discounted price (−${v.disc}%)`,v:inr(dp),hl:1},
         {l:"Discount cost (all orders)",v:"-"+inr(discCost),neg:1,mut:1},
         {l:"Coupon redemption fees",v:"-"+inr(cFees),neg:1,mut:1},
-        {l:"Margin per unit (discounted)",v:inr(mpu),mut:1},
+        {l:`Margin per unit (discounted${Number(v.gstrate)>0?", after GST":""})`,v:inr(mpu),mut:1},
         {l:"Contribution with coupon",v:inr(contrib),mut:1},
         {l:"Baseline contribution",v:inr(baseContrib),mut:1},
         {l:"Net vs baseline",v:inr(net),fin:1,loss:!worth},
@@ -1596,6 +1637,7 @@ const CALCS = [
     {k:"acos",label:"Expected ACOS (%)",t:"num",dec:1,d:10},
     {k:"retcost",label:"Expected return cost per sold unit (₹)",t:"num",dec:2,d:0,full:1,
       hint:"Optional. Your average expected loss from returns per unit sold — return logistics, unrecovered product value or non-refundable charges you want to account for. A return rate alone cannot tell this calculator the financial loss."},
+    saleGstField(true),
   ],
   compute(v){
     /* One model across the Profit, Target Price and Price Band calculators:
@@ -1612,7 +1654,7 @@ const CALCS = [
       const shipping=shipFee(p,v.ful,v.zone,v.kg||0.5);
       const pp=v.ful==="fba"?pickPack(v.kg||0.5):0;
       const fees=(referral+closing+shipping+pp)*(1+GST);   // storage is monthly, not per order
-      return p-fees-(v.cost+v.pack)-p*v.acos/100-retC;
+      return p-fees-(v.cost+v.pack)-p*v.acos/100-retC-saleGst(p,referral+closing+shipping+pp,v.gstrate).due;
     };
     const sp=Math.max(1,Math.round(v.sp||1));
     const lo=Math.max(1,Math.round(sp*0.7)),hi=Math.round(sp*1.3);
@@ -1649,7 +1691,7 @@ const CALCS = [
             ? `Every price tested at or below ₹${sp.toLocaleString("en-IN")} loses money at these inputs — ₹${sp.toLocaleString("en-IN")} is simply the least-loss of them. Product cost, fees or ad spend would have to change before any price in this range makes money.`
             : `Your planned price gives the highest estimated contribution among the tested prices at or below it. Only prices at or below your planned price are searched — whether the market bears a higher one is your call, not this tool's. The rows below show what each nearby fee-band jump would cost or save.`},
       rows,
-      note:"Closing fee steps at ₹300 / ₹500 / ₹1,000; referral steps come from your category's own schedule. Same fee maths as the profit calculator, on Amazon's 10 June 2026 rate card.",
+      note:"Closing fee steps at ₹300 / ₹500 / ₹1,000; referral steps come from your category's own schedule. Same fee maths as the profit calculator: referral fees from Amazon's 10 June 2026 schedule, closing fees as revised on 7 Sep 2026. Contribution is after the GST you pay on the sale, less the GST on Amazon's fees you claim back.",
     };
   }
 },
@@ -1671,6 +1713,7 @@ const CALCS = [
     {k:"acos",label:"Expected ACOS (%)",t:"num",dec:1,d:10},
     {k:"retcost",label:"Expected return cost per sold unit (₹)",t:"num",dec:2,d:0,full:1,
       hint:"Optional. Your average expected loss from returns per unit sold — return logistics, unrecovered product value or non-refundable charges you want to account for. A return rate alone cannot tell this calculator the financial loss."},
+    saleGstField(true),
   ],
   compute(v){
     const feesAt=p=>{
@@ -1680,13 +1723,13 @@ const CALCS = [
       const shipping=shipFee(p,v.ful,v.zone,v.kg||0.5);
       const pp=v.ful==="fba"?pickPack(v.kg||0.5):0;
       const feeSum=referral+closing+shipping+pp;   // storage is billed monthly, not per order
-      return {referral,closing,shipping,pp,st:0,gst:feeSum*GST,total:feeSum*(1+GST),rate};
+      return {referral,closing,shipping,pp,st:0,gst:feeSum*GST,total:feeSum*(1+GST),rate,sale:saleGst(p,feeSum,v.gstrate)};
     };
     /* ACOS is a share of the SELLING PRICE. Charging it against leftover
        contribution both understated ads and made the ledger below disagree
        with the total it sat under. */
     const retC=Math.max(0,Number(v.retcost)||0);
-    const netAt=p=>p-feesAt(p).total-(v.cost+v.pack)-p*v.acos/100-retC;
+    const netAt=p=>{const f=feesAt(p); return p-f.total-(v.cost+v.pack)-p*v.acos/100-retC-f.sale.due;};
     const MAX=49999;
     let price=0;
     for(let p=1;p<=MAX;p++){
@@ -1718,12 +1761,15 @@ const CALCS = [
         {l:"Shipping / weight handling",v:"-"+inr0(f.shipping),neg:1,mut:1},
         ...(f.pp>0?[{l:"FBA pick & pack",v:"-"+inr0(f.pp),neg:1,mut:1}]:[]),
         {l:"GST on fees (18%)",v:"-"+inr(f.gst),neg:1,mut:1},
-        {l:"Product + packaging",v:"-"+inr0(v.cost+v.pack),neg:1,mut:1},
+        {l:"Product + packaging",v:"-"+inr(v.cost+v.pack),neg:1,mut:1},
         {l:`Advertising at ${v.acos}% ACOS of the selling price`,v:"-"+inr(mkt),neg:1,mut:1},
         ...(retC>0?[{l:"Expected return cost you entered",v:"-"+inr(retC),neg:1,mut:1}]:[]),
-        {l:"Estimated profit per unit",v:inr(net),fin:1},
+        ...(f.sale.rate?[{l:`GST you pay (${inr(f.sale.out)} in the price − ${inr(f.sale.itc)} credit on fees)`,v:"-"+inr(f.sale.due),neg:1,mut:1}]:[]),
+        {l:`Estimated profit per unit${f.sale.rate?" after GST":""}`,v:inr(net),fin:1},
       ],
-      note:"Potential GST input tax credit is not included when calculating the required price — the GST on Amazon's fees is treated as a cost here, which is the conservative assumption.",
+      note:Number(v.gstrate)>0
+        ?"The required price includes the GST you collect: the profit shown is after paying that GST, with the GST on Amazon's fees set off as input tax credit."
+        :"Not GST-registered: no GST is taken from the price, and the GST on Amazon's fees is treated as a cost.",
     };
   }
 },
@@ -4040,15 +4086,20 @@ function fieldHtml(f,val){
   if(f.t==="sel"){
     return `<label id="${lid}" for="${id}">${esc(f.label)}</label>
       <select id="${id}" data-k="${f.k}">${f.o.map(o=>
-        `<option value="${o.v}"${o.v===val?" selected":""}>${esc(o.l)}</option>`).join("")}</select>`;
+        `<option value="${o.v}"${o.v===val?" selected":""}>${esc(o.l)}</option>`).join("")}</select>${
+      f.hint?`<div class="f-hint">${esc(f.hint)}</div>`:""}`;
   }
   if(f.t==="seg"){
     return `<label id="${lid}">${esc(f.label)}</label>
       <div class="seg" data-k="${f.k}" role="group" aria-labelledby="${lid}">${f.o.map(o=>
         `<button type="button" data-v="${o.v}" class="${o.v===val?"on":""}" aria-pressed="${o.v===val}" title="${esc(o.l)}">${esc(o.l)}</button>`).join("")}</div>`;
   }
+  /* Rupee and percentage boxes take decimals: amounts copied from Seller
+     Central carry paise ("₹15,255.39"), and a whole-number box used to strip
+     the point and read it as 15,25,539 — a silent 100× error. */
+  const dec=f.dec||/₹|%/.test(f.label);
   return `<label id="${lid}" for="${id}">${esc(f.label)}</label>
-    <input id="${id}" data-k="${f.k}" data-dec="${f.dec?1:0}" inputmode="${f.dec?"decimal":"numeric"}" value="${val}">${
+    <input id="${id}" data-k="${f.k}" data-dec="${dec?1:0}" inputmode="${dec?"decimal":"numeric"}" value="${val}">${
       f.hint?`<div class="f-hint">${esc(f.hint)}</div>`:""}`;
 }
 
@@ -4091,11 +4142,11 @@ function renderCalc(id){
       e.preventDefault();
     });
     el.addEventListener("input",()=>{
-      let v=el.value.replace(el.dataset.dec==="1"?/[^0-9.]/g:/[^0-9]/g,"");
+      let v=el.value.replace(/[^0-9.]/g,"");
       if(el.dataset.dec==="1"){
         const i=v.indexOf(".");
         if(i!==-1) v=v.slice(0,i+1)+v.slice(i+1).replace(/\./g,"");
-      }
+      } else v=v.split(".")[0];   // a pasted "12.5" in a whole-number box is 12, never 125
       if(v!==el.value) el.value=v;
       state[el.dataset.k]=+v||0;
       paint(c);
@@ -4559,7 +4610,7 @@ function saRead(file){
 }
 
 function saAggregate(r){
-  let sales=0,fees=0,tax=0,credits=0,ads=0,balance=0,unknown=0,allSum=0; const feeAgg={};
+  let sales=0,fees=0,promo=0,tax=0,credits=0,ads=0,balance=0,unknown=0,allSum=0; const feeAgg={};
   for(const rec of r.records) for(const l of rec.amounts){
     allSum+=l.amount;
     const kind=saLineKind(l,rec.transactionType);
@@ -4569,7 +4620,10 @@ function saAggregate(r){
     else if(kind==="ads")ads+=l.amount;
     else if(kind==="balance")balance+=l.amount;
     else if(kind==="unknown")unknown+=l.amount;
-    else if(kind==="fee")fees+=l.amount;
+    else if(kind==="fee"){fees+=l.amount;
+      /* Seller-funded promotions travel as fee lines (amount-type "Promotion").
+         Tracked so the fee figure can be stated without them. */
+      if(/^promotion$/i.test((l.amountType||"").trim())||/promo|discount/i.test(label))promo+=l.amount;}
     else credits+=l.amount;
     const a=feeAgg[label]||(feeAgg[label]={count:0,total:0,isTax:kind==="tax",kind});
     a.count++;a.total+=l.amount;
@@ -4577,7 +4631,7 @@ function saAggregate(r){
   /* `fees` is what Amazon CHARGED for selling and fulfilling this period.
      Advertising and balance movements are returned separately and must never
      be folded back in — see saLineKind for what that mistake looked like. */
-  return {sales,fees,tax,credits,ads,balance,unknown,allSum,feeAgg};
+  return {sales,fees,promo,amazonFees:fees-promo,tax,credits,ads,balance,unknown,allSum,feeAgg};
 }
 
 /* ---- daily trend charts (single-series bar charts, site palette,
@@ -4673,11 +4727,19 @@ const SA_ADVERTISING=/advertis/i;
 const SA_BALANCE=/^payable to amazon$|^debt adjustment|reserve|^balance adjustment$/i;
 /* Fees Amazon is KNOWN to charge for selling and fulfilling. A row has to look
    like one of these to be called a fee — see saLineKind for why. */
-const SA_KNOWN_FEE=/commission|closing fee|referral|easy ship|weight handling|pick.*pack|postage|base fee|\bfba\b|storage|shipping (charge|fee|service)|subscription|removal|disposal|return fee|technology fee|fixed fee|variable closing|promo|labelling|prep service|inbound transport/i;
+const SA_KNOWN_FEE=/commission|closing fee|referral|easy ship|weight handling|pick.*pack|postage|base fee|\bfba\b|storage|shipping (charge|fee|service)|subscription|removal|disposal|return fee|technology fee|fixed fee|variable closing|promo|labelling|prep service|inbound ?transport|cancellation charge|fee adjustment/i;
 const SA_KNOWN_CREDIT=/reimburse|compensat|goodwill/i;
+const saIsShipPrincipal=l=>/^shipping$/i.test((l&&l.amountDescription||"").trim())
+  &&(!(l.amountType||"").trim()||/^itemprice$/i.test((l.amountType||"").trim()));
 function saLineKind(l,tt){
   const d=(l&&l.amountDescription||"").trim(), t=(l&&l.amountType||"").trim();
   if(/^principal$/i.test(d)) return "principal";
+  /* "Shipping" under amount-type ItemPrice is what the buyer paid for
+     delivery — order money exactly like Principal, refunded the same way.
+     Left unrecognised it raised a "Not recognised" warning on any statement
+     where a buyer paid for shipping. Consumers keep it out of gross product
+     sales via saIsShipPrincipal and show it as buyer shipping. */
+  if(saIsShipPrincipal(l)) return "principal";
   if(/^debt adjustment$/i.test((tt||"").trim())||SA_BALANCE.test(d)) return "balance";
   if(SA_ADVERTISING.test(t)||SA_ADVERTISING.test(d)) return "ads";
   if(saIsTax(d||t)) return "tax";
@@ -4752,16 +4814,18 @@ function saBucketOf(lab,amt,kind){
   if(/commission|closing/i.test(lab))return "referral";
   if(/easy ship|weight handling|pick.*pack|postage|base fee|fba|storage/i.test(lab))return "fulfil";
   if(/promo/i.test(lab))return "promo";
+  /* A fee and its reversal are the same kind of line with opposite signs. */
+  if(/cancellation charge|fee adjustment/i.test(lab))return "otherFees";
   return amt>=0?"credits":"otherFees";
 }
-const SA_BUCKET_NAMES={gross:"Gross product sales",refunded:"Refunded sales",promo:"Promotions funded by you",
+const SA_BUCKET_NAMES={gross:"Gross product sales",refunded:"Refunded sales",shipPaid:"Shipping charged to buyers (net of refunds)",promo:"Promotions funded by you",
   referral:"Referral & closing fees",fulfil:"Fulfilment & shipping fees",gstFees:"GST on Amazon fees (ITC)",
   prodTax:"Product & shipping tax (net)",shipNet:"Buyer shipping (net)",tcs:"TCS withheld",tds:"TDS u/s 194-O",
   credits:"Reimbursements & credits",otherFees:"Other fees",otherPrincipal:"Other credits",
   ads:"Advertising (Sponsored Ads)",balance:"Account balance moved between statements — not a fee",
   unknown:"Not recognised — counted in your payout, left out of the fee figures"};
 function saFlow(records){
-  const B={gross:0,refunded:0,promo:0,referral:0,fulfil:0,gstFees:0,prodTax:0,shipNet:0,tcs:0,tds:0,credits:0,otherFees:0,otherPrincipal:0,ads:0,balance:0,unknown:0};
+  const B={gross:0,refunded:0,shipPaid:0,promo:0,referral:0,fulfil:0,gstFees:0,prodTax:0,shipNet:0,tcs:0,tds:0,credits:0,otherFees:0,otherPrincipal:0,ads:0,balance:0,unknown:0};
   let orders=0,units=0,refunds=0,refundComm=0,orderIds=new Set();
   for(const rec of records){
     const isOrder=rec.transactionType==="Order";
@@ -4771,7 +4835,8 @@ function saFlow(records){
     for(const l of rec.amounts){
       const a=l.amount,kind=saLineKind(l,rec.transactionType);
       if(kind==="principal"){
-        if(isOrder)B.gross+=a; else if(isRefund)B.refunded+=a; else B.otherPrincipal+=a;
+        if(saIsShipPrincipal(l))B.shipPaid+=a;
+        else if(isOrder)B.gross+=a; else if(isRefund)B.refunded+=a; else B.otherPrincipal+=a;
         continue;
       }
       const bk=saBucketOf(l.amountDescription||l.amountType,a,kind);
@@ -4980,7 +5045,7 @@ function saRenderResults(){
   const sv=n=>`<span class="${n<0?'amt-neg':(n>0?'amt-pos':'')}">${inr(n)}</span>`;
 
   const flowPre=saFlow(r.records);
-  const feePct=flowPre.B.gross?Math.abs(agg.fees)/flowPre.B.gross*100:0;
+  const feePct=flowPre.B.gross?Math.abs(agg.amazonFees)/flowPre.B.gross*100:0;
   /* A negative settlement is NOT a deposit. Calling it "Deposit total" and
      printing it on a green "money in" card told the seller they had received
      ₹1,418.73 when Amazon had in fact carried a debt forward and paid nothing.
@@ -5000,9 +5065,9 @@ function saRenderResults(){
     <div class="stat ${paidOut?"blue":"warn"}"><div class="k">${paidOut?"Deposited to your bank":"Net settlement balance"}</div><div class="v">${inr(total)}</div>
       <div class="sa-sub" style="margin-top:3px">${paidOut?"paid out for this statement":"⚠ no payout this statement — carried forward against your balance"}</div></div>
     <div class="stat green"><div class="k">Gross product sales</div><div class="v">${inr(flowPre.B.gross)}</div>
-      <div class="sa-sub" style="margin-top:3px">${inr(agg.sales)} net after refunds</div></div>
-    <div class="stat red"><div class="k">Amazon fees</div><div class="v">${inr(agg.fees)}</div>
-      <div class="sa-sub" style="margin-top:3px">${flowPre.B.gross?pc(feePct)+" of "+inr(flowPre.B.gross)+" gross — selling &amp; fulfilment only":"selling &amp; fulfilment only"}</div></div>
+      <div class="sa-sub" style="margin-top:3px">${inr(flowPre.B.gross+flowPre.B.refunded)} net after refunds</div></div>
+    <div class="stat red"><div class="k">Amazon fees</div><div class="v">${inr(agg.amazonFees)}</div>
+      <div class="sa-sub" style="margin-top:3px">${flowPre.B.gross?pc(feePct)+" of "+inr(flowPre.B.gross)+" gross — selling &amp; fulfilment only":"selling &amp; fulfilment only"}${Math.abs(agg.promo)>=0.005?` · your promotions ${inr(Math.abs(agg.promo))} not included`:""}</div></div>
     ${agg.ads?`<div class="stat red"><div class="k">Sponsored Ads</div><div class="v">${inr(agg.ads)}</div>
       <div class="sa-sub" style="margin-top:3px">${flowPre.B.gross?pc(Math.abs(agg.ads)/flowPre.B.gross*100)+" of gross — Sponsored Ads":"Sponsored Ads billed in this statement"}</div></div>`
       :`<div class="stat"><div class="k">${taxTitle}</div><div class="v">${inr(agg.tax)}</div></div>`}
@@ -5063,6 +5128,7 @@ function saRenderResults(){
   const rowsFlow=[
     ["Gross product sales",FB.gross],
     ["Refunded sales",FB.refunded],
+    ["Shipping charged to buyers (net of refunds)",FB.shipPaid],
     ["Promotions funded by you",FB.promo],
     /* Naming a bucket "Referral & closing fees" when the statement contains no
        referral fee at all (sub-Rs 1,000 items pay 0%) taught the seller a fee
@@ -5135,18 +5201,22 @@ function saRenderResults(){
     &&(!q||(rec.orderId||"").toLowerCase().includes(q)||(rec.sku||"").toLowerCase().includes(q)));
   const shown=filtered.slice(0,saLimit);
   h+=`<div class="tblwrap"><table class="sa">
-    <thead><tr><th></th><th>Type</th><th>Order</th><th>SKU</th><th class="num">Qty</th><th>Fulfil</th><th class="num">Principal</th><th class="num">Fees</th></tr></thead><tbody>`;
+    <thead><tr><th></th><th>Type</th><th>Order</th><th>SKU</th><th class="num">Qty</th><th>Fulfil</th><th class="num">Principal</th><th class="num" title="Amazon's own charges on this row — closing, referral, shipping and refund fees, net of reversals. Promotions and taxes are not fees.">Amazon fees</th><th class="num" title="Product GST collected, GST on Amazon's fees and TCS on this row">GST / TCS</th></tr></thead><tbody>`;
   shown.forEach((rec,i)=>{
-    const feeTotal=Object.values(rec.feeMap).reduce((s,x)=>s+x,0);
+    /* The column used to add up EVERY non-principal line — product GST and
+       promotions included — so a ₹2.36 closing fee showed as "₹19.74 fees".
+       Fees and taxes are now summed by what each line is. */
+    let feeTotal=0,taxTotal=0;
+    for(const l of rec.fees){const k=saLineKind(l,rec.transactionType); if(k==="fee")feeTotal+=l.amount; else if(k==="tax")taxTotal+=l.amount;}
     const hasDetail=Object.keys(rec.feeMap).length>0;
     h+=`<tr class="exp ${hasDetail?'':'nodetail'}" data-i="${i}">
       <td>${hasDetail?'<span class="caret">▶</span>':''}</td>
       <td title="Amazon transaction-type: ${esc(rec.transactionType)}">${esc(saRecordCategory(rec))}</td><td>${esc(rec.orderId||'—')}</td>
       <td>${esc(rec.sku||'—')}</td><td class="num">${rec.quantity||''}</td>
       <td>${esc(rec.fulfillmentId||'—')}</td>
-      <td class="num">${sv(rec.principal)}</td><td class="num">${sv(feeTotal)}</td></tr>`;
+      <td class="num">${sv(rec.principal)}</td><td class="num">${sv(feeTotal)}</td><td class="num">${sv(taxTotal)}</td></tr>`;
     if(hasDetail)
-      h+=`<tr class="detail" id="sa-d-${i}" style="display:none"><td colspan="8"><div class="grid2">${
+      h+=`<tr class="detail" id="sa-d-${i}" style="display:none"><td colspan="9"><div class="grid2">${
         Object.entries(rec.feeMap).map(([d,a])=>`<div class="fl"><span class="l">${esc(d)}</span><span class="v ${a<0?'amt-neg':'amt-pos'}">${inr(a)}</span></div>`).join("")
       }</div></td></tr>`;
   });
@@ -5182,8 +5252,8 @@ function saRenderResults(){
     if(refPct>10) acts.push(["hot","High refund value",
       `<b>${refPct.toFixed(1)}%</b> of gross sales came back as refunds this statement (${inr(Math.abs(FB.refunded))} of ${inr(FB.gross)}). One or two SKUs usually drive most of it.`,
       "#/sku-report","Find the SKUs →"]);
-    if(agg.ads&&FB.gross&&Math.abs(agg.ads)>Math.abs(agg.fees)) acts.push(["hot","Sponsored Ads exceed selling \u0026 fulfilment fees",
-      `You paid <b>${inr(Math.abs(agg.ads))}</b> in Sponsored Ads against <b>${inr(Math.abs(agg.fees))}</b> in Amazon selling fees. Whether that is worth it depends on what the ads sold.`,
+    if(agg.ads&&FB.gross&&Math.abs(agg.ads)>Math.abs(agg.amazonFees)) acts.push(["hot","Sponsored Ads exceed selling \u0026 fulfilment fees",
+      `You paid <b>${inr(Math.abs(agg.ads))}</b> in Sponsored Ads against <b>${inr(Math.abs(agg.amazonFees))}</b> in Amazon selling fees. Whether that is worth it depends on what the ads sold.`,
       "#/ad-profit","Check ACOS per SKU →"]);
     if(!paidOut) acts.push(["hot","No payout this statement",
       `Amazon settled <b>${inr(total)}</b>, so nothing reached your bank — the balance is carried forward. Load the other Account Type for the same week to see the full picture.`,
@@ -5389,7 +5459,8 @@ function skuCompute(r){
       s.net+=l.amount;
       const kind=saLineKind(l,rec.transactionType);
       if(kind==="principal"){
-        if(isOrder)s.sales+=l.amount;
+        if(saIsShipPrincipal(l)){s.other+=l.amount;s.b.shipPaid=(s.b.shipPaid||0)+l.amount;}
+        else if(isOrder)s.sales+=l.amount;
         else if(isRefund)s.refundValue+=l.amount;
         else s.other+=l.amount;
       }else{
@@ -5498,7 +5569,7 @@ function skuRenderResults(){
   /* Totals cover PRODUCTS only. Summing the "(no SKU)" bucket in here made the
      headline equal the whole deposit, which flatly contradicted the panel below
      saying account-level lines are excluded from every per-SKU figure. */
-  const sumOf=list=>list.reduce((t,s)=>({sales:t.sales+s.sales,fees:t.fees+s.fees,refund:t.refund+s.refundValue,net:t.net+s.net,units:t.units+s.units,ads:t.ads+(s.ads||0),balance:t.balance+(s.balance||0)}),{sales:0,fees:0,refund:0,net:0,units:0,ads:0,balance:0});
+  const sumOf=list=>list.reduce((t,s)=>({sales:t.sales+s.sales,fees:t.fees+s.fees,refund:t.refund+s.refundValue,net:t.net+s.net,units:t.units+s.units,ads:t.ads+(s.ads||0),balance:t.balance+(s.balance||0),promo:t.promo+((s.b&&s.b.promo)||0)}),{sales:0,fees:0,refund:0,net:0,units:0,ads:0,balance:0,promo:0});
   /* "(no SKU)" is not a product — it is the account-level bucket for lines
      Amazon never ties to one (advertising, balance movements, subscription).
      Counting it as a SKU, ranking it as the weakest earner and then advising
@@ -5516,7 +5587,10 @@ function skuRenderResults(){
   });
   const best=sorted.length?sorted.reduce((m,s)=>s.net>m.net?s:m,sorted[0]):{net:0,sku:"—"};
   const worst=sorted.length?sorted.reduce((m,s)=>s.net<m.net?s:m,sorted[0]):{net:0,sku:"—"};
-  const feePct=totals.sales?Math.abs(totals.fees)/totals.sales*100:0;
+  /* Promotions are a discount the seller chose to fund, not a charge from
+     Amazon — counted in, they inflated the fee rate (29.6% for 26.4%). */
+  const amzFees=totals.fees-totals.promo;
+  const feePct=totals.sales?Math.abs(amzFees)/totals.sales*100:0;
   const refundPct=totals.sales?Math.abs(totals.refund)/totals.sales*100:0;
 
   // Advanced P&L: attach product cost and true profit (Pro only).
@@ -5531,8 +5605,14 @@ function skuRenderResults(){
     const cpuKnown=s.sku!=="(no SKU)"&&costs[s.sku]!==undefined&&Number(costs[s.sku])>0;
     const cpu=cpuKnown?Number(costs[s.sku]):0;
     const cost=cpu*netUnits;          // product cost on units sold net of returns
-    const truePL=s.net-cost;          // net settlement minus your product cost
-    return Object.assign({},s,{netUnits,cpuKnown,cpu,cost,truePL});
+    /* Net still holds the GST Amazon collected from buyers, which the seller
+       owes the government. What is actually due = product GST collected − GST
+       paid on Amazon's fees (input credit) − TCS already withheld — exactly
+       the SKU's tax lines. Leaving it in overstated profit: a ₹799 item
+       carries ₹121.88 of GST, ~₹100 of it payable after the fee credit. */
+    const gstDue=s.taxes||0;
+    const truePL=s.net-gstDue-cost;   // net settlement − GST you owe − your product cost
+    return Object.assign({},s,{netUnits,cpuKnown,cpu,cost,gstDue,truePL});
   });
   const costed=withPL.filter(x=>x.cpuKnown);
   const needCost=withPL.filter(x=>!x.cpuKnown&&x.sku!=="(no SKU)"&&(x.units||0)>0).length;
@@ -5544,10 +5624,10 @@ function skuRenderResults(){
     <div class="stat ${totals.net<0?"red":"green"}"><div class="k">SKU settlement contribution</div><div class="v">${inr(totals.net)}</div>
       <div class="sa-sub" style="margin-top:3px">what the products themselves earned${Math.abs(acctNet)>=0.005?` · ${inr(acctNet)} of account-level costs is separate, below`:""}</div></div>
     <div class="stat"><div class="k">Amazon fee rate</div><div class="v">${feePct.toFixed(1)}%</div>
-      <div class="sa-sub" style="margin-top:3px">${inr(Math.abs(totals.fees))} of ${inr(totals.sales)} gross${totals.ads?` · ads ${inr(Math.abs(totals.ads))} counted separately`:""}</div></div>
+      <div class="sa-sub" style="margin-top:3px">${inr(Math.abs(amzFees))} of ${inr(totals.sales)} gross${Math.abs(totals.promo)>=0.005?` · your promotions ${inr(Math.abs(totals.promo))} counted separately`:""}${totals.ads?` · ads ${inr(Math.abs(totals.ads))} counted separately`:""}</div></div>
     <div class="stat ${refundPct>10?'red':''}"><div class="k">Refund value rate</div><div class="v">${refundPct.toFixed(1)}%</div>
       <div class="sa-sub" style="margin-top:3px">${inr(Math.abs(totals.refund))} refunded of ${inr(totals.sales)}</div></div>
-    ${advOn?`<div class="stat ${trueProfit<0?'red':'green'}"><div class="k">True profit after product cost</div><div class="v">${costed.length?inr(trueProfit):"—"}</div><div class="sa-sub" style="margin-top:3px">${costed.length?`across ${costed.length} costed SKU${costed.length===1?"":"s"} · ${lossCount} loss-making`:"enter product costs below"}${needCost?` · <b>${needCost} still need a cost</b>`:""}</div></div>`:""}
+    ${advOn?`<div class="stat ${trueProfit<0?'red':'green'}"><div class="k">True profit after GST &amp; product cost</div><div class="v">${costed.length?inr(trueProfit):"—"}</div><div class="sa-sub" style="margin-top:3px">${costed.length?`across ${costed.length} costed SKU${costed.length===1?"":"s"} · ${lossCount} loss-making`:"enter product costs below"}${needCost?` · <b>${needCost} still need a cost</b>`:""}</div></div>`:""}
   </div>
   ${(!advOn||!costed.length)?`<div class="banner warn" style="text-align:left"><b>Product cost not added.</b> Every figure here is what Amazon settled — <b>contribution</b>, not profit. Your purchase or manufacturing cost is not in it, so a SKU showing a positive number can still be losing money. ${skuIsPro?`<a href="/sku-report/advanced">Add product costs</a> to turn this into real profit and margin.`:`Adding product costs is a Pro feature — <a href="/pricing">see plans</a>.`}</div>`:""}`;
 
@@ -5591,7 +5671,7 @@ function skuRenderResults(){
       <p class="sa-sub">You're on Starter (₹199/month). Upgrade to <b>Pro (₹499/month — just ₹300 more)</b> to add your product costs and see <b>true profit per SKU after cost</b>, with loss-making SKUs flagged and a full per-SKU fee breakdown.</p>
       <a class="lp-btn" href="/pricing" style="margin-top:8px">See Pro pricing</a></div>`;
 
-  h+=`<div class="panel"><h4>Per-SKU breakdown <span class="sa-sub">(${skus.length})</span></h4>
+  h+=`<div class="panel"><h4>Per-SKU breakdown <span class="sa-sub">(${realSkus.length})</span></h4>
     <div class="filterbar">
       <button class="fbtn ${skuSort==='net'?'on':''}" data-sort="net">Sort by Net</button>
       <button class="fbtn ${skuSort==='sales'?'on':''}" data-sort="sales">Sort by Sales</button>
@@ -5610,7 +5690,7 @@ function skuRenderResults(){
       <button class="fbtn" id="sku-apply-all">Apply to all SKUs</button>
       <span class="sa-sub">saved in your browser</span></div>
     <div class="tblwrap"><table class="sa">
-      <thead><tr><th>SKU</th><th>Status</th><th class="num">Units (net)</th><th class="num">Net</th><th class="num">Cost/unit ₹</th><th class="num">Product cost</th><th class="num">True P&amp;L</th></tr></thead>
+      <thead><tr><th>SKU</th><th>Status</th><th class="num">Units (net)</th><th class="num">Net</th><th class="num" title="Product GST collected from buyers − GST on Amazon's fees − TCS: what you pay the government for this SKU">GST to pay</th><th class="num">Cost/unit ₹</th><th class="num">Product cost</th><th class="num">True P&amp;L</th></tr></thead>
       <tbody>${visPL.map(s=>{
         const exp=skuExpanded.has(s.sku);
         const bucketRows=Object.keys(s.b||{}).filter(k=>Math.abs(s.b[k])>=0.005)
@@ -5621,14 +5701,15 @@ function skuRenderResults(){
           <td>${stChip(skuStatus(s,true,s.cpuKnown))}</td>
           <td class="num">${s.netUnits}${s.unitsReturned?` <span class="sa-sub">(−${s.unitsReturned})</span>`:""}</td>
           <td class="num">${sv(s.net)}</td>
+          <td class="num">${Math.abs(s.gstDue)>=0.005?sv(-s.gstDue):'<span class="sa-sub">—</span>'}</td>
           <td class="num">${s.sku==="(no SKU)"?'<span class="sa-sub" title="Account-level spend — a product cost does not apply">n/a</span>':`<input type="number" min="0" inputmode="decimal" class="sku-cost-in" data-cost-sku="${esc(s.sku)}" value="${s.cpu?s.cpu:""}" placeholder="0">`}</td>
           <td class="num">${s.cpuKnown?"-"+inr(s.cost):'<span class="sa-sub">—</span>'}</td>
           <td class="num">${s.cpuKnown?`<b class="${s.truePL<0?'amt-neg':'amt-pos'}">${inr(s.truePL)}</b>`
             :(s.sku==="(no SKU)"?`<b>${sv(s.net)}</b>`:'<span class="sa-sub" title="Enter this SKU\'s product cost to see its true P&L">needs cost</span>')}</td>
         </tr>
-        ${exp?`<tr class="sku-detail"><td colspan="7"><div class="sku-bklist"><div class="sku-bk"><span><b>Fee &amp; charge breakdown</b></span><span></span></div>${bucketRows}</div></td></tr>`:""}`;}).join("")}
+        ${exp?`<tr class="sku-detail"><td colspan="8"><div class="sku-bklist"><div class="sku-bk"><span><b>Fee &amp; charge breakdown</b></span><span></span></div>${bucketRows}</div></td></tr>`:""}`;}).join("")}
       </tbody></table></div>
-    <div class="banner info">Product cost is applied to units <b>sold net of returns</b>. True P&amp;L = Net settlement − your product cost. Costs are stored only in your browser (never uploaded).</div></div>`;
+    <div class="banner info">Product cost is applied to units <b>sold net of returns</b>. True P&amp;L = Net settlement − GST you owe on it − your product cost. The GST is what buyers paid in tax less the GST on Amazon's fees and the TCS already withheld. Costs are stored only in your browser (never uploaded).</div></div>`;
   } else {
     h+=`<div class="tblwrap"><table class="sa">
       <thead><tr><th>SKU</th><th>Status</th><th class="num">Units</th><th class="num">Gross sales</th><th class="num">Refunds</th><th class="num">Fees</th><th class="num">Taxes</th><th class="num">Net</th><th class="num">Net / unit</th><th class="num">Refund %</th></tr></thead>
@@ -5644,7 +5725,7 @@ function skuRenderResults(){
           <td class="num">${s.units?inr(s.net/s.units):"—"}</td>
           <td class="num ${rp>10?'amt-neg':''}">${rp.toFixed(1)}%</td></tr>`;}).join("")}
       </tbody></table></div>
-    <div class="banner info"><b>What "Net" means:</b> sales − refunds − the Amazon fees and taxes attributable to that SKU. It does <b>not</b> include your product cost, and it does not include account-level costs like advertising. Full attribution rules are in <b>“How every number here is computed”</b> below.</div></div>`;
+    <div class="banner info"><b>What "Net" means:</b> sales − refunds − the Amazon fees and taxes attributable to that SKU. It still contains the GST buyers paid, which you owe the government (Advanced P&amp;L takes it out), and it does <b>not</b> include your product cost, and it does not include account-level costs like advertising. Full attribution rules are in <b>“How every number here is computed”</b> below.</div></div>`;
   }
 
   if(r.errors.length) h+=`<div class="banner warn"><b>${r.errors.length} row(s) could not be parsed</b> and are excluded — open the Settlement Analyzer for details.</div>`;
@@ -5654,7 +5735,8 @@ function skuRenderResults(){
     <ol>
       <li><b>Net</b> = the sum of every settlement line for the SKU: principal + fees + taxes + refunds. It is what reached your bank for that product this settlement.</li>
       <li><b>Refund %</b> = |refunded principal| ÷ gross principal, by value.</li>
-      <li><b>True P&amp;L</b> (Advanced) = Net − product cost × units sold net of returns. A SKU with no cost entered shows <b>Needs data</b>, never a guessed profit — a missing cost is unknown, not zero.</li>
+      <li><b>GST to pay</b> (Advanced) = the SKU's tax lines: product GST collected − GST charged on Amazon's fees (your input credit) − TCS withheld. It sits inside Net but belongs to the government.</li>
+      <li><b>True P&amp;L</b> (Advanced) = Net − GST to pay − product cost × units sold net of returns. A SKU with no cost entered shows <b>Needs data</b>, never a guessed profit — a missing cost is unknown, not zero.</li>
       <li><b>Status</b>: <span class="st st-loss">Loss</span> net (or true P&amp;L) below zero · <span class="st st-problem">Problem</span> refund % above 15 · <span class="st st-watch">Watch</span> refund % above 8 · <span class="st st-good">Good</span> otherwise · <span class="st st-data">Needs data</span> cost missing in Advanced mode.</li>
       <li>Order-level shipping (Easy Ship, postage) is traced to the SKU through the order id, except on mixed-SKU orders. Ad spend and other account-level charges stay under <b>(no SKU)</b> — no fee is ever invented per SKU.</li>
     </ol>
@@ -5696,10 +5778,10 @@ function skuRenderResults(){
       const st=skuStatus(s,advOn,s.cpuKnown);
       return [s.sku,st.l,s.units,s.unitsReturned||0,s.sales.toFixed(2),s.refundValue.toFixed(2),
         s.fees.toFixed(2),s.taxes.toFixed(2),s.net.toFixed(2),rp.toFixed(1),
-        advOn?(s.cpuKnown?s.cpu:"" ):"",advOn?(s.cpuKnown?s.truePL.toFixed(2):"needs cost"):""];
+        advOn?(s.gstDue||0).toFixed(2):"",advOn?(s.cpuKnown?s.cpu:"" ):"",advOn?(s.cpuKnown?s.truePL.toFixed(2):"needs cost"):""];
     });
     saCsvDownload("sku-profitability.csv",
-      ["SKU","Status","Units","Units returned","Gross sales (INR)","Refunds (INR)","Fees (INR)","Taxes (INR)","Net (INR)","Refund %","Cost/unit (INR)","True P&L (INR)"],rows);
+      ["SKU","Status","Units","Units returned","Gross sales (INR)","Refunds (INR)","Fees (INR)","Taxes (INR)","Net (INR)","Refund %","GST to pay (INR)","Cost/unit (INR)","True P&L (INR)"],rows);
   });
   out.querySelectorAll(".fbtn[data-sort]").forEach(b=>b.addEventListener("click",()=>{skuSort=b.dataset.sort;skuRenderResults();}));
   const adv=out.querySelector("[data-adv]");
@@ -5806,9 +5888,14 @@ const REC_FEE_FOR=(family,slab)=>{
   if(kind==="fba"){ const t=FBA_WH[b]; return t?t[a][slab]:null; }
   const t=ES_WH[a]; return t?t[slab]:null;
 };
-function recClosingCeiling(price,afn){
+function recClosingCeiling(price,afn,easyShip){
   const band=price<=300?0:price<=500?1:price<=1000?2:3;
-  return afn?[26,22,27,72][band]:[20,26,51,101][band];
+  /* The highest published fee for the band in force now (7 Sep 2026 card),
+     which is never below the older card. An Easy Ship order is held to the
+     Easy Ship column — checking it against the dearer Self Ship column let
+     any overcharge up to Rs 51 on a Rs 799 item pass as "correct". */
+  if(afn) return Math.max(...Object.values(CLOSING_FBA_GROUPS).map(t=>t[band]));
+  return easyShip?CLOSING_BY_CHANNEL.easyship[band]:Math.max(CLOSING_BY_CHANNEL.self[band],CLOSING_BY_CHANNEL.easyship[band]);
 }
 /* FBA customer returns report (Reports → Fulfilment → FBA customer returns).
    One row per returned unit. Returns null when the file isn't this report. */
@@ -6035,6 +6122,11 @@ function recCompute(settlements,mtrRows,extra){
      order invented overcharges. Records are already one per order-item, and a
      record's quantity is the units within it. Amazon's schedule requires fee
      claims within 30 calendar days, so each row carries its age. */
+  /* Orders shipped through Easy Ship carry an "Amazon Easy Ship Charges" line
+     on their own record; knowing the channel lets the check use the Easy Ship
+     column instead of the dearer Self Ship one. */
+  const esOrders=new Set();
+  for(const r2 of records) if(r2.orderId&&(r2.amounts||[]).some(l=>/easy ship/i.test(l.amountDescription||""))) esOrders.add(r2.orderId);
   for(const rec of records){
     if(rec.transactionType!=="Order") continue;
     const afn=rec.fulfillmentId==="AFN", mfn=rec.fulfillmentId==="MFN";
@@ -6082,7 +6174,7 @@ function recCompute(settlements,mtrRows,extra){
     if(buyerPaid<=0||Math.abs(closing)<=0.005) continue;
     feeLinesAudited++;
     const unitPrice=buyerPaid/units, charged=Math.abs(closing)/units;
-    const ceiling=recClosingCeiling(unitPrice,afn);
+    const ceiling=recClosingCeiling(unitPrice,afn,mfn&&esOrders.has(rec.orderId));
     if(charged-ceiling>0.51){
       const days=age();
       feeOver.push({check:"feeOver",orderId:rec.orderId,sku:rec.sku,date:rec.postedDate,days,
@@ -6091,6 +6183,13 @@ function recCompute(settlements,mtrRows,extra){
           +(days!==null?(days>30?". Over 30 days old, so Amazon may refuse the claim":". "+(30-days)+" days left to claim"):"")});
     }
   }
+  /* Orders Amazon has already reimbursed through SAFE-T in the loaded
+     statements. Listing them as cases to file invited a second claim on money
+     already paid (5 of 53 "cases" on one real account). */
+  const safetPaid=new Map();
+  for(const rec of records) if(/safe-?t/i.test(rec.transactionType||"")&&rec.orderId)
+    safetPaid.set(rec.orderId,(safetPaid.get(rec.orderId)||0)+(rec.amounts||[]).reduce((s,l)=>s+l.amount,0));
+  let safeTPaidN=0,safeTPaidAmt=0;
   for(const rec of records){
     const isRefund=/refund/i.test(rec.transactionType);
     if(!isRefund) continue;
@@ -6113,7 +6212,10 @@ function recCompute(settlements,mtrRows,extra){
     // Seller-fulfilled refund → SAFE-T candidate. A refund is listed once: an
     // MFN refund that ALSO lost its referral credit says so in its note rather
     // than appearing again in the refund-fee list.
-    if(rec.fulfillmentId==="MFN"){
+    if(rec.fulfillmentId==="MFN"&&safetPaid.has(rec.orderId)){
+      safeTPaidN++; safeTPaidAmt+=safetPaid.get(rec.orderId);   // already reimbursed — off the list
+    }
+    else if(rec.fulfillmentId==="MFN"){
       let days=null; const d=saParseDate(rec.postedDate);
       if(d) days=Math.floor((Date.now()-new Date(d+"T00:00:00Z").getTime())/86400000);
       let note=days!==null&&days>60?"Refund is "+days+" days old — the 60-day SAFE-T window has likely closed":"Item value refunded (excl. tax)";
@@ -6417,7 +6519,8 @@ function recCompute(settlements,mtrRows,extra){
       haveReturns:fbaReturns.length>0,haveReimb:reimbRows.length>0,
       returnRows:fbaReturns.length,reimbRows:reimbRows.length,retCoverEnd,nrTooRecent,nrSuspicious,
       haveLedger:!!ledger,ledgerCoverEnd,ledgerAdjustments,destroyedSellable,haveRepl:replRows.length>0,replRows:replRows.length,
-      haveMfnRet:mfnRet.length>0,mfnRetRows:mfnRet.length,safeTClaimed,safeTNotBack,safeTBack,safeTNoReq}};
+      haveMfnRet:mfnRet.length>0,mfnRetRows:mfnRet.length,safeTClaimed,safeTNotBack,safeTBack,safeTNoReq,
+      safeTPaidN,safeTPaidAmt:Math.round(safeTPaidAmt*100)/100}};
 }
 window.recCompute=recCompute; // exposed for verification/debugging
 
@@ -6569,6 +6672,8 @@ function recRenderResults(){
       ?`These files show fees Amazon charged and did not credit back. Amazon still decides each claim — check the evidence on each row before filing.`
       :`The loaded reports do <b>not</b> prove Amazon currently owes you a fee reimbursement. ${safeTRows.length?`${safeTRows.length} seller-fulfilled refund${safeTRows.length===1?"":"s"} need contextual review below, but ${safeTRows.length===1?"it is":"they are"} <b>not</b> included in the ${inr(res.recovery)} confirmed amount.`:""} A clean audit is a result, not an empty screen.`}</p>
   </div>`;
+  if(n.safeTPaidN)
+    h+=`<div class="banner good">${num(n.safeTPaidN)} seller-fulfilled refund${n.safeTPaidN===1?" was":"s were"} left off the SAFE-T list because Amazon already paid a SAFE-T reimbursement for ${n.safeTPaidN===1?"that order":"those orders"} (${inr(n.safeTPaidAmt)}) in these statements — claiming again would be a duplicate.</div>`;
   if(n.manyUnmatched)
     h+=`<div class="banner warn">${res.issues.shipped.length} of ${n.mtrOrders} shipped orders have no payment line — that is a lot, and the usual cause is missing statements rather than missing money. <b>Payments → All Statements keeps a separate weekly series for each Account Type</b> — <i>Electronic Transactions</i> and <i>Cash On Delivery Transactions and Non-Transactional Fees</i>. Switch the Account Type dropdown and download both series for the period, then drop them here too.</div>`;
   if(!n.feesItemised&&res.ordersChecked)
@@ -6736,9 +6841,15 @@ const FB_EDGES=(()=>{
 /* Amazon's published closing-fee columns. What a SKU was charged identifies
    its column, so the fee one band lower is read off that same column instead
    of guessed from a category the settlement never names. */
-const FB_CLOSING_COLS=[{id:"easyship",afn:false,t:CLOSING_BY_CHANNEL.easyship},
-  {id:"self",afn:false,t:CLOSING_BY_CHANNEL.self}]
-  .concat(Object.keys(CLOSING_FBA_GROUPS).map(g=>({id:"fba-"+g,afn:true,t:CLOSING_FBA_GROUPS[g]})));
+/* Each column carries the card in force now (t) and the one before it (prev).
+   A statement can straddle the 7 Sep 2026 change, so a SKU's average charge
+   may sit anywhere between the two — that still identifies the column, and
+   any saving is then priced on today's card. */
+const FB_CLOSING_COLS=[{id:"easyship",afn:false,t:CLOSING_BY_CHANNEL.easyship,prev:CLOSING_PREV.easyship},
+  {id:"self",afn:false,t:CLOSING_BY_CHANNEL.self,prev:CLOSING_PREV.self}]
+  .concat(Object.keys(CLOSING_FBA_GROUPS).map(g=>({id:"fba-"+g,afn:true,t:CLOSING_FBA_GROUPS[g],prev:CLOSING_PREV.fba[g]||CLOSING_FBA_GROUPS[g]})));
+const fbColMatches=(c,band,close)=>{const a=c.prev[band],b=c.t[band];
+  return close>=Math.min(a,b)-0.51&&close<=Math.max(a,b)+0.51;};
 const fbClosingBand=p=>p<=300?0:p<=500?1:p<=1000?2:3;
 const FB_SLAB_KG=[0.5,1,2];   // the three published weight-handling bands
 const FB_MIN_UNITS=4;         // fewer units than this and "usual price" means nothing
@@ -6868,7 +6979,7 @@ function fbCompute(settlements,weights){
         const feesItemised=at.some(x=>x.closeSeen)||ref>0.005;
         const rate=P>0?ref/P:0;
         const cats=CATS.filter(c=>Math.abs(refRate(c.key,P)-rate)<=FB_RATE_TOL);
-        const cols=FB_CLOSING_COLS.filter(c=>c.afn===afn&&Math.abs(c.t[fbClosingBand(P)]-close)<=0.51);
+        const cols=FB_CLOSING_COLS.filter(c=>c.afn===afn&&fbColMatches(c,fbClosingBand(P),close));
         if(!feesItemised) noFees++;
         else if(!cats.length) unknownRate++;
         let bestOp=null;
@@ -6882,7 +6993,9 @@ function fbCompute(settlements,weights){
           const refNew=cats.length?E*Math.max(...cats.map(c=>refRate(c.key,E))):null;
           const refSave=refNew===null?0:Math.max(0,ref-refNew);
           const closeNew=cols.length?Math.max(...cols.map(c=>c.t[fbClosingBand(E)])):null;
-          const closeSave=closeNew===null?0:Math.max(0,close-closeNew);
+          // Today's fee at the current price, so a straddling period is never mispriced.
+          const closeNow=cols.length?Math.min(...cols.map(c=>c.t[fbClosingBand(P)])):close;
+          const closeSave=closeNew===null?0:Math.max(0,closeNow-closeNew);
           const give=(P-E)/(1+g);
           const net=refSave+closeSave-give;
           if(net<FB_MIN_NET) continue;
@@ -7061,7 +7174,7 @@ function fbRenderChart(){
           </tbody></table></div>
         <p class="sa-sub" style="margin:8px 0 0">Billed weight is the <b>greater of actual and volumetric</b> (L×W×H ÷ 5000), rounded up to the next 500 g — and at a fulfilment centre Amazon adds 100 g of packaging before rounding, which is why the FBA column asks for less than the band edge. A 780 g parcel bills at 1 kg; 900 g still bills at 1 kg; 910 g jumps to the next band. FBA also charges pick &amp; pack: ${inr0(pickPack(0.5))} up to 1 kg, then ₹5 per additional kg to 5 kg. To check one product against all of this — actual against volumetric, and the fee either way — use the <a href="/fba-fee">FBA fee calculator</a>.</p>
 
-        <span class="htag" style="margin-top:18px">Fixed closing fee, per unit</span>
+        <span class="htag" style="margin-top:18px">Fixed closing fee, per unit — from ${CLOSING_EFFECTIVE}</span>
         <div class="tblwrap"><table class="sa">
           <thead><tr><th>Item price</th><th class="num">Easy Ship</th><th class="num">Self Ship</th><th class="num">FBA</th></tr></thead>
           <tbody>${CLOSING_BANDS.map((edge,i)=>`<tr>
@@ -7295,7 +7408,8 @@ function trendCompute(settlements,mtrRows){
         e.net+=l.amount; if(sm)sm.net+=l.amount;
         const kind=saLineKind(l,rec.transactionType);
         if(kind==="principal"){
-          if(isOrder){e.gross+=l.amount;if(sm)sm.sales+=l.amount;}
+          if(saIsShipPrincipal(l))e.credits+=l.amount;
+          else if(isOrder){e.gross+=l.amount;if(sm)sm.sales+=l.amount;}
           else if(isRefund)e.refunded+=l.amount;
           else e.credits+=l.amount;
         }else if(kind==="tax")e.taxes+=l.amount;
@@ -9100,8 +9214,9 @@ function renderPayoutForecast(){
       <div class="cols">
         <div class="card">
           <div class="fields">
-            <div class="f-full"><label for="pfc-last">Date of last settlement / deposit</label>
-              <input type="date" id="pfc-last" value="${esc(s.last)}"></div>
+            <div class="f-full"><label for="pfc-last">Date your last statement closed</label>
+              <input type="date" id="pfc-last" value="${esc(s.last)}">
+              <div class="f-hint">The <b>end date</b> of the last closed period in Payments → All Statements (e.g. 13 Oct for "6/10 – 13/10"). Not the day the money reached your bank — that comes about 2 days later and is added below; entering it here would push every forecast late.</div></div>
             <div class="f-full"><label for="pfc-cycle">Settlement cycle</label>
               <select id="pfc-cycle">
                 <option value="7"${s.cycle==="7"?" selected":""}>Every 7 days (standard)</option>
@@ -9297,12 +9412,17 @@ function lqcBannedIn(text){
   return hits;
 }
 
-/* ALL-CAPS words (3+ letters) that are not standard abbreviations. */
-function lqcAllCaps(text){
+/* ALL-CAPS words (3+ letters) that are not standard abbreviations. In a
+   title the first word is the brand, and many brands are registered in
+   capitals ("RAAGOS") — the same title passed "starts with the brand" and
+   failed "no ALL-CAPS" for that one word. */
+function lqcAllCaps(text,brandFirst){
   const ok=new Set(["USB","LED","LCD","OLED","AMOLED","PVC","ABS","BPA","EVA","RGB","HDMI","GPS","SIM","OTG","COD","MRP","GSM","UPF","SPF","XXL","XXXL","DIY","RAM","ROM","SSD","HDD","LTE","ISI","FSSAI"]);
   const seen=new Set();
-  (text.split(/[^A-Za-z]+/)).forEach(w=>{
-    if(w.length>=3&&w===w.toUpperCase()&&!ok.has(w)) seen.add(w);
+  const words=text.split(/[^A-Za-z]+/).filter(Boolean);
+  const brand=brandFirst&&words.length?words[0]:null;
+  words.forEach(w=>{
+    if(w.length>=3&&w===w.toUpperCase()&&!ok.has(w)&&w!==brand) seen.add(w);
   });
   return [...seen];
 }
@@ -9344,7 +9464,7 @@ function lqcAnalyze(title,bullets,desc,kws){
     add("Title",/^[A-Z0-9]/.test(title)?"pass":"warn",4,"Starts with the brand name, capitalised",
       /^[A-Z0-9]/.test(title)?"":"Amazon style is Brand + product + key attributes, and the first word capitalised",
       "Start the title with your brand name, capitalised.");
-    const caps=lqcAllCaps(title);
+    const caps=lqcAllCaps(title,true);
     add("Title",caps.length?"warn":"pass",6,"No ALL-CAPS words",
       caps.length?`found: ${caps.map(esc).join(", ")} — use Title Case; caps only for standard abbreviations`:"",
       "Rewrite ALL-CAPS words in Title Case.");
@@ -10449,14 +10569,21 @@ function adpCompute(){
     const spend=a?a.spend:0;
     const cost=Number(costs[s.sku])||0;
     const hasCost=cost>0;
-    const cogs=hasCost?cost*(s.units||0):null;
+    /* Same basis as the SKU Profitability Report: cost on units sold net of
+       returns. Charging it on every unit sold gave the same SKU two different
+       profits in two tools. */
+    const netUnits=Math.max(0,(s.units||0)-(s.unitsReturned||0));
+    const cogs=hasCost?cost*netUnits:null;
     const payout=s.net;                    // after Amazon fees, taxes and refunds
+    /* The payout still holds the GST buyers paid, which is owed to the
+       government (less the GST on Amazon's fees and TCS) — the SKU's tax lines. */
+    const gstDue=s.taxes||0;
     const afterAds=a?payout-spend:null;     // null until ad spend is attributable
-    const profit=(hasCost&&afterAds!==null)?afterAds-cogs:null;
-    const beforeAdsProfit=hasCost?payout-cogs:null;
+    const profit=(hasCost&&afterAds!==null)?afterAds-gstDue-cogs:null;
+    const beforeAdsProfit=hasCost?payout-gstDue-cogs:null;
     const sales=s.sales||0;
     const clicks=a?a.clicks:0,impressions=a?a.impressions:0,adOrders=a?a.adOrders:0;
-    return {sku:s.sku,units:s.units,orders:s.orders,sales,payout,spend,afterAds,
+    return {sku:s.sku,units:s.units,netUnits,orders:s.orders,sales,payout,spend,afterAds,gstDue,
       cost,cogs,profit,beforeAdsProfit,hasCost,
       account:s.sku==="(no SKU)",
       parts:{ads:s.ads||0,balance:s.balance||0,fees:s.fees||0,taxes:s.taxes||0,
@@ -10479,7 +10606,9 @@ function adpCompute(){
       matched:!!a};
   });
   // Ad spend on SKUs that never appear in the settlement (no sales at all).
-  const orphans=[...ads.values()].filter(a=>!seen.has(a.key))
+  /* A SKU with impressions but no spend and no sales is noise, not
+     "Ad spend, no sales" — it used to fill the table with ₹0 rows. */
+  const orphans=[...ads.values()].filter(a=>!seen.has(a.key)&&(a.spend>=0.5||a.adSales>0))
     .map(a=>({sku:a.key,units:0,orders:0,sales:0,payout:0,spend:a.spend,afterAds:-a.spend,
       cost:0,cogs:null,profit:null,beforeAdsProfit:null,hasCost:false,account:false,
       adSales:a.adSales,adOrders:a.adOrders,clicks:a.clicks,impressions:a.impressions,
@@ -10553,6 +10682,11 @@ function adpRender(){
     </div>`;
   if(pctOfProfit!==null)
     h+=`<div class="banner ${pctOfProfit>=50?"warn":"info"}">Advertising is taking <b>${pctOfProfit.toFixed(1)}%</b> of everything Amazon paid you after its own fees${t.flipCount?`, and turns <b>${t.flipCount} SKU${t.flipCount===1?"":"s"}</b> from profit into a loss worth <b>${inr0(t.flipLoss)}</b>`:""}.</div>`;
+  if(r.costed){
+    const cr=r.rows.filter(x=>x.hasCost&&!x.account);
+    const pl=cr.reduce((s,x)=>s+(x.profit??x.beforeAdsProfit??0),0), gd=cr.reduce((s,x)=>s+(x.gstDue||0),0);
+    h+=`<div class="banner ${pl<0?"warn":"good"}">Across your <b>${cr.length}</b> costed SKU${cr.length===1?"":"s"}: profit after ads, GST and product cost is <b>${inr0(pl)}</b>. That already takes out <b>${inr0(gd)}</b> of GST you owe the government on those sales (GST collected − GST on Amazon's fees − TCS) — the settlement contribution still contains it.</div>`;
+  }
     /* The two files carry their own periods. If the ad report covers less
        spend than the statements were charged, the seller is measuring one
        month of ads against two months of payout and every ACOS reads low. */
@@ -10624,7 +10758,7 @@ function adpRender(){
         <th class="num" title="Ad spend ÷ TOTAL settlement sales — what advertising costs the whole SKU, not just its ad-attributed sales">TACOS</th>
         <th class="num" title="How much of a sale can go on ads before this SKU stops making money. Needs a product cost.">Break-even ACOS</th>`:""}
         <th class="num" title="Ad spend ÷ this SKU's ad-attributed sales">ACOS</th>
-        <th class="num">After ads${r.costed?" &amp; cost":""}</th><th>Verdict</th></tr></thead>
+        <th class="num"${r.costed?' title="Settlement contribution − ad spend − GST you owe on the sales (after the credit for GST on Amazon\'s fees and TCS) − product cost on units kept by buyers"':""}>After ads${r.costed?", GST &amp; cost":""}</th><th>Verdict</th></tr></thead>
       <tbody>${rows.map(x=>{
         const bottom=x.hasCost?x.profit:x.afterAds;
         /* "Profitable" is only sayable when the tool holds every input:
@@ -10634,8 +10768,8 @@ function adpRender(){
           :!r.haveAds?["Profit cannot be determined — needs ad report","muted"]
           :!x.hasCost?["Profit cannot be determined — needs product cost","muted"]
           :x.flips?["Ads turn profit into a loss","bad"]
-          :bottom>0?["Profitable after ads & cost","good"]
-          :x.spend>0?["Loss after ads & product cost","bad"]
+          :bottom>0?["Profitable after ads, GST & cost","good"]
+          :x.spend>0?["Loss after ads, GST & product cost","bad"]
           :["Loss before ads","warn"];
         const vc=verdict[1]==="good"?"var(--green)":verdict[1]==="bad"?"var(--red)":verdict[1]==="warn"?"var(--orange)":"var(--muted)";
         const over=x.acos!==null&&x.breakEven!==null&&x.acos>x.breakEven;
@@ -10722,8 +10856,11 @@ const ADS_GROUP_ALIASES=["ad group name","ad group"];
 const ADS_MATCH_ALIASES=["match type"];
 const ADS_TARGET_ALIASES=["targeting"];
 /* A search term needs this much evidence before it is judged at all. */
-const ADS_NEG_CLICKS=10;      // clicks with zero orders before "negate"
-const ADS_NEG_SPEND=100;      // …and at least this much spend, in rupees
+const ADS_NEG_CLICKS=10;      // clicks with zero orders before "negate"…
+const ADS_NEG_SPEND=100;      // …OR this much spend, in rupees. Requiring BOTH found
+                              // nothing on a real account at ₹2.41 a click: a term
+                              // needed ~40 clicks to reach ₹100, so 47 clicks and
+                              // ₹86 with no sale was never flagged.
 const ADS_PROMOTE_ORDERS=2;   // orders before a term earns its own exact match
 const ADS_PROMOTE_ACOS=30;    // …at or under this ACOS
 const ADS_BLEED_ACOS=100;     // converting, but every sale costs more than it brings
@@ -10835,7 +10972,7 @@ function adsCompute(terms,opts){
   const t={spend:0,sales:0,orders:0,clicks:0,impressions:0};
   for(const r of terms){t.spend+=r.spend;t.sales+=r.sales;t.orders+=r.orders;t.clicks+=r.clicks;t.impressions+=r.impressions;}
   const acos=r=>r.sales>0?r.spend/r.sales*100:null;
-  const negate=terms.filter(r=>r.orders===0&&r.clicks>=ADS_NEG_CLICKS&&r.spend>=ADS_NEG_SPEND)
+  const negate=terms.filter(r=>r.orders===0&&(r.clicks>=ADS_NEG_CLICKS||r.spend>=ADS_NEG_SPEND))
     .sort((a,b)=>b.spend-a.spend);
   const promote=terms.filter(r=>{
     if(r.orders<ADS_PROMOTE_ORDERS||r.match==="EXACT") return false;
@@ -10867,7 +11004,10 @@ function adsCompute(terms,opts){
     return Object.assign(c,{acos:a,verdict,vk});
   }).sort((a,b)=>b.spend-a.spend);
   const wasted=negate.reduce((s,r)=>s+r.spend,0);
-  return {totals:t,negate,promote,bleed,campaigns,wasted,
+  // Every rupee that bought no order in this report, flagged or not.
+  const noOrder=terms.filter(r=>r.orders===0&&r.spend>0);
+  const noOrderSpend=noOrder.reduce((s,r)=>s+r.spend,0);
+  return {totals:t,negate,promote,bleed,campaigns,wasted,noOrderSpend,noOrderTerms:noOrder.length,
     termsMatched,termsWithBE,
     acosTotal:t.sales>0?t.spend/t.sales*100:null};
 }
@@ -10896,7 +11036,10 @@ const RT_BUCKETS=[
   {k:"remorse",name:"Buyer remorse / ordering mistakes",advice:"Ordered and changed their mind, or ordered the wrong thing. Some is inevitable; a spike after a discount suggests deal-hunters.",
     re:/^(UNWANTED_ITEM|NO_LONGER_NEEDED|BOUGHT_BY_MISTAKE|ORDERED_WRONG_ITEM|MISORDERED|FOUND_BETTER_PRICE|BETTER_PRICE|UNAUTHORI)/},
   {k:"listing",name:"Listing mismatch",advice:"The buyer expected something else — sharpen images, size charts and the first bullet. Cheaper to fix than a defect.",
-    re:/^(NOT_COMPATIBLE|NOT_AS_DESCRIBED|WRONG_ITEM|STYLE|SIZE|APPAREL_)/},
+    /* Amazon-initiated codes arrive as AMZ-PG-BAD-DESC ("not as described")
+       and AMZ-PG-APP-TOO-SMALL / -TOO-LARGE (apparel sizing); after the prefix
+       is stripped they used to fall into "Other". */
+    re:/^(NOT_COMPATIBLE|NOT_AS_DESCRIBED|WRONG_ITEM|STYLE|SIZE|APPAREL_|BAD[-_]DESC|APP[-_]TOO[-_]|TOO[-_](SMALL|LARGE|BIG))/},
   {k:"switcheroo",name:"Wrong item returned (switcheroo)",advice:"The buyer sent back something other than your product. Photograph outgoing units, report the buyer, and claim via SAFE-T where the refund already happened.",
     re:/^SWITCHEROO/},
 ];
@@ -12160,7 +12303,8 @@ function adsRenderResults(){
         const cost=Number(costs[s2.sku])||0;
         if(!(cost>0)||!(s2.sales>0)) continue;   // no cost → no break-even, never guessed
         const netUnits=Math.max(0,(s2.units||0)-(s2.unitsReturned||0));
-        beOf.set(s2.sku,Math.round((s2.net-cost*netUnits)/s2.sales*1000)/10);
+        // after the GST owed on the SKU's sales, same as Ad Profitability
+        beOf.set(s2.sku,Math.round((s2.net-(s2.taxes||0)-cost*netUnits)/s2.sales*1000)/10);
       }
     }
   }
@@ -12169,14 +12313,14 @@ function adsRenderResults(){
   h+=`<div class="stats">
     <div class="stat"><div class="k">Ad spend in report</div><div class="v">${inr0(t.spend)}</div></div>
     <div class="stat"><div class="k">Ad sales</div><div class="v">${inr0(t.sales)}</div><div class="sa-sub" style="margin-top:3px">ACOS ${r.acosTotal===null?"—":r.acosTotal.toFixed(1)+"%"}</div></div>
-    <div class="stat ${r.wasted>0?"red":"green"}"><div class="k">Going to words that never convert</div><div class="v">${inr0(r.wasted)}</div><div class="sa-sub" style="margin-top:3px">${r.negate.length} term${r.negate.length===1?"":"s"} to negate</div></div>
+    <div class="stat ${r.noOrderSpend>0?"red":"green"}"><div class="k">Spent on words with no order</div><div class="v">${inr0(r.noOrderSpend)}</div><div class="sa-sub" style="margin-top:3px">${num(r.noOrderTerms)} term${r.noOrderTerms===1?"":"s"}${r.totals.spend>0?` · ${(r.noOrderSpend/r.totals.spend*100).toFixed(0)}% of spend`:""} · ${r.negate.length} worth negating now (${inr0(r.wasted)})</div></div>
     <div class="stat green"><div class="k">Winners under broad/auto</div><div class="v">${r.promote.length}</div><div class="sa-sub" style="margin-top:3px">deserve their own exact match</div></div>
   </div>`;
   if(groupSku.size||beOf.size)
     h+=`<div class="banner ${r.termsWithBE?"good":"info"}">${r.termsMatched?`<b>${num(r.termsMatched)}</b> of ${num(all.length)} term rows sit in a single-SKU ad group and inherit that SKU`:"No term row could be matched to a single-SKU ad group — the two ad reports may cover different campaigns or periods"}${r.termsWithBE?`; <b>${num(r.termsWithBE)}</b> are judged against their SKU's <b>own break-even ACOS</b> (from your statements and product costs) instead of the flat ${ADS_BLEED_ACOS}% line`:beOf.size?"":groupSku.size?" — add settlement files and product costs and they get judged against each SKU's own break-even":""}.</div>`;
   h+=`<div class="banner info">These lists read the report you dropped — nothing is estimated. ACOS here is against <b>ad-attributed sales</b>; whether that ACOS is affordable for a given SKU depends on its margin, which lives in <a href="/ad-profit">Ad Profitability</a> (break-even ACOS per SKU).</div>`;
   if(r.negate.length){
-    h+=`<div class="panel"><h4>🚫 Negate these <span class="sa-sub">(${r.negate.length} — ${ADS_NEG_CLICKS}+ clicks, ₹${ADS_NEG_SPEND}+ spent, zero orders)</span></h4>
+    h+=`<div class="panel"><h4>🚫 Negate these <span class="sa-sub">(${r.negate.length} — ${ADS_NEG_CLICKS}+ clicks or ₹${ADS_NEG_SPEND}+ spent, zero orders)</span></h4>
       <p class="sa-sub" style="margin:4px 0 10px">Buyers typed these, clicked your ad, and never bought — over the whole report. Add each as a <b>negative exact</b> in its campaign and that exact term stops spending (close variants may still need their own negatives). Export gives you a paste-ready list.</p>
       <div style="display:flex;justify-content:flex-end;margin:0 0 6px"><button type="button" class="fbtn" id="ads-neg-csv">⬇ Export negatives CSV</button></div>
       <div class="tblwrap"><table class="sa">
@@ -12225,7 +12369,7 @@ function adsRenderResults(){
     <span class="htag">Formulas &amp; thresholds</span>
     <ol>
       <li><b>ACOS</b> = spend ÷ ad-attributed sales, per term and per campaign. Zero sales reads "—", never 0%.</li>
-      <li><b>Negate</b> = ${ADS_NEG_CLICKS}+ clicks and ₹${ADS_NEG_SPEND}+ spend with <b>zero</b> orders across the whole report — enough evidence that the term looks, clicks and doesn't buy.</li>
+      <li><b>Negate</b> = ${ADS_NEG_CLICKS}+ clicks <b>or</b> ₹${ADS_NEG_SPEND}+ spend with <b>zero</b> orders across the whole report — enough evidence that the term looks, clicks and doesn't buy. <b>Spent on words with no order</b> is every zero-order term's spend, including ones too thin to judge yet.</li>
       <li><b>Promote</b> = ${ADS_PROMOTE_ORDERS}+ orders at ≤${ADS_PROMOTE_ACOS}% ACOS under broad, phrase or auto.</li>
       <li><b>Converting at a loss</b> = orders exist but ACOS ≥ ${ADS_BLEED_ACOS}%.</li>
       <li>Rows are summed per term × campaign × ad group × match type, because negatives are added per campaign. Auto targeting (close-match, loose-match, complements, substitutes) is shown as AUTO.</li>
@@ -12371,6 +12515,11 @@ function pingNow(){ _lastPing=0; try{ sendPing(); }catch(e){} }
    entry per shipped change a seller can actually feel.
    ============================================================ */
 const CHANGELOG=[
+  {d:"2026-10-18",t:"Profit now comes after GST",n:"The Profit, Break-Even ACOS, Target Price, Price Band and Coupon calculators, the SKU report's True P&L and Ad Profitability now take out the GST you owe on each sale (less the GST on Amazon's fees you claim back). Before, the GST inside the price was counted as profit — on a ₹799 item that is about ₹100 a unit. Pick your product's GST rate, or “Not GST-registered”."},
+  {d:"2026-10-18",t:"Closing fees updated to Amazon's 7 Sep 2026 card",n:"Amazon added ₹1 per item up to ₹500 and ₹3 above ₹500 on Easy Ship, Seller Flex and FBA (Easy Ship is now ₹2 / ₹23 / ₹48 / ₹79). Every calculator and the Fee Band Optimizer use the new card; statements from before the change are still read against the old one. Reconciliation now checks Easy Ship orders against the Easy Ship fee instead of the dearer Self Ship one."},
+  {d:"2026-10-18",t:"Reconciliation: no SAFE-T case for an order already reimbursed",n:"Refunds where your statements already show a SAFE-T reimbursement are left off the SAFE-T list, so you are never prompted to claim the same order twice."},
+  {d:"2026-10-18",t:"Ads Optimizer finds the words to negate",n:"A search term is now flagged after 10 clicks OR ₹100 of spend with no order (it used to need both, which almost never happens at Indian click prices), and the headline shows everything spent on words that brought no order."},
+  {d:"2026-10-18",t:"Settlement fixes",n:"Order Cancellation Charge, FBA inbound transportation, Fee Adjustment and the shipping a buyer pays are recognised instead of flagged “Not recognised”. The Amazon fees figure no longer includes the promotions you fund. Rupee boxes in the calculators accept paise (pasting ₹15,255.39 used to read as 15,25,539)."},
   {d:"2026-10-13",t:"Label Cropper: multi-quantity orders first in each SKU",n:"In SKU-wise order, labels for Qty 2, 3 or more now print at the top of their SKU, followed by the Qty 1 labels — so the bigger parcels are packed while that product is still on the table."},
   {d:"2026-10-13",t:"Label Cropper: page number at the top or bottom",n:"Some thermal printers cut off the top edge of the label, and the page number with it. The Page numbers option now lets you print it at the bottom instead."},
   {d:"2026-08-06",t:"Traffic Doctor — a new Pro tool",n:"The Business Report's sessions, conversion and Buy Box share per ASIN, turned into a diagnosis: traffic-wasters judged against your own account average, winners that deserve more ads, invisible ASINs that need search fixes — and a clearly-labelled units-lost estimate."},

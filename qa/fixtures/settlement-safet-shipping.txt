@@ -1,0 +1,33 @@
+settlement-id	settlement-start-date	settlement-end-date	deposit-date	total-amount	currency	transaction-type	order-id	merchant-order-id	adjustment-id	shipment-id	marketplace-name	amount-type	amount-description	amount	fulfillment-id	posted-date	posted-date-time	order-item-code	merchant-order-item-id	merchant-adjustment-item-id	sku	quantity-purchased	promotion-id
+10000000001	15.09.2026 06:22:00 UTC	29.09.2026 06:22:00 UTC	01.10.2026 06:22:00 UTC	-170.81	INR																		
+10000000001						Order	171-0000000-0000001				Amazon.in	ItemPrice	Principal	677.12	MFN	20.09.2026	20.09.2026 10:00:00 UTC	90000000001			TEST-BP	1	
+10000000001						Order	171-0000000-0000001				Amazon.in	ItemPrice	Product Tax	121.88	MFN	20.09.2026	20.09.2026 10:00:00 UTC	90000000001			TEST-BP		
+10000000001						Order	171-0000000-0000001				Amazon.in	ItemPrice	Shipping	67.80	MFN	20.09.2026	20.09.2026 10:00:00 UTC	90000000001			TEST-BP		
+10000000001						Order	171-0000000-0000001				Amazon.in	ItemPrice	Shipping tax	12.20	MFN	20.09.2026	20.09.2026 10:00:00 UTC	90000000001			TEST-BP		
+10000000001						Order	171-0000000-0000001				Amazon.in	ItemFees	Fixed closing fee	-48.00	MFN	20.09.2026	20.09.2026 10:00:00 UTC	90000000001			TEST-BP		
+10000000001						Order	171-0000000-0000001				Amazon.in	ItemFees	Fixed closing fee IGST	-8.64	MFN	20.09.2026	20.09.2026 10:00:00 UTC	90000000001			TEST-BP		
+10000000001						Order	171-0000000-0000001				Amazon.in	ItemTCS	TCS-IGST	-3.39	MFN	20.09.2026	20.09.2026 10:00:00 UTC	90000000001			TEST-BP		
+10000000001						other-transaction	171-0000000-0000001				Amazon.in	other-transaction	Amazon Easy Ship Charges	-55.00		20.09.2026	20.09.2026 10:00:00 UTC						
+10000000001						other-transaction	171-0000000-0000001				Amazon.in	other-transaction	MFNPostagePurchaseCompleteIGST	-9.90		20.09.2026	20.09.2026 10:00:00 UTC						
+10000000001						Refund	171-0000000-0000001				Amazon.in	ItemPrice	Principal	-677.12	MFN	25.09.2026	25.09.2026 10:00:00 UTC	90000000001			TEST-BP	1	
+10000000001						Refund	171-0000000-0000001				Amazon.in	ItemPrice	Product Tax	-121.88	MFN	25.09.2026	25.09.2026 10:00:00 UTC	90000000001			TEST-BP		
+10000000001						Refund	171-0000000-0000001				Amazon.in	ItemPrice	Shipping	-67.80	MFN	25.09.2026	25.09.2026 10:00:00 UTC	90000000001			TEST-BP		
+10000000001						Refund	171-0000000-0000001				Amazon.in	ItemPrice	Shipping tax	-12.20	MFN	25.09.2026	25.09.2026 10:00:00 UTC	90000000001			TEST-BP		
+10000000001						Refund	171-0000000-0000001				Amazon.in	ItemTCS	TCS-IGST	3.39	MFN	25.09.2026	25.09.2026 10:00:00 UTC	90000000001			TEST-BP		
+10000000001						Refund	171-0000000-0000001				Amazon.in	ItemFees	Refund commission	-95.00	MFN	25.09.2026	25.09.2026 10:00:00 UTC	90000000001			TEST-BP		
+10000000001						Refund	171-0000000-0000001				Amazon.in	ItemFees	Refund commission IGST	-17.10	MFN	25.09.2026	25.09.2026 10:00:00 UTC	90000000001			TEST-BP		
+10000000001						SAFE-T Reimbursement	171-0000000-0000001				Amazon.in	Other Transactions	SAFE-T Reimbursement	168.79	MFN	28.09.2026	28.09.2026 10:00:00 UTC						
+10000000001						Order	171-0000000-0000002				Amazon.in	ItemPrice	Principal	126.27	MFN	20.09.2026	20.09.2026 10:00:00 UTC	90000000002			TEST-TAPE	1	
+10000000001						Order	171-0000000-0000002				Amazon.in	ItemPrice	Product Tax	22.73	MFN	20.09.2026	20.09.2026 10:00:00 UTC	90000000002			TEST-TAPE		
+10000000001						Order	171-0000000-0000002				Amazon.in	ItemFees	Fixed closing fee	-2.00	MFN	20.09.2026	20.09.2026 10:00:00 UTC	90000000002			TEST-TAPE		
+10000000001						Order	171-0000000-0000002				Amazon.in	ItemFees	Fixed closing fee IGST	-0.36	MFN	20.09.2026	20.09.2026 10:00:00 UTC	90000000002			TEST-TAPE		
+10000000001						Refund	171-0000000-0000002				Amazon.in	ItemPrice	Principal	-126.27	MFN	26.09.2026	26.09.2026 10:00:00 UTC	90000000002			TEST-TAPE	1	
+10000000001						Refund	171-0000000-0000002				Amazon.in	ItemPrice	Product Tax	-22.73	MFN	26.09.2026	26.09.2026 10:00:00 UTC	90000000002			TEST-TAPE		
+10000000001						Refund	171-0000000-0000002				Amazon.in	ItemFees	Refund commission	-45.00	MFN	26.09.2026	26.09.2026 10:00:00 UTC	90000000002			TEST-TAPE		
+10000000001						Refund	171-0000000-0000002				Amazon.in	ItemFees	Refund commission IGST	-8.10	MFN	26.09.2026	26.09.2026 10:00:00 UTC	90000000002			TEST-TAPE		
+10000000001						Cancellation	171-0000000-0000003				Amazon.in	Amazon Fees	Order Cancellation Charge	-15.75		20.09.2026	20.09.2026 10:00:00 UTC						
+10000000001						Cancellation	171-0000000-0000003				Amazon.in	Amazon Fees	OrderCancellationChargeIGST	-2.84		20.09.2026	20.09.2026 10:00:00 UTC						
+10000000001						other-transaction					Amazon.in	other-transaction	Fee Adjustment	18.59		20.09.2026	20.09.2026 10:00:00 UTC						
+10000000001											Amazon.in	other-transaction	FBAInboundTransportationFee	-42.80		20.09.2026	20.09.2026 10:00:00 UTC						
+10000000001											Amazon.in	other-transaction	CGST	-3.85		20.09.2026	20.09.2026 10:00:00 UTC						
+10000000001											Amazon.in	other-transaction	SGST	-3.85		20.09.2026	20.09.2026 10:00:00 UTC						
