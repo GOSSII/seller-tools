@@ -9236,10 +9236,15 @@ function lcBody(){
             ?(info.items&&info.items.length>1?Math.min(4,info.items.length):1):0;
           const numRes=numPos==="bot"?16:LC_BY_BAND,capRes=capN?14*capN+2:0;
           const AW=288-8,AH=432-topRes-numRes-capRes-8;
-          const rot=wideRot&&r.w>r.h*1.15;
+          // Only when this marketplace's labels print without their invoice:
+          // with "Include invoice" on, a page that has none (a Meesho
+          // exchange order) stays upright like the rest of the stack.
+          const rot=wideRot&&ivmOf(info)!=="same"&&r.w>r.h*1.15;
           const ow=rot?r.h:r.w,oh=rot?r.w:r.h;
           const s=Math.min(AW/ow,AH/oh);
-          const ox=(288-ow*s)/2,oy=numRes+capRes+4+(AH-oh*s)/2;
+          // Top-aligned, so labels of different heights (an exchange order
+          // with no invoice among full ones) all start at the same edge.
+          const ox=(288-ow*s)/2,oy=numRes+capRes+4+(AH-oh*s);
           boxCapTop=oy-2;
           page.drawPage(boxEmb.get(info),rot
             ?{x:ox,y:oy+oh*s,xScale:s,yScale:s,rotate:PDFLib.degrees(-90)}
