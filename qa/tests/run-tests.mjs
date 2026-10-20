@@ -305,6 +305,38 @@ console.log('\n== fixes from the 18 Oct 2026 real-account audit ==');
   eq('listing checker: other ALL-CAPS words are still caught', a.capsLoud, 'BEST');
 }
 
+console.log('\n== label cropper: marketplace, label pages and couriers ==');
+{
+  const a = await page.evaluate(() => ({
+    meesho: lcPlatOf('Customer Address Anusha Bekal 78/1 Bengaluru If undelivered, return to: GOSSI STUDIO Product Details SKU Size Qty'),
+    flipkart: lcPlatOf('STD E-Kart Logistics OD438330251193989100 COD Ordered through Flipkart Shipping/Customer address: Name: Naresh'),
+    shopsy: lcPlatOf('Ordered through Shopsy SKU ID | Description QTY'),
+    amazon: lcPlatOf('Ship To: rajiv poddar Order Id: 171-4628810-0339557 Sold on: www.amazon.in'),
+    unknown: lcPlatOf('Packing slip for order 12345'),
+    meeshoInvoiceOnly: lcHasLabel('meesho', 'TAX INVOICE Original For Recipient BILL TO / SHIP TO'),
+    flipkartLabel: lcHasLabel('flipkart', 'SKU ID | Description QTY Not for resale. Printed at 0935 hrs'),
+    valmoPlus: lcCourierOf('Prepaid: Do not collect cash ValmoPlus Pickup BGZ-R0'),
+    xpressBees: lcCourierOf('COD: Check the payable amount on the app Xpress Bees Pickup'),
+    ekart: lcCourierOf('STD E-Kart Logistics OD438330251193989100 COD'),
+    amazonShipping: lcCourierOf('Sold on: www.amazon.in ATSPL'),
+    firstNamed: lcCourierOf('Delhivery Pickup Return to Shadowfax hub'),
+    noneNamed: lcCourierOf('Ship To: ATS Greens, Sector 50, Noida'),
+  }));
+  eq('label cropper: a Meesho page is Meesho', a.meesho, 'meesho');
+  eq('label cropper: a Flipkart page is Flipkart', a.flipkart, 'flipkart');
+  eq('label cropper: a Shopsy page uses the Flipkart layout', a.shopsy, 'flipkart');
+  eq('label cropper: an Amazon page is Amazon', a.amazon, 'amazon');
+  eq('label cropper: anything else keeps the crop settings', a.unknown, '');
+  eq('label cropper: a Meesho run-on invoice page is not a label', a.meeshoInvoiceOnly, false);
+  eq('label cropper: a Flipkart label page is a label', a.flipkartLabel, true);
+  eq('label cropper: ValmoPlus is Valmo', a.valmoPlus, 'Valmo');
+  eq('label cropper: Xpress Bees is XpressBees', a.xpressBees, 'XpressBees');
+  eq('label cropper: E-Kart Logistics is Ekart', a.ekart, 'Ekart');
+  eq('label cropper: ATSPL is Amazon Shipping', a.amazonShipping, 'Amazon Shipping');
+  eq('label cropper: the first courier named wins', a.firstNamed, 'Delhivery');
+  eq('label cropper: an address word is not a courier', a.noneNamed, '');
+}
+
 if (useReal && fs.existsSync(REAL)) {
   console.log('\n== retest against the REAL files the defects were found on ==');
   const walk = (d) => fs.readdirSync(d, { withFileTypes: true })

@@ -4,7 +4,8 @@
 > uploaded file — settlement reports, order reports, label PDFs — is parsed in the
 > seller's own browser and never reaches a server.
 
-Marketplace: Amazon India only. Fees, GST and settlement formats are India-specific.
+Marketplace: Amazon India (the Label Cropper also reads Flipkart and Meesho labels).
+Fees, GST and settlement formats are India-specific.
 Pricing: free tools need no account. Starter ₹199/month (or ₹999/year), Pro ₹499/month
 (or ₹2,499/year).
 
@@ -25,7 +26,7 @@ Pricing: free tools need no account. Starter ₹199/month (or ₹999/year), Pro 
 
 ## Free tools (no login, files never leave the browser)
 
-- [Amazon Label Extractor](https://sellertoolsindia.com/label-cropper): Crop Amazon India Easy Ship A4 label PDFs to clean 4×6 thermal-printer pages — free, fully in your browser.
+- [Label Cropper for Amazon, Flipkart & Meesho](https://sellertoolsindia.com/label-cropper): Crop Amazon, Flipkart and Meesho shipping label PDFs to clean 4×6 thermal labels — marketplace detected automatically, sorted by SKU or courier, free and fully in your browser.
 - [Amazon Order Printer — Picklist & Packing Slips](https://sellertoolsindia.com/order-printer): Turn your Amazon unshipped-orders report into a printable picklist and packing slips — free, fully in your browser.
 - [FNSKU Barcode Sticker Generator](https://sellertoolsindia.com/fnsku-labels): Free FNSKU barcode sticker generator for Amazon FBA — Code 128 labels on A4 65/40/24-up sheets or 4×6 thermal, generated fully in your browser.
 - [GST Invoice Generator — Self-Ship Invoices](https://sellertoolsindia.com/gst-invoice): Generate GST-compliant tax invoices for your Amazon.in self-ship orders from the unshipped-orders report — free, fully in your browser.
