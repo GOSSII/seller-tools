@@ -375,6 +375,102 @@
   .lc-digit .reel span{display:flex;align-items:center;justify-content:center;height:44px;color:#fff;font-weight:800;font-size:24px;font-variant-numeric:tabular-nums}
   .lc-odo-cap{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-top:6px}
   @media(prefers-reduced-motion:reduce){.lc-digit .reel{transition:none}}
+  /* Label Cropper: marketplace tabs over one panel — upload card on the
+     left, Print Settings on the right, status and download along the foot. */
+  .lc-shell{margin-top:16px}
+  .lc-tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;position:relative;z-index:1}
+  .lc-tabs::-webkit-scrollbar{display:none}
+  .lc-tab{display:flex;align-items:center;gap:9px;padding:11px 16px;min-height:48px;border:1px solid transparent;
+    border-bottom:0;border-radius:12px 12px 0 0;background:none;font:inherit;font-size:15px;font-weight:500;
+    color:var(--ink);cursor:pointer;white-space:nowrap}
+  .lc-tab:hover{color:var(--blue)}
+  .lc-tab[aria-selected="true"]{background:var(--card);border-color:var(--line);color:var(--blue);font-weight:600;
+    margin-bottom:-1px;padding-bottom:12px}
+  /* Phones: the four tabs share the width, icon over a short name. */
+  @media(max-width:560px){
+    .lc-tabs{display:grid;grid-template-columns:repeat(4,1fr)}
+    .lc-tab{flex-direction:column;gap:4px;padding:9px 2px 10px;font-size:13px;min-width:0}
+    .lc-tab[aria-selected="true"]{padding-bottom:11px}
+    .lc-long{display:none}
+  }
+  .lc-ico{width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+    font-weight:800;font-size:14px;line-height:1;flex:none}
+  .lc-ico.all{background:#3b4252;color:#fff}
+  .lc-ico.amazon{background:#232f3e;color:#ff9900}
+  .lc-ico.flipkart{background:#2874f0;color:#ffe11b}
+  .lc-ico.meesho{background:#570a57;color:#fff}
+  .lc-panel{background:var(--card);border:1px solid var(--line);border-radius:0 14px 14px 14px}
+  .lc-grid{display:grid;gap:16px;padding:14px}
+  @media(min-width:900px){.lc-grid{grid-template-columns:minmax(0,1fr) 360px;gap:22px;padding:26px}}
+  .lc-grid>*{min-width:0}
+  .lc-box{border:1px solid var(--line);border-radius:12px;background:#fff;align-self:start}
+  .lc-box-h{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:15px 18px;
+    border-bottom:1px solid var(--line);font-weight:700;font-size:16.5px}
+  .lc-box-h small{font-size:12.5px;font-weight:500;color:var(--faint)}
+  .lc-box-b{padding:16px}
+  @media(min-width:600px){.lc-box-b{padding:20px}}
+  .lc-drop{position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;margin:0;
+    border:2px dashed #cfd6e2;border-radius:12px;background:#fafbfd;padding:34px 16px;text-align:center;
+    cursor:pointer;transition:border-color .15s,background .15s;color:var(--muted);font-weight:400}
+  .lc-drop:hover,.lc-drop.over{border-color:var(--blue);background:var(--blue-soft)}
+  .lc-drop b{color:var(--ink);font-size:16.5px;font-weight:600;margin-top:6px}
+  .lc-drop .sub{font-size:13px}
+  .lc-browse{margin-top:10px;color:var(--blue);font-weight:600;font-size:14.5px}
+  .lc-drop input{position:absolute;inset:0;opacity:0;cursor:pointer;min-height:0}
+  .lc-file{display:flex;align-items:center;gap:10px;margin-top:10px;padding:8px 8px 8px 10px;
+    border:1px solid var(--line);border-radius:10px;font-size:13.5px}
+  .lc-fico{flex:none;font-size:9.5px;font-weight:800;letter-spacing:.04em;color:#fff;background:var(--red);
+    border-radius:4px;padding:3px 4px}
+  .lc-file .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+  .lc-file .meta{color:var(--muted);font-size:12.5px;white-space:nowrap}
+  @media(max-width:520px){.lc-file{flex-wrap:wrap}.lc-file .meta{order:3;width:100%;padding-left:36px}}
+  .lc-file .x{flex:none;width:32px;height:32px;border:0;border-radius:8px;background:none;color:var(--muted);
+    font-size:20px;line-height:1;cursor:pointer;padding:0}
+  .lc-file .x:hover{background:var(--red-soft);color:var(--red)}
+  .lc-priv{margin-top:12px;font-size:12.5px;color:#166534}
+  .lc-sec{padding:9px 18px;background:#f8f9fc;border-bottom:1px solid var(--line);font-size:11.5px;font-weight:700;
+    letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+  .lc-row{display:flex;align-items:center;gap:8px;padding:11px 18px;border-bottom:1px solid var(--line)}
+  .lc-row.off{opacity:.45}
+  .lc-ck{display:flex;align-items:center;gap:11px;margin:0;font-size:14.5px;font-weight:500;cursor:pointer;min-height:26px}
+  .lc-set input[type="checkbox"],.lc-set input[type="radio"]{width:18px;height:18px;flex:none;margin:0;accent-color:var(--blue)}
+  .lc-set input[type="radio"]{appearance:auto;-webkit-appearance:radio;min-height:0;padding:0;border:0;background:none}
+  .lc-stack{flex-direction:column;align-items:stretch;gap:9px}
+  .lc-rowh{display:flex;align-items:center;gap:8px;margin:0;font-size:14.5px;font-weight:500}
+  .lc-radios{display:flex;flex-wrap:wrap;gap:6px 20px}
+  .lc-radios label{display:flex;align-items:center;gap:8px;margin:0;font-size:14px;font-weight:500;cursor:pointer;min-height:28px}
+  .lc-selrow{justify-content:space-between}
+  .lc-selrow label{margin:0;font-size:14.5px;font-weight:500;white-space:nowrap}
+  .lc-selrow select{width:auto;max-width:62%;min-height:38px;font-size:14px}
+  .lc-cropgrid{gap:8px}
+  .lc-cropgrid label{font-size:12px;font-weight:500;color:var(--muted);margin-bottom:3px}
+  .lc-cropgrid input{min-height:38px}
+  .lc-tip{position:relative;display:inline-flex;align-items:center;justify-content:center;flex:none;width:16px;height:16px;
+    border:1.4px solid var(--faint);border-radius:50%;color:var(--faint);font-size:10px;font-weight:700;line-height:1;font-style:normal;cursor:help}
+  .lc-tip:hover::after,.lc-tip:focus::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 8px);right:-10px;
+    width:min(240px,72vw);padding:8px 10px;border-radius:8px;background:var(--ink);color:#fff;
+    font-size:12px;font-weight:500;line-height:1.45;text-align:left;z-index:30;box-shadow:0 6px 20px rgba(15,26,43,.2)}
+  /* Phones: the explanation shows as a bar along the bottom of the screen,
+     where it can't run off either edge. */
+  @media(max-width:560px){.lc-tip:hover::after,.lc-tip:focus::after{position:fixed;left:16px;right:16px;bottom:16px;
+    width:auto;font-size:13px;padding:10px 12px}}
+  .lc-ph{margin:0;padding:12px 18px 14px;font-size:13px;color:var(--faint);border-bottom:1px solid var(--line)}
+  .lc-psec-h{display:flex;align-items:center;gap:9px;padding:12px 18px 4px;font-weight:700;font-size:14px}
+  .lc-psec-h .lc-ico{width:20px;height:20px;font-size:11.5px}
+  .lc-psec .lc-row{padding-left:18px}
+  .lc-more summary{padding:12px 18px;cursor:pointer;font-weight:600;font-size:14px;color:var(--blue)}
+  .lc-more[open] summary{border-bottom:1px solid var(--line)}
+  .lc-more .lc-row:last-child{border-bottom:0}
+  .lc-foot{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;
+    padding:14px;border-top:1px solid var(--line)}
+  @media(min-width:900px){.lc-foot{padding:16px 26px}}
+  .lc-stat{display:flex;align-items:flex-start;gap:10px;flex:1;min-width:240px;color:var(--muted);font-size:14px}
+  .lc-sti{flex:none;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;margin-top:1px;
+    border:1.5px solid var(--faint);border-radius:50%;color:var(--faint);font-size:11px;font-weight:700;line-height:1;font-style:normal}
+  .lc-acts{display:flex;gap:8px;flex-wrap:wrap}
+  .lc-acts [hidden]{display:none}
+  .lc-dl{display:inline-flex;align-items:center;gap:8px;text-decoration:none}
+  .lc-dl[aria-disabled="true"]{opacity:.45;cursor:default}
   .sa-drop.loaded{border-style:solid;border-color:#1e9e63;background:#f2fbf7}
   .sa-drop.loaded h3{color:#116b42}
   /* Once loaded, the invisible full-area input must not swallow clicks —
@@ -1841,7 +1937,7 @@ const HELP={
   "keyword-combiner":{input:`Best source words: <b>Advertising console → Sponsored ads reports → Search term report</b> — the words customers actually type.`,
     steps:["Paste word lists into A, B and (optionally) C — one term per line.","Pick broad / \"phrase\" / [exact] wrapping; enable reversed A↔B if word order matters.","Copy all combinations into your PPC campaign."]},
   "label-cropper":{tag:"Input — the label PDF from your seller panel",input:`<b>Amazon:</b> <b>Orders → Manage Orders</b> → tick your unshipped Easy Ship orders → <b>Print label &amp; invoice</b>.<br><b>Flipkart / Shopsy:</b> Seller Hub → <b>Orders</b> → select the orders → download the <b>label</b> PDF (label and invoice on one A4 page).<br><b>Meesho:</b> Supplier Panel → <b>Orders → Ready to Ship</b> → select the orders → <b>Label</b> (the <i>Sub_Order_Labels</i> PDF).<br>Drop the files here — several at once, from different marketplaces, is fine.`,
-    steps:["Drop the PDF(s). Marketplace is detected page by page; Flipkart and Meesho labels are cut out along their own border. Labels come out SKU-wise by default, with Qty 2, 3… orders at the top of each SKU (switch to courier-wise, marketplace-wise, Qty or original order if you prefer).","Pick the output: 4×6 thermal, or A4 with 1 or 4 labels per sheet. Invoices: “Auto” keeps Meesho's invoice on its label page and leaves the others out; or put them on the same page as the label (Meesho, Flipkart), on the next page, in a separate PDF, or leave them out. A Meesho label printed on its own turns sideways to fill the 4×6 — switch to “Keep upright” if you prefer.","Keep \"SKU | Qty on label\" and \"Page numbers\" on — packers see the product, and 1 / 2 / 3… makes the printed stack easy to count and verify (put the number at the bottom if your printer cuts off the top edge). The SKU | Qty prints after the invoice table (like Amazon's own caption) by default, or in a top/bottom strip; add the Order List page first or last.","Check the preview, download, print."]},
+    steps:["Pick a tab: <b>All platforms</b> detects the marketplace page by page (mixed files are fine), or choose Amazon, Flipkart or Meesho. Drop the PDF(s) — cropping starts at once, and Flipkart and Meesho labels are cut out along their own border.","Print Settings apply straight away. By default each courier's labels come out together, SKU-wise inside each courier with Qty 2, 3… orders first; switch the groups and the quantity order to suit your packing desk.","Each marketplace's own options appear once one of its files is read: whether its invoice is included, on the same page or the next, and (Amazon and other labels) where the label sits on the page. A Meesho label printed on its own turns sideways to fill the 4×6.","Keep the label numbers and the SKU | Qty line on — packers see the product, and 1 / 23, 2 / 23… makes the stack easy to count (More options moves them, e.g. the number to the top). The summary page lists every SKU, seller and courier with label numbers.","Check the preview, then Download PDF and print."]},
   "order-printer":{input:`<b>Orders → Order Reports → Unshipped Orders</b> → Request report → Download (a .txt file). If you want customer addresses on packing slips, enable the address columns in the report settings on that page.`,
     steps:["Drop the report file.","Print the picklist — total units per SKU, one trip to the shelf.","Print packing slips — one per order, each on its own page."]},
   "settlement-analyzer":{input:`<b>Payments → All Statements</b> → pick a closed settlement → <b>Download Flat File V2</b> (a .txt file). Any completed settlement period works.`,
@@ -8184,7 +8280,7 @@ const CROP_PRESETS={
   "full":{name:"Full page (resize to 4×6) — Recommended for Amazon labels",left:0,top:0,width:100,height:100},
   "custom":{name:"Custom (set % below)",left:0,top:0,width:50,height:50},
 };
-let lcFiles=[], lcBusy=false, lcPageInfo=[];
+let lcFiles=[], lcBusy=false, lcAgain=false, lcPageInfo=[];
 
 /* Nothing reaches a printed caption without passing through here. pdf.js
    returns raw glyph ids as text when a PDF's font carries no usable
@@ -8339,124 +8435,124 @@ function lcBody(){
   // "top" default implicitly, so those values (and the legacy "yes") migrate
   // once; an explicit "No" is kept, and choices made after this stick via pnum2.
   const pnumSaved=saved.pnum2||(saved.pnum==="no"?"no":"bot");
-  // inv2: invoices default to "auto" now (Meesho keeps its invoice on the
-  // label page, as the full-page crop always did; others leave it out).
-  // Every run saved the old "none" default implicitly, so it migrates
-  // once; any other choice is kept, and later choices stick via inv2.
-  const invSaved=saved.inv2||(saved.invMode&&saved.invMode!=="none"?saved.invMode:"auto");
-  const platSaved=saved.plat||"auto";
+  // sort3: sorting is three switches and a direction now. The old single
+  // choice maps across; its implicit default ("sku", saved on every run)
+  // takes the new default, which also groups by courier — each courier's
+  // parcels together for its pickup.
+  const sortSaved=saved.sort3||({
+    courier:{q:"desc",sku:true,cour:true,mkt:false}, mkt:{q:"desc",sku:true,cour:false,mkt:true},
+    qty:{q:"desc",sku:false,cour:false,mkt:false}, qtyasc:{q:"asc",sku:false,cour:false,mkt:false},
+    orig:{q:"none",sku:false,cour:false,mkt:false},
+  }[saved.sort]||{q:"desc",sku:true,cour:true,mkt:false});
+  // inv3: invoices are set per marketplace now. inv2 (one choice for all,
+  // itself migrated from invMode) maps across; its "auto" was Meesho's
+  // invoice on the label page and the rest left out.
+  const invOld=saved.inv2||(saved.invMode&&saved.invMode!=="none"?saved.invMode:"auto");
+  const invAll=(inc,newp,sep)=>({m:{inc,newp},f:{inc,newp},a:{inc},sep});
+  const invSaved=saved.inv3||{none:invAll(false,false,false),same:invAll(true,false,false),
+    interleave:invAll(true,true,false),separate:invAll(true,false,true)}[invOld]
+    ||{m:{inc:true,newp:false},f:{inc:false,newp:false},a:{inc:false},sep:false};
+  let curPlat=saved.plat||"auto";
   lcFiles=[];
+  const PLATS=[["auto",`All<span class="lc-long"> platforms</span>`],["amazon","Amazon"],["flipkart","Flipkart"],["meesho","Meesho"]];
+  const icon=p=>p==="auto"
+    ?`<span class="lc-ico all" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/></svg></span>`
+    :`<span class="lc-ico ${p}" aria-hidden="true">${{amazon:"a",flipkart:"f",meesho:"m"}[p]}</span>`;
+  const tip=t=>`<i class="lc-tip" tabindex="0" role="img" aria-label="${esc(t)}" data-tip="${esc(t)}">i</i>`;
+  const ck=(id,on,text,t)=>`<div class="lc-row"><label class="lc-ck"><input type="checkbox" id="${id}"${on?" checked":""}> ${text}</label>${t?tip(t):""}</div>`;
+  const sel=(id,label,val,opts)=>`<div class="lc-row lc-selrow"><label for="${id}">${label}</label><select id="${id}">${
+    opts.map(([v,t])=>`<option value="${v}"${v===val?" selected":""}>${t}</option>`).join("")}</select></div>`;
   app.innerHTML=`
     <div class="wrap page">
-      <div class="lc-h2row"><h1>Label Cropper — Amazon, Flipkart &amp; Meesho</h1>
+      <div class="lc-h2row"><h1>Label Cropper</h1>
         <div class="lc-odo" id="lc-odo" hidden aria-label="Labels cropped so far">
           <div class="lc-odo-digits" id="lc-odo-digits"></div>
           <div class="lc-odo-cap">Labels cropped</div>
         </div></div>
-      <p class="lede">Drop your Amazon, Flipkart or Meesho label PDFs — even all three at once — and get clean, print-ready 4×6 labels. Each page's marketplace is detected and its label is trimmed to its border, with the tax invoice handled per your choice below. Labels come out SKU-wise by default (or courier-wise), each with a page number so the stack is easy to verify, and an Order List page counts every SKU and courier.</p>
+      <p class="lede">Crop Amazon, Flipkart and Meesho label PDFs down to the label, sort the batch by courier and SKU, and print on 4×6 or A4 — free, with your files never leaving your browser.</p>
       ${helpHtml("label-cropper")}
-      <label class="sa-drop" id="lc-drop">
-        <div class="ico">🏷️</div>
-        <h3>Drop label PDF(s) here</h3>
-        <p>or click to choose — you can select multiple files</p>
-        <input type="file" id="lc-file" accept="application/pdf,.pdf" multiple>
-      </label>
-      <div class="sa-priv">🔒 Private by design — PDFs are processed entirely in your browser and never uploaded. Most label-cropping sites send your PDFs (with your customers' names and addresses) to their servers; this one can't, even in principle.</div>
-      <div class="card" style="margin-top:14px">
-        <label for="lc-plat">Marketplace</label>
-        <select id="lc-plat">
-          <option value="auto"${platSaved==="auto"?" selected":""}>Auto-detect — Amazon, Flipkart, Meesho (mixed files are fine)</option>
-          <option value="amazon"${platSaved==="amazon"?" selected":""}>Amazon (or other) — use the label position below</option>
-          <option value="flipkart"${platSaved==="flipkart"?" selected":""}>Flipkart / Shopsy</option>
-          <option value="meesho"${platSaved==="meesho"?" selected":""}>Meesho</option>
-        </select>
-        <div id="lc-cropbox">
-        <label for="lc-preset" style="margin-top:12px">Label position on the page — Amazon &amp; other labels <span style="font-weight:400;color:var(--muted)">(Flipkart and Meesho labels are found automatically)</span></label>
-        <select id="lc-preset">${Object.entries(CROP_PRESETS).map(([k,p])=>`<option value="${k}"${k===preset?" selected":""}>${esc(p.name)}</option>`).join("")}</select>
-        <div class="cropgrid" style="margin-top:12px">
-          <div><label for="lc-left">From left (%)</label><input id="lc-left" inputmode="decimal" value="${c.left}"></div>
-          <div><label for="lc-top">From top (%)</label><input id="lc-top" inputmode="decimal" value="${c.top}"></div>
-          <div><label for="lc-w">Width (%)</label><input id="lc-w" inputmode="decimal" value="${c.width}"></div>
-          <div><label for="lc-h">Height (%)</label><input id="lc-h" inputmode="decimal" value="${c.height}"></div>
+      <div class="lc-shell">
+        <div class="lc-tabs" role="tablist" aria-label="Marketplace">${PLATS.map(([p,t])=>
+          `<button type="button" class="lc-tab" role="tab" data-plat="${p}" aria-selected="${p===curPlat}">${icon(p)}<span>${t}</span></button>`).join("")}</div>
+        <div class="lc-panel">
+          <div class="lc-grid">
+            <div class="lc-box">
+              <div class="lc-box-h" id="lc-uptitle">Upload label PDFs</div>
+              <div class="lc-box-b">
+                <label class="lc-drop" id="lc-drop">
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9a4 4 0 0 1 .5 7.97"/><path d="M12 12v8"/><path d="M8.8 15.2 12 12l3.2 3.2"/></svg>
+                  <b>Drop PDF files here</b>
+                  <span class="sub">Single or multiple files · PDF only · mix marketplaces freely</span>
+                  <span class="lc-browse">Browse files</span>
+                  <input type="file" id="lc-file" accept="application/pdf,.pdf" multiple>
+                </label>
+                <div id="lc-files"></div>
+                <div class="lc-priv">🔒 Processed entirely in your browser — your customers' names and addresses are never uploaded anywhere.</div>
+              </div>
+            </div>
+            <aside class="lc-box lc-set" id="lc-set" aria-label="Print settings">
+              <div class="lc-box-h">Print Settings <small id="lc-scope"></small></div>
+              <div class="lc-sec">Every PDF</div>
+              ${sel("lc-fmt","Paper",saved.fmt||"4x6",[["4x6","4×6 thermal"],["a4-4up","A4 — 4 labels per sheet"],["a4-1up","A4 — 1 label per sheet"]])}
+              ${ck("lc-pnum",pnumSaved!=="no","Number the labels (3 / 23)","Prints 1 / 23, 2 / 23 … on every label, so the printed stack is easy to count and a missing one stands out.")}
+              ${ck("lc-olist",olistSaved!=="no","Add summary (Order List page)","An extra page listing every SKU and courier with quantities and label numbers. For checking only — not a shipping label.")}
+              ${ck("lc-skuon",skuPosSaved!=="no","Print SKU | Qty on each label","The SKU and quantity in bold under each label, so the packer sees what goes in the parcel.")}
+              <div class="lc-row lc-stack">
+                <div class="lc-rowh">Sort by quantity ${tip("Descending puts multi-unit orders first; Ascending puts single units first; Off keeps them in file order. Equal quantities keep their file order.")}</div>
+                <div class="lc-radios" role="radiogroup" aria-label="Sort by quantity">${[["asc","Ascending"],["desc","Descending"],["none","Off"]].map(([v,t])=>
+                  `<label><input type="radio" name="lc-q" value="${v}"${sortSaved.q===v?" checked":""}> ${t}</label>`).join("")}</div>
+              </div>
+              ${ck("lc-gsku",sortSaved.sku,"Group identical SKUs together","All labels for one SKU print one after another, SKUs A→Z.")}
+              ${ck("lc-gcour",sortSaved.cour,"Group by courier","Each courier's labels print together, couriers in the order they first appear in your files — so each pickup gets its own pile.")}
+              <div id="lc-gmkt-row">${ck("lc-gmkt",sortSaved.mkt,"Group by marketplace","Amazon, Flipkart and Meesho labels print as separate piles.")}</div>
+              ${ck("lc-sep",invSaved.sep,"Invoices in a separate PDF","Every invoice you include goes into its own PDF instead of between the labels.")}
+              <div class="lc-sec">Platform-specific</div>
+              <p class="lc-ph" id="lc-ph">Each marketplace's own options appear here once one of its files is read.</p>
+              <div class="lc-psec" data-p="meesho" hidden>
+                <div class="lc-psec-h">${icon("meesho")} Meesho</div>
+                ${ck("lc-m-inv",invSaved.m.inc,"Include invoice","Keeps Meesho's tax invoice with the label. Off prints the label only.")}
+                ${ck("lc-m-newp",invSaved.m.newp,"Invoice on new page","Prints the invoice on the page after its label instead of under it.")}
+                ${ck("lc-m-wide",saved.wide!=="up","Turn label sideways on 4×6","Meesho's label is wider than tall. Printed on its own, turned sideways, it comes out about 1.5× bigger on a 4×6 sticker.")}
+              </div>
+              <div class="lc-psec" data-p="flipkart" hidden>
+                <div class="lc-psec-h">${icon("flipkart")} Flipkart / Shopsy</div>
+                ${ck("lc-f-inv",invSaved.f.inc,"Include invoice","Keeps Flipkart's tax invoice with the label. Off prints the label only.")}
+                ${ck("lc-f-newp",invSaved.f.newp,"Invoice on new page","Prints the invoice on the page after its label instead of under it.")}
+              </div>
+              <div class="lc-psec" data-p="amazon" hidden>
+                <div class="lc-psec-h">${icon("amazon")} Amazon &amp; other labels</div>
+                ${ck("lc-a-inv",invSaved.a.inc,"Include invoice (next page)","Prints each order's invoice on the page after its label.")}
+                <div class="lc-row lc-stack">
+                  <label for="lc-preset" class="lc-rowh">Label position on the page</label>
+                  <select id="lc-preset">${Object.entries(CROP_PRESETS).map(([k,p])=>`<option value="${k}"${k===preset?" selected":""}>${esc(p.name)}</option>`).join("")}</select>
+                  <div class="cropgrid lc-cropgrid">
+                    <div><label for="lc-left">From left (%)</label><input id="lc-left" inputmode="decimal" value="${c.left}"></div>
+                    <div><label for="lc-top">From top (%)</label><input id="lc-top" inputmode="decimal" value="${c.top}"></div>
+                    <div><label for="lc-w">Width (%)</label><input id="lc-w" inputmode="decimal" value="${c.width}"></div>
+                    <div><label for="lc-h">Height (%)</label><input id="lc-h" inputmode="decimal" value="${c.height}"></div>
+                  </div>
+                </div>
+                ${sel("lc-invpos","Invoice area",saved.invPos||"full",[["full","Full original page"],["right","Right half"],["bottom","Bottom half"]])}
+                ${sel("lc-split","Labels per page",saved.split||"auto",[["auto","Auto detect"],["1","1"],["2","2 — stacked"]])}
+              </div>
+              <details class="lc-more">
+                <summary>More options</summary>
+                ${sel("lc-pnumpos","Label number at",pnumSaved==="top"?"top":"bot",[["bot","Bottom"],["top","Top"]])}
+                ${sel("lc-skupos","SKU | Qty at",skuPosSaved==="no"?"mid":skuPosSaved,[["mid","Under the label"],["top","Top strip"],["bot","Bottom strip"]])}
+                ${sel("lc-olistpos","Summary page",olistSaved==="first"?"first":"last",[["last","Last page"],["first","First page"]])}
+                ${ck("lc-dt",saved.dt==="yes","Date and time on each label","Prints when the batch was cropped, in the top strip.")}
+                ${ck("lc-blank",saved.blank!=="keep","Skip blank pages","Drops empty pages some downloads are padded with.")}
+              </details>
+            </aside>
+          </div>
+          <div class="lc-foot">
+            <div class="lc-stat"><i class="lc-sti" aria-hidden="true">i</i><span id="lc-status" role="status">Add label PDFs from any marketplace to begin.</span></div>
+            <div class="lc-acts">
+              <a class="bigbtn sec" id="lc-dl2" hidden download="invoices.pdf">Download invoices</a>
+              <a class="bigbtn lc-dl" id="lc-dl" aria-disabled="true" download="labels.pdf"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg> Download PDF</a>
+            </div>
+          </div>
         </div>
-        </div>
-        <div class="cropgrid" style="margin-top:12px">
-          <div style="grid-column:span 2"><label for="lc-fmt">Output format</label>
-            <select id="lc-fmt">
-              <option value="4x6"${(saved.fmt||"4x6")==="4x6"?" selected":""}>4×6 thermal — one label per page</option>
-              <option value="a4-4up"${saved.fmt==="a4-4up"?" selected":""}>A4 sheet — 4 labels per page (normal printer)</option>
-              <option value="a4-1up"${saved.fmt==="a4-1up"?" selected":""}>A4 sheet — one label per page</option>
-            </select></div>
-          <div><label for="lc-inv">Invoices</label>
-            <select id="lc-inv">
-              <option value="auto"${invSaved==="auto"?" selected":""}>Auto (Meesho: on label)</option>
-              <option value="none"${invSaved==="none"?" selected":""}>Don't include</option>
-              <option value="same"${invSaved==="same"?" selected":""}>Same page as label</option>
-              <option value="interleave"${invSaved==="interleave"?" selected":""}>Next page after label</option>
-              <option value="separate"${invSaved==="separate"?" selected":""}>Separate PDF</option>
-            </select></div>
-          <div id="lc-invpos-wrap"><label for="lc-invpos">Amazon invoice area</label>
-            <select id="lc-invpos">
-              <option value="full"${(saved.invPos||"full")==="full"?" selected":""}>Full original page</option>
-              <option value="right"${saved.invPos==="right"?" selected":""}>Right half</option>
-              <option value="bottom"${saved.invPos==="bottom"?" selected":""}>Bottom half</option>
-            </select></div>
-          <div><label for="lc-sort">Sorting</label>
-            <select id="lc-sort">
-              <option value="sku"${(saved.sort||"sku")==="sku"?" selected":""}>SKU-wise (A→Z), bigger Qty first</option>
-              <option value="courier"${saved.sort==="courier"?" selected":""}>Courier-wise, then SKU</option>
-              <option value="mkt"${saved.sort==="mkt"?" selected":""}>Marketplace-wise, then SKU</option>
-              <option value="qty"${saved.sort==="qty"?" selected":""}>Qty — high to low</option>
-              <option value="qtyasc"${saved.sort==="qtyasc"?" selected":""}>Qty — low to high</option>
-              <option value="orig"${saved.sort==="orig"?" selected":""}>Original order</option>
-            </select></div>
-          <div><label for="lc-wide">Meesho label on 4×6</label>
-            <select id="lc-wide">
-              <option value="rot"${(saved.wide||"rot")==="rot"?" selected":""}>Turn sideways — bigger print</option>
-              <option value="up"${saved.wide==="up"?" selected":""}>Keep upright</option>
-            </select></div>
-          <div><label for="lc-skuprint">SKU | Qty on label</label>
-            <select id="lc-skuprint">
-              <option value="mid"${skuPosSaved==="mid"?" selected":""}>Yes — middle (after invoice table)</option>
-              <option value="top"${skuPosSaved==="top"?" selected":""}>Yes — top strip</option>
-              <option value="bot"${skuPosSaved==="bot"?" selected":""}>Yes — bottom strip</option>
-              <option value="no"${skuPosSaved==="no"?" selected":""}>No</option>
-            </select></div>
-          <div><label for="lc-pagenum">Page numbers</label>
-            <select id="lc-pagenum">
-              <option value="bot"${pnumSaved==="bot"?" selected":""}>Yes — bottom</option>
-              <option value="top"${pnumSaved==="top"?" selected":""}>Yes — top</option>
-              <option value="no"${pnumSaved==="no"?" selected":""}>No</option>
-            </select></div>
-          <div><label for="lc-olist">Order list page</label>
-            <select id="lc-olist">
-              <option value="last"${olistSaved==="last"?" selected":""}>Yes — last page</option>
-              <option value="first"${olistSaved==="first"?" selected":""}>Yes — first page</option>
-              <option value="no"${olistSaved==="no"?" selected":""}>No</option>
-            </select></div>
-          <div><label for="lc-split">Labels per page</label>
-            <select id="lc-split">
-              <option value="auto"${(saved.split||"auto")==="auto"?" selected":""}>Auto detect</option>
-              <option value="1"${saved.split==="1"?" selected":""}>1</option>
-              <option value="2"${saved.split==="2"?" selected":""}>2 — stacked</option>
-            </select></div>
-          <div><label for="lc-datetime">Date/time on label</label>
-            <select id="lc-datetime">
-              <option value="no"${(saved.dt||"no")==="no"?" selected":""}>No</option>
-              <option value="yes"${saved.dt==="yes"?" selected":""}>Yes — in top strip</option>
-            </select></div>
-          <div><label for="lc-blank">Blank pages</label>
-            <select id="lc-blank">
-              <option value="skip"${(saved.blank||"skip")==="skip"?" selected":""}>Skip automatically</option>
-              <option value="keep"${saved.blank==="keep"?" selected":""}>Keep</option>
-            </select></div>
-        </div>
-        <div class="optrow" style="margin-bottom:0">
-          <button class="bigbtn" id="lc-go" disabled>Crop labels</button>
-          <a class="bigbtn sec" id="lc-dl" style="display:none" download="labels.pdf">Download labels</a>
-          <a class="bigbtn sec" id="lc-dl2" style="display:none" download="invoices.pdf">Download invoices</a>
-        </div>
-        <div class="note" id="lc-status" style="margin:10px 0 0">Waiting for a PDF…</div>
       </div>
       <div id="lc-skus"></div>
       <div id="lc-prev"></div>
@@ -8493,80 +8589,129 @@ function lcBody(){
       body:JSON.stringify({tool:"label-cropper",n})}).catch(()=>{}); }catch(e){}
   };
   const status=t=>{document.getElementById("lc-status").textContent=t;};
-  ["dragenter","dragover"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add("over");}));
-  ["dragleave","drop"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove("over");}));
+  const $=id=>document.getElementById(id);
+  const dl=$("lc-dl");
+  const setDl=on=>{ if(on) dl.removeAttribute("aria-disabled"); else dl.setAttribute("aria-disabled","true"); };
+  dl.addEventListener("click",e=>{ if(dl.getAttribute("aria-disabled")) e.preventDefault(); });
+  // Marketplaces found in the last run: "amazon" stands for every label
+  // cropped by the position settings (Amazon and anything unrecognised).
+  let lcSeen=new Set(), lcFileInfo=[];
+  const syncUi=()=>{
+    for(const b of document.querySelectorAll(".lc-tab")) b.setAttribute("aria-selected",String(b.dataset.plat===curPlat));
+    const name={auto:"All platforms",amazon:"Amazon",flipkart:"Flipkart",meesho:"Meesho"}[curPlat];
+    $("lc-uptitle").textContent=curPlat==="auto"?"Upload Amazon, Flipkart and Meesho label PDFs":`Upload ${name} label PDFs`;
+    $("lc-scope").textContent=name;
+    let any=false;
+    for(const s of document.querySelectorAll(".lc-psec")){
+      const show=curPlat==="auto"?lcSeen.has(s.dataset.p):s.dataset.p===curPlat;
+      s.hidden=!show; any=any||show;
+    }
+    $("lc-ph").hidden=any;
+    $("lc-gmkt-row").hidden=curPlat!=="auto";
+    // Invoice-on-new-page only means something while the invoice is kept.
+    for(const [inc,np] of [["lc-m-inv","lc-m-newp"],["lc-f-inv","lc-f-newp"]]){
+      $(np).disabled=!$(inc).checked||$("lc-sep").checked;
+      $(np).closest(".lc-row").classList.toggle("off",$(np).disabled);
+    }
+    for(const id of ["lc-pnumpos","lc-skupos","lc-olistpos"]) $(id).closest(".lc-row").classList.toggle("off",
+      !$({"lc-pnumpos":"lc-pnum","lc-skupos":"lc-skuon","lc-olistpos":"lc-olist"}[id]).checked);
+  };
+  const radio=n=>(document.querySelector(`input[name="${n}"]:checked`)||{}).value;
+  const readSettings=()=>({
+    plat:curPlat, fmt:$("lc-fmt").value,
+    pnum:$("lc-pnum").checked?$("lc-pnumpos").value:"no",
+    olist:$("lc-olist").checked?$("lc-olistpos").value:"no",
+    sku:$("lc-skuon").checked?$("lc-skupos").value:"no",
+    dt:$("lc-dt").checked, blank:$("lc-blank").checked, split:$("lc-split").value,
+    wide:$("lc-m-wide").checked, invPos:$("lc-invpos").value, preset:$("lc-preset").value,
+    crop:{
+      left:Math.max(0,parseFloat($("lc-left").value)||0),
+      top:Math.max(0,parseFloat($("lc-top").value)||0),
+      width:Math.min(100,Math.max(1,parseFloat($("lc-w").value)||50)),
+      height:Math.min(100,Math.max(1,parseFloat($("lc-h").value)||50)),
+    },
+    sort:{q:radio("lc-q")||"desc",sku:$("lc-gsku").checked,cour:$("lc-gcour").checked,mkt:$("lc-gmkt").checked},
+    inv:{m:{inc:$("lc-m-inv").checked,newp:$("lc-m-newp").checked},
+         f:{inc:$("lc-f-inv").checked,newp:$("lc-f-newp").checked},
+         a:{inc:$("lc-a-inv").checked},sep:$("lc-sep").checked},
+  });
+  const saveSettings=S=>{
+    try{localStorage.setItem("lc_crop",JSON.stringify({preset:S.preset,custom:S.crop,fmt:S.fmt,invPos:S.invPos,
+      skuPrint:S.sku,pnum2:S.pnum,olist2:S.olist,split:S.split,dt:S.dt?"yes":"no",blank:S.blank?"skip":"keep",
+      plat:S.plat,wide:S.wide?"rot":"up",sort3:S.sort,inv3:S.inv}));}catch(e){}
+  };
+  // Files are kept across drops (a Flipkart file and a Meesho file can come
+  // from two downloads); the same file twice is taken once.
+  const fileRows=()=>{
+    $("lc-files").innerHTML=lcFiles.map((f,k)=>{
+      const fi=lcFileInfo[k];
+      const meta=[(f.size/1048576).toFixed(f.size<1048576?2:1)+" MB",fi&&fi.pages?fi.pages+" page"+(fi.pages===1?"":"s"):"",fi&&fi.mkts?fi.mkts:""].filter(Boolean).join(" · ");
+      return `<div class="lc-file"><span class="lc-fico" aria-hidden="true">PDF</span><span class="nm" title="${esc(f.name)}">${esc(f.name)}</span><span class="meta">${esc(meta)}</span><button type="button" class="x" data-k="${k}" aria-label="Remove ${esc(f.name)}">×</button></div>`;
+    }).join("");
+  };
+  let runTimer=null;
+  const schedule=(ms)=>{ clearTimeout(runTimer); if(lcFiles.length) runTimer=setTimeout(()=>lcProcess(false),ms==null?350:ms); };
   const take=list=>{
     const files=[...list].filter(f=>/pdf$/i.test(f.name)||f.type==="application/pdf");
     if(!files.length){status("That doesn't look like a PDF.");return;}
-    lcFiles=files;
-    document.getElementById("lc-go").disabled=false;
-    const names=lcFiles.map(f=>f.name).join(", ");
-    const mb=(lcFiles.reduce((s,f)=>s+f.size,0)/1048576).toFixed(1);
-    drop.classList.add("loaded");
-    drop.querySelector(".ico").textContent="✅";
-    drop.querySelector("h3").textContent=`${lcFiles.length} file(s) loaded (${mb} MB)`;
-    drop.querySelector("p").innerHTML=`${esc(names)}<br><span class="sa-change">Choose different file(s)</span>`;
-    status(`${lcFiles.length} file(s) ready — ${names}. Click "Crop labels".`);
+    for(const f of files) if(!lcFiles.some(g=>g.name===f.name&&g.size===f.size&&g.lastModified===f.lastModified)) lcFiles.push(f);
+    lcFileInfo=[];
+    fileRows();
+    status(`${lcFiles.length} file(s) loaded — cropping…`);
+    schedule(0);
   };
+  ["dragenter","dragover"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add("over");}));
+  ["dragleave","drop"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove("over");}));
   drop.addEventListener("drop",ev=>take(ev.dataTransfer.files));
   file.addEventListener("change",()=>{take(file.files);file.value="";});
-  // Once loaded, an accidental click can't silently restart the file
-  // picker — replacing files takes the explicit "Choose different" link
-  // (dropping new files on the area still works).
-  // (Once loaded the input has pointer-events:none, so a click targeting
-  // it can only be the label forwarding the "Choose different" click.)
-  drop.addEventListener("click",e=>{if(lcFiles.length&&e.target!==file&&!e.target.closest(".sa-change"))e.preventDefault();});
-  document.getElementById("lc-preset").addEventListener("change",e=>{
-    const p=CROP_PRESETS[e.target.value];
-    if(p&&e.target.value!=="custom"){
-      document.getElementById("lc-left").value=p.left;
-      document.getElementById("lc-top").value=p.top;
-      document.getElementById("lc-w").value=p.width;
-      document.getElementById("lc-h").value=p.height;
+  $("lc-files").addEventListener("click",e=>{
+    const b=e.target.closest("button.x"); if(!b) return;
+    lcFiles.splice(+b.dataset.k,1); lcFileInfo=[]; fileRows();
+    if(lcFiles.length){ status("Cropping…"); schedule(0); }
+    else{
+      revokeUrls([dl.dataset.blob,$("lc-dl2").dataset.blob]);
+      dl.removeAttribute("href"); delete dl.dataset.blob; setDl(false); $("lc-dl2").hidden=true;
+      $("lc-skus").innerHTML=""; $("lc-prev").innerHTML="";
+      lcSeen=new Set(); syncUi(); status("Add label PDFs from any marketplace to begin.");
     }
   });
-  const invPosWrap=document.getElementById("lc-invpos-wrap"),invSel=document.getElementById("lc-inv");
-  const platSel=document.getElementById("lc-plat"),cropBox=document.getElementById("lc-cropbox");
-  // The crop settings and the invoice area only apply to Amazon / other
-  // labels — dim them when every page will be found automatically.
-  const syncInv=()=>{
-    const boxed=platSel.value==="flipkart"||platSel.value==="meesho";
-    invPosWrap.style.opacity=invSel.value==="none"||invSel.value==="auto"||boxed?"0.45":"1";
-    cropBox.style.opacity=boxed?"0.45":"1";
-  };
-  invSel.addEventListener("change",syncInv);platSel.addEventListener("change",syncInv);syncInv();
+  for(const b of document.querySelectorAll(".lc-tab")) b.addEventListener("click",()=>{
+    if(curPlat===b.dataset.plat) return;
+    curPlat=b.dataset.plat; syncUi(); saveSettings(readSettings()); schedule(0);
+  });
+  $("lc-preset").addEventListener("change",e=>{
+    const p=CROP_PRESETS[e.target.value];
+    if(p&&e.target.value!=="custom"){
+      $("lc-left").value=p.left; $("lc-top").value=p.top; $("lc-w").value=p.width; $("lc-h").value=p.height;
+    }
+  });
+  // Any change in Print Settings is saved and re-crops the loaded files.
+  $("lc-set").addEventListener("change",()=>{ syncUi(); saveSettings(readSettings()); schedule(); });
+  syncUi();
   const lcProcess=async(useStored)=>{
-    if(lcBusy||!lcFiles.length)return;
-    lcBusy=true;
-    const btn=document.getElementById("lc-go");btn.disabled=true;
+    if(!lcFiles.length) return;
+    // A change made while a batch is cropping runs again right after it.
+    if(lcBusy){ lcAgain=true; return; }
+    lcBusy=true; lcAgain=false; setDl(false);
     try{
       status("Loading PDF engine…");
       await loadPdfLib();
       status("Processing…");
-      const presetKey=document.getElementById("lc-preset").value;
-      const crop={
-        left:Math.max(0,parseFloat(document.getElementById("lc-left").value)||0),
-        top:Math.max(0,parseFloat(document.getElementById("lc-top").value)||0),
-        width:Math.min(100,Math.max(1,parseFloat(document.getElementById("lc-w").value)||50)),
-        height:Math.min(100,Math.max(1,parseFloat(document.getElementById("lc-h").value)||50)),
-      };
-      const fmt=document.getElementById("lc-fmt").value;
-      const invMode=invSel.value;
-      const invPos=document.getElementById("lc-invpos").value;
-      const skuPos=document.getElementById("lc-skuprint").value; // mid | top | bot | no
+      const S=readSettings();
+      saveSettings(S);
+      const presetKey=S.preset, crop=S.crop, fmt=S.fmt, invPos=S.invPos;
+      const skuPos=S.sku; // mid | top | bot | no
       const skuPrint=skuPos!=="no";
-      const sortMode=document.getElementById("lc-sort").value; // sku | courier | mkt | qty | qtyasc | orig
-      const numPos=document.getElementById("lc-pagenum").value; // top | bot | no
+      const srt=S.sort, inv=S.inv;
+      const numPos=S.pnum; // top | bot | no
       const numPrint=numPos!=="no";
-      const olist=document.getElementById("lc-olist").value; // last | first | no
-      const splitSel=document.getElementById("lc-split").value; // auto | 1 | 2
-      const dtPrint=document.getElementById("lc-datetime").value==="yes";
-      const blankSkip=document.getElementById("lc-blank").value!=="keep";
-      const platMode=platSel.value; // auto | amazon | flipkart | meesho
-      const wideRot=document.getElementById("lc-wide").value!=="up";
+      const olist=S.olist; // last | first | no
+      const splitSel=S.split; // auto | 1 | 2
+      const dtPrint=S.dt, blankSkip=S.blank;
+      const platMode=S.plat; // auto | amazon | flipkart | meesho
+      const wideRot=S.wide;
       // One stamp for the whole batch, e.g. "30 Jul 2026, 6:45 am".
       const dtStamp=new Date().toLocaleString("en-IN",{day:"numeric",month:"short",year:"numeric",hour:"numeric",minute:"2-digit",hour12:true});
-      try{localStorage.setItem("lc_crop",JSON.stringify({preset:presetKey,custom:crop,fmt,inv2:invMode,invPos,skuPrint:skuPos,sort:sortMode,pnum2:numPos,olist2:olist,split:splitSel,dt:dtPrint?"yes":"no",blank:blankSkip?"skip":"keep",plat:platMode,wide:wideRot?"rot":"up"}));}catch(e){}
       const A4W=595.28,A4H=841.89;
       const white=()=>PDFLib.rgb(1,1,1);
 
@@ -8894,6 +9039,12 @@ function lcBody(){
               hdr=sa?posItems.filter(t=>t.y>sa.y+2).map(t=>t.s).join(" "):text.split(/Shipping\s*\/\s*Customer|Sold\s+By/i)[0];
             }
             info.courier=lcCourierOf(hdr);
+            // Seller account, for the summary: Meesho's return-to name,
+            // otherwise the "Sold By" / "Ship From" name.
+            const iu=posItems.findIndex(t=>/If undelivered,?\s*return to/i.test(t.s));
+            const seller=iu>=0?(posItems.slice(iu+1).find(t=>t.s.trim())||{s:""}).s
+              :(text.match(/\b(?:Sold\s+By|Ship\s+From)\s*:?\s*([A-Za-z0-9][^,:]{2,50}?)\s*(?:,|GSTIN|$)/i)||[])[1];
+            info.seller=lcSkuSafe((seller||"").trim()).slice(0,40);
           }
           }finally{ if(pdoc.destroy) await pdoc.destroy(); }
         }
@@ -8977,39 +9128,48 @@ function lcBody(){
           if(!x.qty&&iv.qty) x.qty=iv.qty;
           if(!x.items&&iv.items) x.items=iv.items;
           if(!x.plat&&iv.plat) x.plat=iv.plat;
+          if(!x.seller&&iv.seller) x.seller=iv.seller;
         }
       }
-      // Labels only. SKU-wise is the default sort; unrecognised SKUs go
-      // last in their original order. Within one SKU, bigger quantities
-      // come first (Qty 3, Qty 2, then the Qty 1s), so the packer handles
-      // the multi-unit parcels while that SKU is still on the table.
-      // Courier- and marketplace-wise keep that SKU order inside each pile;
-      // a courier or marketplace that wasn't read goes last.
+      // Labels only, sorted by the switches in Print Settings, in this
+      // order: marketplace, courier, SKU (A→Z, unrecognised last), quantity,
+      // then file order. Marketplaces and couriers keep the order they first
+      // appear in the files, so the piles come out as the files had them.
+      // The default — courier, SKU, bigger Qty first — puts each courier's
+      // parcels together, and within a SKU the multi-unit parcels go first
+      // while that product is still on the table.
       const orderList=lcPageInfo.filter(x=>!x.inv);
-      const bySku=(a,b)=>{
-        const ka=a.sku||"￿", kb=b.sku||"￿";
-        return ka<kb?-1:ka>kb?1:((b.qty||0)-(a.qty||0))||(a.f-b.f)||(a.i-b.i);
-      };
       const mktOf=x=>x.mkt||LC_MKT[x.plat]||"";
-      const byKey=key=>(a,b)=>{
-        const ka=key(a)||"￿", kb=key(b)||"￿";
-        return ka<kb?-1:ka>kb?1:bySku(a,b);
+      const firstSeen=keyOf=>{
+        const m=new Map();
+        for(const x of orderList){ const k=keyOf(x); if(k&&!m.has(k)) m.set(k,m.size); }
+        return x=>{ const k=keyOf(x); return k&&m.has(k)?m.get(k):1e9; };
       };
-      if(sortMode==="sku") orderList.sort(bySku);
-      else if(sortMode==="courier") orderList.sort(byKey(x=>x.courier));
-      else if(sortMode==="mkt") orderList.sort(byKey(mktOf));
-      else if(sortMode==="qty") orderList.sort((a,b)=>(b.qty||0)-(a.qty||0)||(a.f-b.f)||(a.i-b.i));
-      // Unknown qty (0) last here too, not first.
-      else if(sortMode==="qtyasc") orderList.sort((a,b)=>(a.qty||1e9)-(b.qty||1e9)||(a.f-b.f)||(a.i-b.i));
+      const rankMkt=firstSeen(mktOf), rankCour=firstSeen(x=>x.courier);
+      const bySku=(a,b)=>{
+        const ka=a.sku||"\uffff", kb=b.sku||"\uffff";
+        return ka<kb?-1:ka>kb?1:0;
+      };
+      if(srt.mkt||srt.cour||srt.sku||srt.q!=="none") orderList.sort((a,b)=>
+        (srt.mkt?rankMkt(a)-rankMkt(b):0)
+        ||(srt.cour?rankCour(a)-rankCour(b):0)
+        ||(srt.sku?bySku(a,b):0)
+        // Unknown qty (0) goes last either way, never first.
+        ||(srt.q==="desc"?(b.qty||0)-(a.qty||0):srt.q==="asc"?(a.qty||1e9)-(b.qty||1e9):0)
+        ||(a.f-b.f)||(a.i-b.i));
       const skippedInv=lcPageInfo.filter(x=>x.inv).length;
 
       // Stage 1: label-only 4x6 pages (masked), plus invoice pages if wanted.
       status("Cropping…");
-      // Invoice handling per label. "auto" keeps Meesho's invoice on its
-      // label page and leaves the rest out; "same" can only keep a Meesho /
-      // Flipkart invoice on the label, so Amazon's goes on the next page.
-      const ivmOf=x=>invMode==="auto"?(x.box&&x.plat==="meesho"?"same":"none")
-        :invMode==="same"&&!x.box?"interleave":invMode;
+      // Invoice handling per label, from its marketplace's switches. Pages
+      // cropped by the position settings (Amazon, anything unrecognised)
+      // follow Amazon's, and their invoice can only go on the next page.
+      const ivmOf=x=>{
+        const c=x.box?(x.plat==="meesho"?inv.m:inv.f):inv.a;
+        if(!c.inc) return "none";
+        if(inv.sep) return "separate";
+        return !x.box||c.newp?"interleave":"same";
+      };
       const labelDoc=await PDFLib.PDFDocument.create();
       const invDoc=orderList.some(x=>{const v=ivmOf(x);return v==="interleave"||v==="separate"||(v==="same"&&x.invs.length);})
         ?await PDFLib.PDFDocument.create():null;
@@ -9244,7 +9404,7 @@ function lcBody(){
       let invBytes=null;
       if(invDoc){
         invBytes=await invDoc.save();
-        if(invMode!=="separate"){
+        if(!inv.sep){
           const merged=await PDFLib.PDFDocument.create();
           const lp=await merged.copyPages(outDoc,outDoc.getPageIndices());
           const ip=await merged.copyPages(invDoc,invDoc.getPageIndices());
@@ -9274,9 +9434,10 @@ function lcBody(){
         // — a packet holding two products appears in two rows (the labels
         // carry the full contents), and the Total row says how many
         // packets hold multiple SKUs so the arithmetic stays checkable.
-        const group=keysOf=>{
+        const group=(keysOf,keep)=>{
           const g=new Map();
           orderList.forEach((x,k)=>{
+            if(keep&&!keep(x)) return;
             for(const [key,q] of keysOf(x)){
               const e=g.get(key)||{n:0,q:0,nums:[]};
               e.n++; e.q+=q||0; e.nums.push(k+1);
@@ -9285,7 +9446,9 @@ function lcBody(){
           });
           return [...g.entries()].sort((a,b)=>a[0]<b[0]?-1:1);
         };
-        const skuGroups=group(x=>x.items&&x.items.length>1?x.items.map(t=>[t.sku,t.qty]):[[x.sku||"(not detected)",x.qty]]);
+        const skuKeys=x=>x.items&&x.items.length>1?x.items.map(t=>[t.sku,t.qty]):[[x.sku||"(not detected)",x.qty]];
+        const skuGroups=group(skuKeys);
+        const qtyOf=x=>x.items&&x.items.length>1?x.items.reduce((s2,t)=>s2+(t.qty||0),0):x.qty||0;
         // Qty only when every label's qty was read — a partial sum would
         // look like a real total.
         const qtyKnown=orderList.every(x=>x.items&&x.items.length>1?x.items.every(t=>t.qty):x.qty);
@@ -9300,24 +9463,33 @@ function lcBody(){
         const site=/^(localhost|127\.)/.test(location.hostname)?"sellertoolsindia.com":location.host;
         const ROW=24,HEAD=30,FOOT=80;
         let inserted=0,pageO=null,y=0;
-        const startPage=()=>{
+        const startPage=sub=>{
           pageO=mkPage(inserted);inserted++;
           const ty=A4H-46;
           pageO.drawText("Order List",{x:TL,y:ty,size:14,font:fontB});
+          // A separate text item, so a re-run still finds "Order List".
+          if(sub) pageO.drawText(sub,{x:TL+fontB.widthOfTextAtSize("Order List",14)+6,y:ty,size:14,font});
           pageO.drawText(`${labels} labels — Seller Tools India`,{x:TR-160,y:ty+1,size:9,font,color:grey});
           const ww=font.widthOfTextAtSize(site,10);
           pageO.drawText(site,{x:(A4W-ww)/2,y:26,size:10,font,color:PDFLib.rgb(0.62,0.62,0.62)});
           y=ty-12;
         };
         // cols: {h: header, w: width (0 = the rest), b: bold, wrap: wraps}
-        const table=(cols,rows,total)=>{
+        // A title draws as a dark bar over the header (repeated on a new page).
+        const table=(cols,rows,total,title)=>{
           const flex=TR-TL-cols.reduce((s,c)=>s+(c.w||0),0);
           const xs=[TL];
           cols.forEach(c=>xs.push(xs[xs.length-1]+(c.w||flex)));
-          let top=0;
+          let top=0,colTop=0;
           const head=()=>{
             top=y;
-            const hb=top-HEAD;
+            if(title){
+              pageO.drawRectangle({x:TL,y:y-26,width:TR-TL,height:26,color:PDFLib.rgb(0.2,0.24,0.3)});
+              pageO.drawText(title,{x:TL+12,y:y-18,size:12.5,font:fontB,color:PDFLib.rgb(1,1,1)});
+              y-=26;
+            }
+            colTop=y;
+            const hb=y-HEAD;
             cols.forEach((c,i)=>pageO.drawText(c.h,{x:xs[i]+12,y:hb+10,size:13,font:fontB}));
             pageO.drawLine({start:{x:TL,y:hb},end:{x:TR,y:hb},thickness:1,color:black});
             y=hb;
@@ -9332,7 +9504,7 @@ function lcBody(){
             pageO.drawRectangle({x:TL,y:bottom,width:TR-TL,height:top-bottom,borderColor:black,borderWidth:1.2});
             const vEnd=withTotal?y:bottom;
             for(let i=1;i<cols.length;i++)
-              pageO.drawLine({start:{x:xs[i],y:top},end:{x:xs[i],y:vEnd},thickness:1,color:black});
+              pageO.drawLine({start:{x:xs[i],y:colTop},end:{x:xs[i],y:vEnd},thickness:1,color:black});
             y=bottom;
           };
           head();
@@ -9355,15 +9527,18 @@ function lcBody(){
           if(total&&y-ROW-6<FOOT){close(false);startPage();head();}
           close(!!total);
         };
-        const gap=()=>{ y-=18; if(y-HEAD-ROW<FOOT) startPage(); };
+        const gap=(extra,sub)=>{ y-=18; if(y-HEAD-ROW-(extra||0)<FOOT) startPage(sub); };
+        const skuCols=[{h:"ORD",w:70,b:1},{h:"SKU"},...(qtyKnown?[{h:"Qty",w:56,b:1}]:[]),{h:"Label no.",w:130,wrap:1}];
+        const skuRows=gs=>gs.map(([k,e])=>[e.n,k,...(qtyKnown?[e.q]:[]),numRuns(e.nums)]);
         startPage();
-        table([{h:"ORD",w:70,b:1},{h:"SKU"},...(qtyKnown?[{h:"Qty",w:56,b:1}]:[]),{h:"Label no.",w:130,wrap:1}],
-          skuGroups.map(([k,e])=>[e.n,k,...(qtyKnown?[e.q]:[]),numRuns(e.nums)]),
+        table(skuCols,skuRows(skuGroups),
           `Total package: ${labels}${qtyKnown?`  ·  Total qty: ${qtyTotal}`:""}${multi?`  (${multi} contain 2+ SKUs)`:""}`);
-        if(orderList.some(x=>x.courier)){
+        // Seller account(s) the labels came from.
+        const sellers=group(x=>[[x.seller||"",qtyOf(x)]]).filter(([k])=>k);
+        if(sellers.length){
           gap();
-          table([{h:"ORD",w:70,b:1},{h:"Courier"},{h:"Label no.",w:240,wrap:1}],
-            group(x=>[[x.courier||"(not read)",0]]).map(([k,e])=>[e.n,k,numRuns(e.nums)]));
+          table([{h:"ORD",w:70,b:1},{h:"Seller account"},...(qtyKnown?[{h:"Qty",w:56,b:1}]:[])],
+            sellers.map(([k,e])=>[e.n,k,...(qtyKnown?[e.q]:[])]));
         }
         const mkts=group(x=>[[mktOf(x)||"Other",0]]);
         if(mkts.length>1){
@@ -9371,21 +9546,42 @@ function lcBody(){
           table([{h:"ORD",w:70,b:1},{h:"Marketplace"},{h:"Label no.",w:240,wrap:1}],
             mkts.map(([k,e])=>[e.n,k,numRuns(e.nums)]));
         }
+        // Courier-wise, on its own page: one table per courier, couriers in
+        // the order they first appear in the files, so each pickup's pile
+        // can be checked against its list.
+        if(orderList.some(x=>x.courier)){
+          const NR="(courier not read)";
+          const order=[...new Set([...orderList].sort((a,b)=>(a.f-b.f)||(a.i-b.i)).map(x=>x.courier||NR))]
+            .sort((a,b)=>(a===NR)-(b===NR));
+          startPage("— by courier");
+          order.forEach((cr,ci)=>{
+            const mine=x=>(x.courier||NR)===cr;
+            const n=orderList.filter(mine).length, q=orderList.filter(mine).reduce((s2,x)=>s2+qtyOf(x),0);
+            if(ci) gap(26,"— by courier");
+            table(skuCols,skuRows(group(skuKeys,mine)),
+              `Total orders: ${n}${qtyKnown?`  ·  Total qty: ${q}`:""}`,cr);
+          });
+        }
       }
 
       const outBytes=await outDoc.save();
-      const dl=document.getElementById("lc-dl");
-      const dl2=document.getElementById("lc-dl2");
+      const dl2=$("lc-dl2");
       // Extracting again replaces both links, so the previous run's PDFs are
       // unreachable — let go of them instead of holding every batch of the
       // session in memory.
       revokeUrls([dl.dataset.blob,dl2.dataset.blob]);
       const url=ownUrl(URL.createObjectURL(new Blob([outBytes],{type:"application/pdf"})));
-      dl.href=url;dl.dataset.blob=url;dl.style.display="inline-block";
-      if(invMode==="separate"&&invBytes){
+      // File names say what is inside and when, e.g.
+      // Meesho_Labels_20261020_3_19PM.pdf.
+      const now=new Date(),pad=n=>String(n).padStart(2,"0");
+      const mkNames=[...new Set(orderList.map(mktOf).filter(Boolean))];
+      const stamp=`${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${now.getHours()%12||12}_${pad(now.getMinutes())}${now.getHours()<12?"AM":"PM"}`;
+      const base=(mkNames.length===1?mkNames[0]+"_":"")+"%s_"+stamp+".pdf";
+      dl.href=url;dl.dataset.blob=url;dl.download=base.replace("%s","Labels");setDl(true);
+      if(inv.sep&&invBytes){
         const u2=ownUrl(URL.createObjectURL(new Blob([invBytes],{type:"application/pdf"})));
-        dl2.href=u2;dl2.dataset.blob=u2;dl2.style.display="inline-block";
-      }else{ dl2.removeAttribute("href"); delete dl2.dataset.blob; dl2.style.display="none"; }
+        dl2.href=u2;dl2.dataset.blob=u2;dl2.download=base.replace("%s","Invoices");dl2.hidden=false;
+      }else{ dl2.removeAttribute("href"); delete dl2.dataset.blob; dl2.hidden=true; }
       const fmtName=fmt==="4x6"?"4×6 thermal":fmt==="a4-4up"?"A4, 4 per sheet":"A4, 1 per sheet";
       pdfPreviewInto(document.getElementById("lc-prev"),`Preview — ${labels} label(s) on ${outDoc.getPageCount()} page(s) (${fmtName})`,outBytes,url,"Cropped labels preview");
 
@@ -9408,14 +9604,19 @@ function lcBody(){
       }
 
       lcCountAdd(labels);
-      status(`Done — ${labels} label(s)${split===2?` (2 per page detected${autoLeft?", labels column auto-cropped":""})`:""}${skippedInv?`, ${invMode==="none"||invMode==="auto"?"skipped":"paired"} ${skippedInv} invoice page(s)`:""}${blanksSkipped?`, ${blanksSkipped} blank page(s) removed`:""}, ${outDoc.getPageCount()} output page(s)${{sku:", sorted SKU-wise",courier:", sorted courier-wise",mkt:", sorted marketplace-wise",qty:", sorted by quantity (high to low)",qtyasc:", sorted by quantity (low to high)"}[sortMode]||", in original order"}. Check the preview, then download.`);
+      // Show each marketplace's own options, and what each file held.
+      lcSeen=new Set(orderList.map(x=>x.box?x.plat:"amazon"));
+      lcFileInfo=srcDocs.map((d,fi)=>({pages:d.getPageCount(),
+        mkts:[...new Set(orderList.filter(x=>x.f===fi).map(mktOf).filter(Boolean))].join(", ")}));
+      fileRows(); syncUi();
+      status(`Done — ${labels} label(s)${split===2?` (2 per page detected${autoLeft?", labels column auto-cropped":""})`:""}${skippedInv?`, ${inv.a.inc?"paired":"skipped"} ${skippedInv} invoice page(s)`:""}${blanksSkipped?`, ${blanksSkipped} blank page(s) removed`:""}, ${outDoc.getPageCount()} output page(s)${[srt.mkt&&"marketplace",srt.cour&&"courier",srt.sku&&"SKU",srt.q!=="none"&&(srt.q==="desc"?"bigger Qty first":"smaller Qty first")].filter(Boolean).join(", ").replace(/^./,ch=>", sorted by "+ch)||", in file order"}. Check the preview, then download.`);
     }catch(e){
       try{console.error("Label cropper:",e);}catch(_){}
       status("Could not process that PDF"+(String(e).includes("load failed")?" — the PDF engine failed to load (check your connection) and nothing was uploaded anywhere.":" — it may be corrupted or password-protected."));
     }
-    btn.disabled=false;lcBusy=false;
+    lcBusy=false;
+    if(lcAgain) schedule(0);
   };
-  document.getElementById("lc-go").addEventListener("click",()=>{lcProcess(false);});
 }
 
 /* ============================================================
@@ -12866,6 +13067,7 @@ function pingNow(){ _lastPing=0; try{ sendPing(); }catch(e){} }
    entry per shipped change a seller can actually feel.
    ============================================================ */
 const CHANGELOG=[
+  {d:"2026-10-20",t:"Label Cropper: new look, crops as you drop",n:"Pick a tab — All platforms, Amazon, Flipkart or Meesho — and drop your PDFs: cropping starts at once and every Print Setting applies straight away. Settings are plain switches now (label numbers, summary page, SKU | Qty, sort by quantity, group by SKU, courier or marketplace), and each marketplace's own options appear once one of its files is read. Labels now come out grouped by courier by default, couriers in the order they appear in your files. The summary adds a seller-account count and a courier-wise page listing each courier's SKUs."},
   {d:"2026-10-20",t:"Label Cropper now does Flipkart and Meesho too",n:"Drop Amazon, Flipkart (and Shopsy) and Meesho label PDFs — even all three at once. Each page's marketplace is detected and its label is trimmed to its exact border, so a Meesho label with a long address is never cut off. New: sort courier-wise or marketplace-wise, put the invoice on the label page, the next page or a separate PDF, and a bigger sideways Meesho label on 4×6. The Order List now shows Qty, the label numbers for each SKU, and a courier-wise count. Fixed: a Meesho file holding an exchange order (no invoice on its page) printed only that one label."},
   {d:"2026-10-18",t:"Profit now comes after GST",n:"The Profit, Break-Even ACOS, Target Price, Price Band and Coupon calculators, the SKU report's True P&L and Ad Profitability now take out the GST you owe on each sale (less the GST on Amazon's fees you claim back). Before, the GST inside the price was counted as profit — on a ₹799 item that is about ₹100 a unit. Pick your product's GST rate, or “Not GST-registered”."},
   {d:"2026-10-18",t:"Closing fees updated to Amazon's 7 Sep 2026 card",n:"Amazon added ₹1 per item up to ₹500 and ₹3 above ₹500 on Easy Ship, Seller Flex and FBA (Easy Ship is now ₹2 / ₹23 / ₹48 / ₹79). Every calculator and the Fee Band Optimizer use the new card; statements from before the change are still read against the old one. Reconciliation now checks Easy Ship orders against the Easy Ship fee instead of the dearer Self Ship one."},
