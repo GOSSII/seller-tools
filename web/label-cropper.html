@@ -2021,7 +2021,7 @@ const HELP={
   "reconcile":{input:`Settlement file(s): <b>Payments → All Statements → Download Flat File V2</b> — drop every statement for the period you're checking, <b>from both Account Types</b>: All Statements keeps a separate weekly series for <i>Electronic Transactions</i> and for <i>Cash On Delivery Transactions and Non-Transactional Fees</i>, and orders paid through the series you skip will look unpaid. Optional for Easy Ship / self-ship sellers: the <b>seller-fulfilled Return Report</b> (Orders → Manage Returns → View reports → All Returns, 60-day ranges) sorts the SAFE-T list by strength — refunds whose item never came back rise to the top, items delivered back drop down, and claims already filed disappear. Optional: the <b>Inventory Ledger</b> (detailed view) finds stock Amazon misplaced and never reimbursed, and the <b>Replacements</b> report stops replacement flows being misread as unreturned refunds. Optional: the <b>FBA customer returns</b> and <b>Reimbursements</b> reports (<b>Reports → Fulfilment</b>, Download tab, exact dates matching your statements — both together) unlock the refunded-never-returned and damaged-at-Amazon checks. Optional but recommended: the matching MTR — <b>Reports → Tax Document Library → Merchant Tax Reports → B2C</b> (.csv) — so shipped-but-unpaid orders can be caught too.`,
     steps:["Drop your settlement file(s), and the MTR for the same months if you have it.","Work through each issue list — every row shows the order, the amount involved and, where a case is still actionable, the exact Seller Central path.","Tick rows off as you raise them (ticks are saved in your browser), and export the checklist as CSV to track claims."]},
   "fnsku-labels":{input:`Your FNSKU (starts with X0) is in <b>Inventory → FBA Inventory</b> — the FNSKU column — or on the <b>Print item labels</b> page (<b>Manage Inventory</b> → tick your FBA listings → <b>Print item labels</b>). Copy it from either place; the product name can be anything your packers will recognise.`,
-    steps:["Add a row per product: FNSKU/code, product name, condition (defaults to New) and how many stickers you need.","Pick the paper: A4 sticker sheets with 65, 40 or 24 labels per page, or a 4×6 thermal sheet (12 per page).","Generate, check the preview, download — and print at 100% scale (never \"fit to page\", or the barcode dimensions shift).","Stick one label per unit, covering any existing barcode on the retail packaging."]},
+    steps:["Add a row per product: FNSKU/code, product name, MRP (printed as typed, e.g. “MRP - 499”; leave it empty for no MRP line) and how many stickers you need.","Pick the paper: A4 sticker sheets with 65, 40 or 24 labels per page, or a 4×6 thermal sheet (12 per page).","Generate, check the preview, download — and print at 100% scale (never \"fit to page\", or the barcode dimensions shift).","Stick one label per unit, covering any existing barcode on the retail packaging."]},
   "listing-checker":{input:`Copy the title, bullet points and description straight from <b>Seller Central → Inventory → Manage Inventory → Edit</b> (the listing edit page). Target keywords: your main search terms, comma-separated — the <b>Search term report</b> is the best source.`,
     steps:["Paste the title, the bullets (one per line) and the description.","Add your target keywords, comma-separated — coverage is checked across all three fields.","Work through the \"Fix first\" list; the score updates live as you edit.","Paste the cleaned-up text back into the Edit listing page."]},
   "gst-invoice":{input:`<b>Orders → Order Reports → Unshipped Orders</b> → Request report → Download (a .txt file). Enable the address columns in the report settings on that page so buyer ship-to details appear on the invoices.`,
@@ -4014,7 +4014,7 @@ function renderHome(){
         <a class="tile" href="/order-printer"><div class="ico">🖨️</div><h3>Amazon Order Printer</h3><p>Picklists and packing slips from your unshipped-orders report.</p></a>
         <a class="tile" href="/payout-forecast"><div class="ico">💸</div><h3>Payout Date Forecaster</h3><p>Your next 6 settlement closes and estimated bank-credit dates — from your cycle and daily sales.</p></a>
         <a class="tile" href="/gst-invoice"><div class="ico">🧾</div><h3>GST Invoice Generator</h3><p>Invoices for your self-ship orders — one merged A4 PDF, numbered in sequence, CGST+SGST or IGST by state.</p></a>
-        <a class="tile" href="/fnsku-labels"><div class="ico">📦</div><h3>FNSKU Barcode Sticker Generator</h3><p>Code 128 barcode stickers for FBA units — A4 65/40/24-up sheets or 4×6 thermal.</p></a>
+        <a class="tile" href="/fnsku-labels"><div class="ico">📦</div><h3>FBA Barcode Sticker Generator</h3><p>Code 128 barcode stickers for FBA units — A4 65/40/24-up sheets or 4×6 thermal.</p></a>
       </div>
       <div class="minigrid">
         ${minis.map(m=>`<a class="tile-mini" href="/${m.id}"><span class="ico">${m.icon}</span>${esc(m.name)}</a>`).join("")}
@@ -4046,7 +4046,7 @@ function renderHome(){
       </section>
       <div class="pr-grid" style="padding-top:16px">
         <div class="pr-card"><h3>Free</h3><div class="pr-price">₹0</div><div class="pr-alt">Forever. No login needed.</div>
-          <ul class="pr-feats"><li><span class="tick">✓</span> All 20 free calculators &amp; tools</li><li><span class="tick">✓</span> Label extractor &amp; order printer</li><li><span class="tick">✓</span> FNSKU stickers &amp; GST invoices</li><li><span class="tick">✓</span> Files never leave your browser</li></ul>
+          <ul class="pr-feats"><li><span class="tick">✓</span> All 20 free calculators &amp; tools</li><li><span class="tick">✓</span> Label extractor &amp; order printer</li><li><span class="tick">✓</span> FBA barcode stickers &amp; GST invoices</li><li><span class="tick">✓</span> Files never leave your browser</li></ul>
           <button type="button" class="lp-btn sec" data-scroll="tools">Use free tools</button></div>
         <div class="pr-card pop"><span class="pr-badge">Most popular</span><h3>Starter</h3><div class="pr-price">₹199 <small>/ month</small></div><div class="pr-alt">or ₹999 / year (save ~58%)</div>
           <ul class="pr-feats"><li><span class="tick">✓</span> Everything in Free</li><li><span class="tick">✓</span> Settlement Analyzer</li><li><span class="tick">✓</span> GST &amp; TCS filing report</li><li><span class="tick">✓</span> SKU Profitability Report</li><li><span class="tick">✓</span> Multi-Month Trends</li></ul>
@@ -4058,7 +4058,7 @@ function renderHome(){
 
       <section class="lp-faq" aria-label="Frequently asked questions">
         <h2>Questions sellers ask</h2>
-        <details><summary>Is it really free?</summary><p>Yes — all 20 free tools are free with no login: every calculator, the label cropper (Amazon, Flipkart and Meesho), order printer, FNSKU barcode sticker generator, GST invoice generator, link builder and keyword combiner. The advanced reports (Settlement Analyzer, GST report, SKU report, Trends and the Pro reports) are on a paid plan from ₹199/month. The free tools stay free.</p></details>
+        <details><summary>Is it really free?</summary><p>Yes — all 20 free tools are free with no login: every calculator, the label cropper (Amazon, Flipkart and Meesho), order printer, FBA barcode sticker generator, GST invoice generator, link builder and keyword combiner. The advanced reports (Settlement Analyzer, GST report, SKU report, Trends and the Pro reports) are on a paid plan from ₹199/month. The free tools stay free.</p></details>
         <details><summary>Do you upload or store my files?</summary><p>No. Settlement reports and label PDFs are processed entirely in your browser — they are never uploaded to any server. That is our core promise and it will always be true. Most other label-cropping sites upload your PDFs — including your customers' names and addresses — to their servers and promise to delete them later; we never receive them in the first place.</p></details>
         <details><summary>Which marketplaces do you support?</summary><p>Amazon India (Amazon.in) only. Fees, GST and settlement formats are all specific to the India marketplace.</p></details>
         <details><summary>How do I get my settlement report?</summary><p>In Seller Central go to Payments → Reports Repository (or Date Range Reports) and download the transaction/settlement report, then paste or upload it into the Settlement Analyzer.</p></details>
@@ -10231,13 +10231,13 @@ function lqcUpdate(){
 }
 
 /* ============================================================
-   FNSKU BARCODE STICKER GENERATOR — Code 128 stickers for FBA
+   FBA BARCODE STICKER GENERATOR — Code 128 FNSKU stickers for FBA
    units, drawn with pdf-lib entirely in the browser.
    ============================================================ */
 function renderFnskuLabels(){
-  document.title="FNSKU Barcode Sticker Generator — Seller Tools India";
+  document.title="FBA Barcode Sticker Generator — Seller Tools India";
   const md=document.querySelector('meta[name="description"]');
-  if(md) md.setAttribute("content","Free FNSKU barcode sticker generator for Amazon FBA — Code 128 labels on A4 65/40/24-up sheets or 4×6 thermal, generated fully in your browser.");
+  if(md) md.setAttribute("content","Free FBA barcode sticker generator for Amazon — FNSKU Code 128 labels with MRP on A4 65/40/24-up sheets or 4×6 thermal, generated fully in your browser.");
   backBtn.hidden=false;
   const fmts=fnskuFormats();
   let savedFmt="a4-65";
@@ -10246,8 +10246,8 @@ function renderFnskuLabels(){
   const th='style="text-align:left;font-size:12px;font-weight:600;color:#667;padding:0 8px 6px 0;white-space:nowrap"';
   app.innerHTML=`
     <div class="wrap page">
-      <h1>FNSKU Barcode Sticker Generator</h1>
-      <p class="lede">Type or paste your FNSKUs and get a print-ready PDF of Code 128 barcode stickers — for A4 sticker sheets (65, 40 or 24 per page) or a 4×6 thermal printer. Each sticker carries the barcode, the code in text, the product name and the condition — the layout Amazon expects on every FBA unit.</p>
+      <h1>FBA Barcode Sticker Generator</h1>
+      <p class="lede">Type or paste your FNSKUs and get a print-ready PDF of Code 128 barcode stickers — for A4 sticker sheets (65, 40 or 24 per page) or a 4×6 thermal printer. Each sticker carries the barcode, the code in text, the product name and the MRP.</p>
       ${helpHtml("fnsku-labels")}
       <div class="sa-priv">🔒 Private by design — stickers are generated entirely in your browser; your codes and product names never leave this device.</div>
       <div class="card" style="margin-top:14px">
@@ -10257,7 +10257,7 @@ function renderFnskuLabels(){
             <thead><tr>
               <th ${th}>FNSKU / code</th>
               <th ${th}>Product name</th>
-              <th ${th}>Condition</th>
+              <th ${th}>MRP</th>
               <th ${th}>Qty</th>
               <th style="width:34px"></th>
             </tr></thead>
@@ -10279,7 +10279,7 @@ function renderFnskuLabels(){
     </div>`;
   const tbody=document.getElementById("fk-rows");
   const status=t=>{const el=document.getElementById("fk-status");if(el)el.textContent=t;};
-  const addRow=r=>{tbody.insertAdjacentHTML("beforeend",fnskuRowHtml(r||{code:"",name:"",cond:"New",qty:30}));};
+  const addRow=r=>{tbody.insertAdjacentHTML("beforeend",fnskuRowHtml(r||{code:"",name:"",mrp:FNSKU_MRP0,qty:30}));};
   const saved=fnskuLoadRows();
   if(saved.length) saved.forEach(addRow); else addRow();
   tbody.addEventListener("input",()=>fnskuSaveRows(fnskuReadRows()));
@@ -10287,7 +10287,7 @@ function renderFnskuLabels(){
     const b=e.target.closest(".fk-del"); if(!b) return;
     const tr=b.closest("tr");
     if(tbody.children.length>1) tr.remove();
-    else tr.querySelectorAll("input").forEach(inp=>{inp.value=inp.dataset.f==="cond"?"New":inp.dataset.f==="qty"?"30":"";});
+    else tr.querySelectorAll("input").forEach(inp=>{inp.value=inp.dataset.f==="mrp"?FNSKU_MRP0:inp.dataset.f==="qty"?"30":"";});
     fnskuSaveRows(fnskuReadRows());
   });
   document.getElementById("fk-add").addEventListener("click",()=>addRow());
@@ -10317,7 +10317,7 @@ function renderFnskuLabels(){
       revokeUrls([dl.dataset.blob]);
       const url=ownUrl(URL.createObjectURL(new Blob([res.bytes],{type:"application/pdf"})));
       dl.href=url; dl.dataset.blob=url; dl.style.display="inline-block";
-      pdfPreviewInto(document.getElementById("fk-prev"),`Preview — ${res.stickers} sticker(s) on ${res.pages} page(s) (${esc(res.fmtName)})`,res.bytes,url,"FNSKU sticker preview");
+      pdfPreviewInto(document.getElementById("fk-prev"),`Preview — ${res.stickers} sticker(s) on ${res.pages} page(s) (${esc(res.fmtName)})`,res.bytes,url,"FBA barcode sticker preview");
       status(`Done — ${res.stickers} sticker(s) on ${res.pages} page(s). Print at 100% scale (no "fit to page").`+(res.dense?" Note: long codes print quite dense on this sticker size — test-scan one sticker before printing the lot.":""));
     }catch(err){
       status("Something went wrong: "+((err&&err.message)||err));
@@ -10326,12 +10326,15 @@ function renderFnskuLabels(){
   });
 }
 
+/* The third line of each sticker: the MRP, printed exactly as typed
+   ("MRP - 499"); left empty, the sticker has no third line. */
+const FNSKU_MRP0="MRP - 499";
 function fnskuRowHtml(r){
   const td='style="padding:4px 8px 4px 0"';
   return `<tr>
     <td ${td}><input data-f="code" value="${esc(r.code||"")}" placeholder="X0ABC1234" autocomplete="off" autocapitalize="characters" spellcheck="false"></td>
     <td ${td}><input data-f="name" value="${esc(r.name||"")}" placeholder="Product name (printed under the barcode)"></td>
-    <td ${td} width="110"><input data-f="cond" value="${esc(r.cond||"New")}" style="width:100px"></td>
+    <td ${td} width="130"><input data-f="mrp" value="${esc(r.mrp??FNSKU_MRP0)}" placeholder="MRP - 499" style="width:120px"></td>
     <td ${td} width="80"><input data-f="qty" inputmode="numeric" value="${esc(String(r.qty||30))}" style="width:70px"></td>
     <td><button class="fk-del" type="button" title="Remove row" aria-label="Remove row" style="border:none;background:none;cursor:pointer;font-size:15px;color:#889;padding:4px">✕</button></td>
   </tr>`;
@@ -10344,7 +10347,9 @@ function fnskuLoadRows(){
     return raw.slice(0,200).map(r=>({
       code:String((r&&r.code)||"").slice(0,64),
       name:String((r&&r.name)||"").slice(0,200),
-      cond:String((r&&r.cond)||"New").slice(0,40),
+      // Rows saved before MRP replaced Condition carry "cond"; its default
+      // "New" becomes the MRP default, anything typed there is kept.
+      mrp:String(r&&r.mrp!=null?r.mrp:r&&r.cond&&r.cond!=="New"?r.cond:FNSKU_MRP0).slice(0,40),
       qty:Math.max(1,Math.min(9999,parseInt((r&&r.qty),10)||1)),
     }));
   }catch(e){return [];}
@@ -10361,7 +10366,7 @@ function fnskuReadRows(){
     out.push({
       code:g("code").replace(/\s+/g,""),
       name:g("name").trim(),
-      cond:g("cond").trim()||"New",
+      mrp:g("mrp").trim(),
       qty:Math.max(1,Math.min(9999,parseInt(g("qty"),10)||1)),
     });
   });
@@ -10480,9 +10485,9 @@ function fnskuDrawSticker(page,font,fontB,x,yTop,w,h,it){
   const name=fnskuFit(font,fnskuAscii(it.name),nameSize,maxW);
   const nameY=codeY-gap-nameSize;
   if(name) page.drawText(name,{x:x+(w-font.widthOfTextAtSize(name,nameSize))/2,y:nameY,size:nameSize,font,color:black});
-  const cond=fnskuFit(font,fnskuAscii(it.cond||"New"),nameSize,maxW);
-  const condY=nameY-gap-nameSize;
-  if(cond) page.drawText(cond,{x:x+(w-font.widthOfTextAtSize(cond,nameSize))/2,y:condY,size:nameSize,font,color:black});
+  const mrp=fnskuFit(font,fnskuAscii(it.mrp),nameSize,maxW);
+  const mrpY=nameY-gap-nameSize;
+  if(mrp) page.drawText(mrp,{x:x+(w-font.widthOfTextAtSize(mrp,nameSize))/2,y:mrpY,size:nameSize,font,color:black});
   return mw<0.5;
 }
 
