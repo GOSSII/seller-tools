@@ -28,7 +28,7 @@ Pricing: free tools need no account. Starter ₹199/month (or ₹999/year), Pro 
 
 - [Label Cropper for Amazon, Flipkart & Meesho](https://sellertoolsindia.com/label-cropper): Crop Amazon, Flipkart and Meesho shipping label PDFs to clean 4×6 thermal labels — marketplace detected automatically, sorted by SKU or courier, free and fully in your browser.
 - [Amazon Order Printer — Picklist & Packing Slips](https://sellertoolsindia.com/order-printer): Turn your Amazon unshipped-orders report into a printable picklist and packing slips — free, fully in your browser.
-- [FNSKU Barcode Sticker Generator](https://sellertoolsindia.com/fnsku-labels): Free FNSKU barcode sticker generator for Amazon FBA — Code 128 labels on A4 65/40/24-up sheets or 4×6 thermal, generated fully in your browser.
+- [FBA Barcode Sticker Generator](https://sellertoolsindia.com/fnsku-labels): Free FBA barcode sticker generator for Amazon — FNSKU Code 128 labels with MRP on A4 65/40/24-up sheets or 4×6 thermal, generated fully in your browser.
 - [GST Invoice Generator — Self-Ship Invoices](https://sellertoolsindia.com/gst-invoice): Generate GST-compliant tax invoices for your Amazon.in self-ship orders from the unshipped-orders report — free, fully in your browser.
 - [Amazon Link Builder](https://sellertoolsindia.com/link-builder): Generate Amazon India 2-step URLs, canonical URLs and add-to-cart links from an ASIN and keyword — free, in your browser.
 - [Amazon Keyword Combiner](https://sellertoolsindia.com/keyword-combiner): Combine word lists into every long-tail keyword permutation for Amazon PPC campaigns — broad, phrase and exact match, free in your browser.

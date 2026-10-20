@@ -3947,7 +3947,7 @@ function renderHome(){
         <a class="tile" href="/order-printer"><div class="ico">🖨️</div><h3>Amazon Order Printer</h3><p>Picklists and packing slips from your unshipped-orders report.</p></a>
         <a class="tile" href="/payout-forecast"><div class="ico">💸</div><h3>Payout Date Forecaster</h3><p>Your next 6 settlement closes and estimated bank-credit dates — from your cycle and daily sales.</p></a>
         <a class="tile" href="/gst-invoice"><div class="ico">🧾</div><h3>GST Invoice Generator</h3><p>Invoices for your self-ship orders — one merged A4 PDF, numbered in sequence, CGST+SGST or IGST by state.</p></a>
-        <a class="tile" href="/fnsku-labels"><div class="ico">📦</div><h3>FNSKU Barcode Sticker Generator</h3><p>Code 128 barcode stickers for FBA units — A4 65/40/24-up sheets or 4×6 thermal.</p></a>
+        <a class="tile" href="/fnsku-labels"><div class="ico">📦</div><h3>FBA Barcode Sticker Generator</h3><p>Code 128 barcode stickers for FBA units — A4 65/40/24-up sheets or 4×6 thermal.</p></a>
       </div>
       <div class="minigrid">
         ${minis.map(m=>`<a class="tile-mini" href="/${m.id}"><span class="ico">${m.icon}</span>${esc(m.name)}</a>`).join("")}
@@ -3979,7 +3979,7 @@ function renderHome(){
       </section>
       <div class="pr-grid" style="padding-top:16px">
         <div class="pr-card"><h3>Free</h3><div class="pr-price">₹0</div><div class="pr-alt">Forever. No login needed.</div>
-          <ul class="pr-feats"><li><span class="tick">✓</span> All 20 free calculators &amp; tools</li><li><span class="tick">✓</span> Label extractor &amp; order printer</li><li><span class="tick">✓</span> FNSKU stickers &amp; GST invoices</li><li><span class="tick">✓</span> Files never leave your browser</li></ul>
+          <ul class="pr-feats"><li><span class="tick">✓</span> All 20 free calculators &amp; tools</li><li><span class="tick">✓</span> Label extractor &amp; order printer</li><li><span class="tick">✓</span> FBA barcode stickers &amp; GST invoices</li><li><span class="tick">✓</span> Files never leave your browser</li></ul>
           <button type="button" class="lp-btn sec" data-scroll="tools">Use free tools</button></div>
         <div class="pr-card pop"><span class="pr-badge">Most popular</span><h3>Starter</h3><div class="pr-price">₹199 <small>/ month</small></div><div class="pr-alt">or ₹999 / year (save ~58%)</div>
           <ul class="pr-feats"><li><span class="tick">✓</span> Everything in Free</li><li><span class="tick">✓</span> Settlement Analyzer</li><li><span class="tick">✓</span> GST &amp; TCS filing report</li><li><span class="tick">✓</span> SKU Profitability Report</li><li><span class="tick">✓</span> Multi-Month Trends</li></ul>
@@ -3991,7 +3991,7 @@ function renderHome(){
 
       <section class="lp-faq" aria-label="Frequently asked questions">
         <h2>Questions sellers ask</h2>
-        <details><summary>Is it really free?</summary><p>Yes — all 20 free tools are free with no login: every calculator, the label cropper (Amazon, Flipkart and Meesho), order printer, FNSKU barcode sticker generator, GST invoice generator, link builder and keyword combiner. The advanced reports (Settlement Analyzer, GST report, SKU report, Trends and the Pro reports) are on a paid plan from ₹199/month. The free tools stay free.</p></details>
+        <details><summary>Is it really free?</summary><p>Yes — all 20 free tools are free with no login: every calculator, the label cropper (Amazon, Flipkart and Meesho), order printer, FBA barcode sticker generator, GST invoice generator, link builder and keyword combiner. The advanced reports (Settlement Analyzer, GST report, SKU report, Trends and the Pro reports) are on a paid plan from ₹199/month. The free tools stay free.</p></details>
         <details><summary>Do you upload or store my files?</summary><p>No. Settlement reports and label PDFs are processed entirely in your browser — they are never uploaded to any server. That is our core promise and it will always be true. Most other label-cropping sites upload your PDFs — including your customers' names and addresses — to their servers and promise to delete them later; we never receive them in the first place.</p></details>
         <details><summary>Which marketplaces do you support?</summary><p>Amazon India (Amazon.in) only. Fees, GST and settlement formats are all specific to the India marketplace.</p></details>
         <details><summary>How do I get my settlement report?</summary><p>In Seller Central go to Payments → Reports Repository (or Date Range Reports) and download the transaction/settlement report, then paste or upload it into the Settlement Analyzer.</p></details>
@@ -10164,13 +10164,13 @@ function lqcUpdate(){
 }
 
 /* ============================================================
-   FNSKU BARCODE STICKER GENERATOR — Code 128 stickers for FBA
+   FBA BARCODE STICKER GENERATOR — Code 128 FNSKU stickers for FBA
    units, drawn with pdf-lib entirely in the browser.
    ============================================================ */
 function renderFnskuLabels(){
-  document.title="FNSKU Barcode Sticker Generator — Seller Tools India";
+  document.title="FBA Barcode Sticker Generator — Seller Tools India";
   const md=document.querySelector('meta[name="description"]');
-  if(md) md.setAttribute("content","Free FNSKU barcode sticker generator for Amazon FBA — Code 128 labels on A4 65/40/24-up sheets or 4×6 thermal, generated fully in your browser.");
+  if(md) md.setAttribute("content","Free FBA barcode sticker generator for Amazon — FNSKU Code 128 labels with MRP on A4 65/40/24-up sheets or 4×6 thermal, generated fully in your browser.");
   backBtn.hidden=false;
   const fmts=fnskuFormats();
   let savedFmt="a4-65";
@@ -10179,7 +10179,7 @@ function renderFnskuLabels(){
   const th='style="text-align:left;font-size:12px;font-weight:600;color:#667;padding:0 8px 6px 0;white-space:nowrap"';
   app.innerHTML=`
     <div class="wrap page">
-      <h1>FNSKU Barcode Sticker Generator</h1>
+      <h1>FBA Barcode Sticker Generator</h1>
       <p class="lede">Type or paste your FNSKUs and get a print-ready PDF of Code 128 barcode stickers — for A4 sticker sheets (65, 40 or 24 per page) or a 4×6 thermal printer. Each sticker carries the barcode, the code in text, the product name and the MRP.</p>
       ${helpHtml("fnsku-labels")}
       <div class="sa-priv">🔒 Private by design — stickers are generated entirely in your browser; your codes and product names never leave this device.</div>
@@ -10250,7 +10250,7 @@ function renderFnskuLabels(){
       revokeUrls([dl.dataset.blob]);
       const url=ownUrl(URL.createObjectURL(new Blob([res.bytes],{type:"application/pdf"})));
       dl.href=url; dl.dataset.blob=url; dl.style.display="inline-block";
-      pdfPreviewInto(document.getElementById("fk-prev"),`Preview — ${res.stickers} sticker(s) on ${res.pages} page(s) (${esc(res.fmtName)})`,res.bytes,url,"FNSKU sticker preview");
+      pdfPreviewInto(document.getElementById("fk-prev"),`Preview — ${res.stickers} sticker(s) on ${res.pages} page(s) (${esc(res.fmtName)})`,res.bytes,url,"FBA barcode sticker preview");
       status(`Done — ${res.stickers} sticker(s) on ${res.pages} page(s). Print at 100% scale (no "fit to page").`+(res.dense?" Note: long codes print quite dense on this sticker size — test-scan one sticker before printing the lot.":""));
     }catch(err){
       status("Something went wrong: "+((err&&err.message)||err));
