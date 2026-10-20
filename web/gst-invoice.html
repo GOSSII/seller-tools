@@ -8348,6 +8348,9 @@ function lcCourierOf(t){
   return best;
 }
 const LC_MKT={amazon:"Amazon",flipkart:"Flipkart",meesho:"Meesho"};
+// Our name on every cropped label, bottom right; LC_BY_BAND is the strip it
+// gets when the page number isn't printed at the bottom.
+const LC_BY="by SellerToolsIndia.com", LC_BY_RE=/\s*by SellerToolsIndia\.com\s*/i, LC_BY_BAND=11;
 
 /* Meesho and Flipkart print the label and its tax invoice on one A4
    page: label on top, invoice under it. The label's exact border is read
@@ -8773,7 +8776,7 @@ function lcBody(){
             for(const t of posItems){
               const b=bandOf(t);
               if(!b) continue;
-              const bare=t.s.replace(/^\s*\d+\s*\/\s*\d+\s*(?:·\s*)?/,"");
+              const bare=t.s.replace(/^\s*\d+\s*\/\s*\d+\s*(?:·\s*)?/,"").replace(LC_BY_RE,"");
               if(bare!==t.s||/\|\s*Qty\b/i.test(t.s)){ info[b==="top"?"wipeTop":"wipeBot"]=true; t.s=bare; }
             }
             // A wide label this tool turned sideways onto a 4×6: its text
@@ -9181,7 +9184,8 @@ function lcBody(){
       const labelDoc=await PDFLib.PDFDocument.create();
       const invDoc=orderList.some(x=>{const v=ivmOf(x);return v==="interleave"||v==="separate"||(v==="same"&&x.invs.length);})
         ?await PDFLib.PDFDocument.create():null;
-      const skuFont=(skuPrint||dtPrint||numPrint)?(await embedTextFonts(labelDoc)).bold:null;
+      const labelFonts=await embedTextFonts(labelDoc);
+      const skuFont=labelFonts.bold;
       // Embed only the pages we will actually draw (labels + their linked
       // invoice pages). Skipped blanks stay out — pdf-lib can't even embed
       // a page whose Contents stream is missing entirely. Meesho / Flipkart
@@ -9246,12 +9250,17 @@ function lcBody(){
           const topRes=(numPos==="top"||dtPrint||skuPos==="top")?16:0;
           const capN=skuPrint&&skuPos!=="top"&&!info.capKept&&(info.sku||info.qty)
             ?(info.items&&info.items.length>1?Math.min(4,info.items.length):1):0;
-          const numRes=numPos==="bot"?16:0,capRes=capN?14*capN+2:0;
+          const numRes=numPos==="bot"?16:LC_BY_BAND,capRes=capN?14*capN+2:0;
           const AW=288-8,AH=432-topRes-numRes-capRes-8;
-          const rot=wideRot&&r.w>r.h*1.15;
+          // Only when this marketplace's labels print without their invoice:
+          // with "Include invoice" on, a page that has none (a Meesho
+          // exchange order) stays upright like the rest of the stack.
+          const rot=wideRot&&ivmOf(info)!=="same"&&r.w>r.h*1.15;
           const ow=rot?r.h:r.w,oh=rot?r.w:r.h;
           const s=Math.min(AW/ow,AH/oh);
-          const ox=(288-ow*s)/2,oy=numRes+capRes+4+(AH-oh*s)/2;
+          // Top-aligned, so labels of different heights (an exchange order
+          // with no invoice among full ones) all start at the same edge.
+          const ox=(288-ow*s)/2,oy=numRes+capRes+4+(AH-oh*s);
           boxCapTop=oy-2;
           page.drawPage(boxEmb.get(info),rot
             ?{x:ox,y:oy+oh*s,xScale:s,yScale:s,rotate:PDFLib.degrees(-90)}
@@ -9294,11 +9303,17 @@ function lcBody(){
           }
         }
         // Bottom: for printers that clip the label's top edge. Same strip
-        // and type as the top one, mirrored to the bottom edge.
-        const numBand=numPos==="bot"?16:0;
-        if(numBand){
-          page.drawRectangle({x:0,y:0,width:288,height:numBand,color:white()});
+        // and type as the top one, mirrored to the bottom edge. Every label
+        // carries our name at its right end — in the page-number strip, or
+        // in a slimmer strip of its own when the number is elsewhere.
+        const numBand=numPos==="bot"?16:LC_BY_BAND;
+        page.drawRectangle({x:0,y:0,width:288,height:numBand,color:white()});
+        if(numPos==="bot")
           page.drawText((labels+1)+" / "+orderList.length,{x:8,y:5,size:9,font:skuFont,color:PDFLib.rgb(0,0,0)});
+        {
+          const bySize=numPos==="bot"?7.5:6.5;
+          page.drawText(LC_BY,{x:280-labelFonts.font.widthOfTextAtSize(LC_BY,bySize),y:numPos==="bot"?5.5:3,
+            size:bySize,font:labelFonts.font,color:PDFLib.rgb(0,0,0)});
         }
         // A label that already carries its caption gets no second one.
         if(skuPrint&&skuPos!=="top"&&!info.capKept&&(info.sku||info.qty)){
