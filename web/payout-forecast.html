@@ -469,6 +469,17 @@
     border:1.5px solid var(--faint);border-radius:50%;color:var(--faint);font-size:11px;font-weight:700;line-height:1;font-style:normal}
   .lc-acts{display:flex;gap:8px;flex-wrap:wrap}
   .lc-acts [hidden]{display:none}
+  /* StockBook cross-promo, shown once a batch is cropped. */
+  .lc-promo{margin-top:16px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding:14px 16px;
+    border:1px solid var(--green-line);background:var(--green-soft);border-radius:12px}
+  .lc-promo[hidden]{display:none}
+  .lc-promo-ico{flex:0 0 42px;height:42px;border-radius:10px;background:#fff;border:1px solid var(--green-line);
+    display:grid;place-items:center;color:var(--green)}
+  .lc-promo-t{flex:1 1 220px;min-width:0}
+  .lc-promo-t b{display:block;font-size:15px;color:var(--ink)}
+  .lc-promo-t span{display:block;font-size:13.5px;color:var(--muted);margin-top:3px;line-height:1.45}
+  .lc-promo-a{display:flex;gap:8px;flex-wrap:wrap}
+  .lc-promo .bigbtn{padding:10px 16px;text-decoration:none;min-height:40px;display:inline-flex;align-items:center}
   .lc-dl{display:inline-flex;align-items:center;gap:8px;text-decoration:none}
   .lc-dl[aria-disabled="true"]{opacity:.45;cursor:default}
   .sa-drop.loaded{border-style:solid;border-color:#1e9e63;background:#f2fbf7}
@@ -921,7 +932,7 @@
         <div class="card">
           <div class="fields">
             <div class="f-full"><label for="pfc-last">Date your last statement closed</label>
-              <input type="date" id="pfc-last" value="2026-10-20">
+              <input type="date" id="pfc-last" value="2026-11-07">
               <div class="f-hint">The <b>end date</b> of the last closed period in Payments → All Statements (e.g. 13 Oct for "6/10 – 13/10"). Not the day the money reached your bank — that comes about 2 days later and is added below; entering it here would push every forecast late.</div></div>
             <div class="f-full"><label for="pfc-cycle">Settlement cycle</label>
               <select id="pfc-cycle">
@@ -941,7 +952,7 @@
           <div class="note" style="margin-top:12px;margin-bottom:0">Reserve ⓘ — Amazon holds back a slice of each settlement (unshipped orders + A-to-Z claim reserve) and releases it in the following one.</div>
         </div>
         <div id="pfc-out">
-    <div class="banner good" style="font-size:15px"><b>Next deposit: ~₹27,300</b> on <b>Thu, 29 Oct, 2026</b> (in 9 days).</div>
+    <div class="banner good" style="font-size:15px"><b>Next deposit: ~₹27,300</b> on <b>Tue, 17 Nov, 2026</b> (in 10 days).</div>
     
     <div class="chips" style="margin-bottom:14px">
       <span class="chip">Gross / cycle: ₹35,000</span>
@@ -951,7 +962,7 @@
     </div>
     <div class="tblwrap"><table class="sa" style="min-width:520px">
       <thead><tr><th>#</th><th>Settlement closes</th><th>Est. bank credit</th><th class="num">Est. deposit</th></tr></thead>
-      <tbody><tr><td>1</td><td>Tue, 27 Oct, 2026</td><td>Thu, 29 Oct, 2026</td><td class="num">₹27,300.00</td></tr><tr><td>2</td><td>Tue, 3 Nov, 2026</td><td>Thu, 5 Nov, 2026</td><td class="num">₹27,300.00</td></tr><tr><td>3</td><td>Tue, 10 Nov, 2026</td><td>Thu, 12 Nov, 2026</td><td class="num">₹27,300.00</td></tr><tr><td>4</td><td>Tue, 17 Nov, 2026</td><td>Thu, 19 Nov, 2026</td><td class="num">₹27,300.00</td></tr><tr><td>5</td><td>Tue, 24 Nov, 2026</td><td>Thu, 26 Nov, 2026</td><td class="num">₹27,300.00</td></tr><tr><td>6</td><td>Tue, 1 Dec, 2026</td><td>Thu, 3 Dec, 2026</td><td class="num">₹27,300.00</td></tr></tbody>
+      <tbody><tr><td>1</td><td>Sat, 14 Nov, 2026</td><td>Tue, 17 Nov, 2026</td><td class="num">₹27,300.00</td></tr><tr><td>2</td><td>Sat, 21 Nov, 2026</td><td>Tue, 24 Nov, 2026</td><td class="num">₹27,300.00</td></tr><tr><td>3</td><td>Sat, 28 Nov, 2026</td><td>Tue, 1 Dec, 2026</td><td class="num">₹27,300.00</td></tr><tr><td>4</td><td>Sat, 5 Dec, 2026</td><td>Tue, 8 Dec, 2026</td><td class="num">₹27,300.00</td></tr><tr><td>5</td><td>Sat, 12 Dec, 2026</td><td>Tue, 15 Dec, 2026</td><td class="num">₹27,300.00</td></tr><tr><td>6</td><td>Sat, 19 Dec, 2026</td><td>Tue, 22 Dec, 2026</td><td class="num">₹27,300.00</td></tr></tbody>
     </table></div>
     <div class="note" style="margin-top:10px">Estimates only — actual settlement timing, cycle changes and reserve amounts are controlled by Amazon and can shift with unshipped orders, claims and bank holidays (only weekends are skipped here). Deposits assume steady daily sales, so each cycle's new holdback is offset by the previous cycle's release.</div></div>
       </div>
@@ -8578,6 +8589,11 @@ function lcBody(){
           </div>
         </div>
       </div>
+      <div class="lc-promo" id="lc-promo" hidden>
+        <div class="lc-promo-ico" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5"/><path d="M12 13v8"/></svg></div>
+        <div class="lc-promo-t"><b>Shipped these orders? Keep your stock right.</b><span>StockBook is our free stock app for Amazon, Flipkart and Meesho sellers. Record purchases, sales and returns, and always know what is left. No ads.</span></div>
+        <div class="lc-promo-a"><a class="bigbtn" id="lc-promo-play" href="https://play.google.com/store/apps/details?id=studio.gossii.stockbook&amp;referrer=utm_source%3Dsellertoolsindia%26utm_medium%3Dlabel_cropper%26utm_campaign%3Dcrop_done" target="_blank" rel="noopener">Get it on Google Play</a><a class="bigbtn sec" href="https://stockbook.sellertoolsindia.com/?utm_source=sellertoolsindia&amp;utm_medium=label_cropper&amp;utm_campaign=crop_done" target="_blank" rel="noopener">Use on the web</a></div>
+      </div>
       <div id="lc-skus"></div>
       <div id="lc-prev"></div>
     </div>`;
@@ -9614,6 +9630,7 @@ function lcBody(){
       const stamp=`${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${now.getHours()%12||12}_${pad(now.getMinutes())}${now.getHours()<12?"AM":"PM"}`;
       const base=(mkNames.length===1?mkNames[0]+"_":"")+"%s_"+stamp+".pdf";
       dl.href=url;dl.dataset.blob=url;dl.download=base.replace("%s","Labels");setDl(true);
+      const lcPromo=$("lc-promo"); if(lcPromo) lcPromo.hidden=false;
       if(inv.sep&&invBytes){
         const u2=ownUrl(URL.createObjectURL(new Blob([invBytes],{type:"application/pdf"})));
         dl2.href=u2;dl2.dataset.blob=u2;dl2.download=base.replace("%s","Invoices");dl2.hidden=false;
