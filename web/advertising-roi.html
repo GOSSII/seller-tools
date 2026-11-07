@@ -469,6 +469,17 @@
     border:1.5px solid var(--faint);border-radius:50%;color:var(--faint);font-size:11px;font-weight:700;line-height:1;font-style:normal}
   .lc-acts{display:flex;gap:8px;flex-wrap:wrap}
   .lc-acts [hidden]{display:none}
+  /* StockBook cross-promo, shown once a batch is cropped. */
+  .lc-promo{margin-top:16px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding:14px 16px;
+    border:1px solid var(--green-line);background:var(--green-soft);border-radius:12px}
+  .lc-promo[hidden]{display:none}
+  .lc-promo-ico{flex:0 0 42px;height:42px;border-radius:10px;background:#fff;border:1px solid var(--green-line);
+    display:grid;place-items:center;color:var(--green)}
+  .lc-promo-t{flex:1 1 220px;min-width:0}
+  .lc-promo-t b{display:block;font-size:15px;color:var(--ink)}
+  .lc-promo-t span{display:block;font-size:13.5px;color:var(--muted);margin-top:3px;line-height:1.45}
+  .lc-promo-a{display:flex;gap:8px;flex-wrap:wrap}
+  .lc-promo .bigbtn{padding:10px 16px;text-decoration:none;min-height:40px;display:inline-flex;align-items:center}
   .lc-dl{display:inline-flex;align-items:center;gap:8px;text-decoration:none}
   .lc-dl[aria-disabled="true"]{opacity:.45;cursor:default}
   .sa-drop.loaded{border-style:solid;border-color:#1e9e63;background:#f2fbf7}
@@ -8570,6 +8581,11 @@ function lcBody(){
           </div>
         </div>
       </div>
+      <div class="lc-promo" id="lc-promo" hidden>
+        <div class="lc-promo-ico" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5"/><path d="M12 13v8"/></svg></div>
+        <div class="lc-promo-t"><b>Shipped these orders? Keep your stock right.</b><span>StockBook is our free stock app for Amazon, Flipkart and Meesho sellers. Record purchases, sales and returns, and always know what is left. No ads.</span></div>
+        <div class="lc-promo-a"><a class="bigbtn" id="lc-promo-play" href="https://play.google.com/store/apps/details?id=studio.gossii.stockbook&amp;referrer=utm_source%3Dsellertoolsindia%26utm_medium%3Dlabel_cropper%26utm_campaign%3Dcrop_done" target="_blank" rel="noopener">Get it on Google Play</a><a class="bigbtn sec" href="https://stockbook.sellertoolsindia.com/?utm_source=sellertoolsindia&amp;utm_medium=label_cropper&amp;utm_campaign=crop_done" target="_blank" rel="noopener">Use on the web</a></div>
+      </div>
       <div id="lc-skus"></div>
       <div id="lc-prev"></div>
     </div>`;
@@ -9606,6 +9622,7 @@ function lcBody(){
       const stamp=`${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${now.getHours()%12||12}_${pad(now.getMinutes())}${now.getHours()<12?"AM":"PM"}`;
       const base=(mkNames.length===1?mkNames[0]+"_":"")+"%s_"+stamp+".pdf";
       dl.href=url;dl.dataset.blob=url;dl.download=base.replace("%s","Labels");setDl(true);
+      const lcPromo=$("lc-promo"); if(lcPromo) lcPromo.hidden=false;
       if(inv.sep&&invBytes){
         const u2=ownUrl(URL.createObjectURL(new Blob([invBytes],{type:"application/pdf"})));
         dl2.href=u2;dl2.dataset.blob=u2;dl2.download=base.replace("%s","Invoices");dl2.hidden=false;
