@@ -227,6 +227,26 @@
   .r.fin .rl{font-weight:700} .r.fin .rv{color:var(--green);font-size:17px}
   .r.fin.loss{background:var(--red-soft)} .r.fin.loss .rv{color:var(--red)}
 
+  /* Plain-language guide under a tool: what the fees are, worked numbers,
+     questions sellers search for. Visible (not collapsed) so it reads as the
+     page's own content. */
+  .guide{margin-top:28px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 16px 8px}
+  @media(min-width:600px){.guide{padding:24px 26px 12px}}
+  .guide h2{font-size:clamp(18px,4.6vw,21px);letter-spacing:-.015em;margin-bottom:8px}
+  .guide h3{font-size:15.5px;letter-spacing:-.01em;margin:22px 0 7px}
+  .guide p,.guide li{font-size:14px;line-height:1.65;color:#2b3a50}
+  .guide p{margin-bottom:10px}
+  .guide ol,.guide ul{padding-left:20px;margin-bottom:10px}
+  .guide li{margin-bottom:4px}
+  .guide a{color:var(--blue);font-weight:600}
+  .guide .tblwrap{margin:6px 0 8px}
+  .guide table.sa{min-width:0}
+  .guide table.sa th{white-space:normal;vertical-align:bottom}
+  .guide table.sa th,.guide table.sa td{padding:8px 10px}
+  .guide table.sa td.wrap{min-width:110px;max-width:none}
+  .guide .gnote{font-size:12.5px;color:var(--muted);line-height:1.55}
+  .guide .faq h3{margin-top:16px}
+
   details.howto{background:#fff;border:1px solid var(--line);border-radius:12px;margin-bottom:16px}
   details.howto summary{cursor:pointer;font-weight:700;font-size:13.5px;padding:12px 16px;color:var(--blue);
     list-style:none;display:flex;align-items:center;gap:8px;min-height:44px}
@@ -1999,6 +2019,172 @@ function helpHtml(id){
     ${e.input?`<span class="htag">${e.tag||"Input — from your Amazon seller account"}</span><div>${e.input}</div>`:""}
     <span class="htag">Steps</span><ol>${e.steps.map(s=>`<li>${s}</li>`).join("")}</ol>
   </div></details>`;
+}
+
+/* ============================================================
+   SEARCH TITLES + GUIDES
+   The <title> and description Google shows can say more than the H1.
+   Search Console (Nov 2026) shows sellers typing "amazon fba fees india",
+   "amazon profit calculator india", "kitna milega calculator", "amazon
+   label crop", "flipkart label cutter" — these pages ranked 60–80 for
+   them, partly because each page was a form with almost no text.
+   Every number in a guide is computed from the same fee tables and
+   functions the calculators use, so a fee change updates both.
+   ============================================================ */
+const SEO={
+  "fba-fee":{title:"Amazon FBA Fee Calculator India 2026 — Seller Tools India",
+    desc:`Free Amazon.in FBA fee calculator: referral, closing, weight handling, pick & pack and ${GST*100}% GST on fees for your price, category and size. Updated for the ${CLOSING_EFFECTIVE} fee change.`},
+  "profit":{title:"Amazon Profit Calculator India (Kitna Milega) — Seller Tools India",
+    desc:"Kitna milega? Free Amazon India profit calculator: enter price and cost, see your payout after Amazon fees, shipping, ads and GST — with margin, ROI and break-even ACOS."},
+  "fba-storage":{title:"Amazon FBA Storage Fee Calculator India — Seller Tools India",
+    desc:`Amazon India FBA storage fees: ₹${STORAGE_CUFT.std} per cubic foot a month (₹${STORAGE_CUFT.peak} in Oct–Dec). See the cost per unit, months of cover and the aged-stock surcharge.`},
+  "acos":{title:"Amazon ACOS Calculator India (ACOS & TACoS) — Seller Tools India",
+    desc:"Free ACOS calculator for Amazon India PPC: enter ad spend, ad sales and total sales to get ACOS, TACoS and how efficient your ads are."},
+  "advertising-roi":{title:"Amazon ROAS Calculator India (PPC & ACOS) — Seller Tools India",
+    desc:"Amazon India PPC planner: project clicks, orders, ad sales, ACOS and ROAS from your ad budget, CPC and conversion rate."},
+  "target-price":{title:"Amazon Selling Price Calculator India — Seller Tools India",
+    desc:"Find the lowest Amazon India selling price that reaches your target margin or profit after Amazon's fees — every price band checked, rupee by rupee."},
+  "label-cropper":{title:"Amazon, Flipkart & Meesho Label Cropper (4×6) — Seller Tools India",
+    desc:"Free label cropper (label cutter) for Amazon, Flipkart and Meesho: crop shipping label PDFs to 4×6 thermal labels, sorted by courier and SKU. Files never leave your browser."},
+};
+function setPageMeta(id,title,desc){
+  const s=SEO[id]||{};
+  document.title=s.title||title;
+  const md=document.querySelector('meta[name="description"]');
+  if(md) md.setAttribute("content",s.desc||desc);
+}
+
+const rs=n=>"₹"+Number(n).toLocaleString("en-IN",{maximumFractionDigits:2});
+const gTable=(head,rows,numFrom=1)=>`<div class="tblwrap"><table class="sa"><thead><tr>${head.map((h,i)=>
+  `<th${i>=numFrom?' class="num"':""}>${h}</th>`).join("")}</tr></thead><tbody>${rows.map(r=>
+  `<tr>${r.map((c,i)=>`<td${i>=numFrom?' class="num"':' class="wrap"'}>${c}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+const gFaq=qs=>`<div class="faq">${qs.map(([q,a])=>`<h3>${q}</h3><p>${a}</p>`).join("")}</div>`;
+
+/* "0% up to ₹1,000 · 9% above ₹1,000" — same reading as refRate (≤ edge). */
+function refRuleText(rules){
+  if(rules.length===1) return `${rules[0][1]}% at any price`;
+  let prev=null;
+  return rules.map(([upTo,p])=>{
+    const s=upTo===null?`${p}% above ${rs(prev)}`
+      :prev===null?`${p}% up to ${rs(upTo)}`:`${p}% over ${rs(prev)} up to ${rs(upTo)}`;
+    prev=upTo; return s;
+  }).join(" · ");
+}
+/* One order's Amazon fees, exactly as the calculators charge them. */
+function orderFees(sp,cat,ful,zone,kg,L,W,H){
+  const bill=billingWeight(kg,L,W,H);
+  const base=sp*refRate(cat,sp)+closingFee(sp,ful,cat)+shipFee(sp,ful,zone,bill)+(ful==="fba"?pickPack(bill):0);
+  const fees=base*(1+GST);
+  return {fees,payout:sp-fees};
+}
+const CLOSE_BAND_LABELS=["Up to ₹300","₹300 – ₹500","₹500 – ₹1,000","Above ₹1,000"];
+
+const GUIDES={
+  "fba-fee":()=>{
+    const ex=orderFees(999,"electronics","fba","national",0.5,20,15,8);
+    const wh=FBA_WH[FBA_STEP_DEFAULT], es=ES_WH[FBA_STEP_DEFAULT];
+    const sampleCats=["clothing","home-decor","beauty","electronics","toys","jewellery","books","mobile-phones"];
+    return `<h2>Amazon FBA fees in India (2026), explained</h2>
+      <p>Every FBA order pays four Amazon fees: a <b>referral fee</b>, a <b>closing fee</b>, <b>weight handling</b> (shipping) and <b>pick &amp; pack</b>. Amazon then adds <b>${GST*100}% GST</b> on top of all of them. Storage is billed separately, once a month, for the space your stock takes in the warehouse.</p>
+      <p>Example: a ${rs(999)} electronics item weighing 0.5 kg (20 × 15 × 8 cm), shipped nationally by FBA, pays about <b>${inr(ex.fees)}</b> in fees including GST — ${pc(ex.fees/999*100)} of the price — so Amazon pays you about <b>${inr(ex.payout)}</b>.</p>
+
+      <h3>1. Referral fee — a % of your selling price</h3>
+      <p>It depends on the category and the price. Since 10 June 2026 most categories pay <b>0% up to ₹1,000</b> and the full rate above it, so a price just over ₹1,000 can pay you less than one just under it.</p>
+      ${gTable(["Category","Referral fee"],sampleCats.map(k=>[esc(CATMAP[k].name),refRuleText(CATMAP[k].referral)]),9)}
+      <p class="gnote">${CATS.length} categories are in the calculator above. Amazon publishes many more; check yours in Seller Central → Reports → Fee Preview.</p>
+
+      <h3>2. Closing fee — a flat fee per item, by price</h3>
+      ${gTable(["Item price","FBA","Easy Ship","Self Ship"],CLOSE_BAND_LABELS.map((l,i)=>
+        [l,rs(CLOSING_FBA_GROUPS.std[i]),rs(CLOSING_BY_CHANNEL.easyship[i]),rs(CLOSING_BY_CHANNEL.self[i])]))}
+      <p class="gnote">From ${CLOSING_EFFECTIVE}, when Amazon added ₹1 (up to ₹500) or ₹3 (above ₹500) on Easy Ship and FBA. Some FBA categories pay less in the two lowest bands; the calculator uses your category's own rate.</p>
+
+      <h3>3. Weight handling — the shipping fee</h3>
+      ${gTable(["Shipping weight","FBA Regional","FBA National","Easy Ship"],[
+        ["Up to 500 g",rs(wh.r[0]),rs(wh.n[0]),rs(es[0])],
+        ["500 g – 1 kg",rs(wh.r[1]),rs(wh.n[1]),rs(es[1])],
+        ["1 – 2 kg",rs(wh.r[2]),rs(wh.n[2]),rs(es[2])],
+        ["Each extra kg, 2 – 5 kg","+"+rs(FBA_WH_ADD.r.after2),"+"+rs(FBA_WH_ADD.n.after2),"+"+rs(ES_WH_ADD.after2)],
+        ["Each extra kg above 5 kg","+"+rs(FBA_WH_ADD.r.after5),"+"+rs(FBA_WH_ADD.n.after5),"+"+rs(ES_WH_ADD.after5)],
+      ])}
+      <p class="gnote">Standard STEP level (Premium and Advanced sellers pay a little less, Basic a little more). Shipping weight is the higher of actual weight and volumetric weight (L × W × H in cm ÷ 5,000). FBA adds 100 g for packaging; both round up to the next 500 g. Easy Ship charges the same in every zone.</p>
+
+      <h3>4. Pick &amp; pack, storage and GST</h3>
+      <ul>
+        <li><b>Pick &amp; pack (FBA only):</b> ${rs(pickPack(0.5))} per unit up to 1 kg shipping weight, more for heavier parcels.</li>
+        <li><b>Storage (FBA only):</b> ₹${STORAGE_CUFT.std} per cubic foot per month, ₹${STORAGE_CUFT.peak} in October–December. Work it out with the <a href="/fba-storage">FBA Storage Fee Calculator</a>.</li>
+        <li><b>GST:</b> ${GST*100}% on every fee above. If you are GST-registered you claim it back as input tax credit.</li>
+      </ul>
+      ${gFaq([
+        ["How much does Amazon take from each sale?",`It depends on the category, the price band and the parcel's weight. For the ${rs(999)} example above it is ${pc(ex.fees/999*100)} of the price. Enter your own product above to see yours.`],
+        ["FBA or Easy Ship — which is cheaper?",`Put the same product in the <a href="/profit">Profit Calculator</a> and switch between Self, Easy Ship and FBA to compare what you keep. FBA adds pick &amp; pack and storage, but Amazon packs and ships for you.`],
+        ["Does Amazon charge GST on its fees?",`Yes, ${GST*100}% on every fee. A GST-registered seller claims it back against the GST they owe on sales; for anyone else it is a cost.`],
+        ["How do I check the exact fee on my own product?","In Seller Central go to Reports → Fee Preview. After orders ship, your settlement report shows every fee charged — the <a href=\"/settlement-analyzer\">Settlement Analyzer</a> reads it for you."],
+      ])}`;
+  },
+  "profit":()=>{
+    const cat="clothing", prices=[299,499,799,999,1001,1499,2499];
+    const at=p=>({es:orderFees(p,cat,"easyship","national",0.5,25,20,3),fba:orderFees(p,cat,"fba","national",0.5,25,20,3)});
+    const a999=at(999).es.payout, a1001=at(1001).es.payout;
+    const closeMin=Math.min(...Object.values(CLOSING_BY_CHANNEL).flat()), closeMax=Math.max(...Object.values(CLOSING_BY_CHANNEL).flat());
+    return `<h2>Kitna milega? How your Amazon profit is worked out</h2>
+      <p>Amazon pays you the selling price minus its fees. What you keep is that payout minus your product cost, packaging, ads and the GST you owe on the sale. Step by step:</p>
+      <ol>
+        <li><b>Selling price</b> — what the buyer pays, GST included.</li>
+        <li>minus the <b>referral fee</b> — a % of the price set by category. Since 10 June 2026 most categories pay 0% up to ₹1,000.</li>
+        <li>minus the <b>closing fee</b> — ${rs(closeMin)} to ${rs(closeMax)} per item, by price and shipping method.</li>
+        <li>minus <b>shipping</b> — Easy Ship or FBA weight handling (plus pick &amp; pack on FBA). Self Ship has no Amazon shipping fee; you pay your own courier.</li>
+        <li>minus <b>${GST*100}% GST on those fees</b>. This gives the <b>settlement</b> — the money that reaches your bank.</li>
+        <li>minus <b>product cost, packaging, ads and returns</b>, and the <b>GST on the sale</b> if you are registered = your <b>profit</b>.</li>
+      </ol>
+
+      <h3>What Amazon pays you at common prices</h3>
+      ${gTable(["Selling price","Easy Ship: you get","FBA: you get"],prices.map(p=>{
+        const r=at(p);
+        return [rs(p),"<b>"+inr(r.es.payout)+"</b>","<b>"+inr(r.fba.payout)+"</b>"];
+      }))}
+      <p class="gnote">${esc(CATMAP[cat].name)}, 0.5 kg parcel, Standard STEP level, FBA at the National rate. "You get" is the price minus Amazon's fees and the ${GST*100}% GST on them — before product cost and the GST on the sale. Your own category and weight change these — use the calculator above.</p>
+      ${gFaq([
+        ...(a1001<a999?[["Why does ₹1,001 pay less than ₹999?",`In most categories the referral fee jumps from 0% to the full rate just above ₹1,000, and the closing fee steps up too. In the table, a ₹1,001 price pays you ${inr(a999-a1001)} <i>less</i> than ₹999 on Easy Ship. The <a href="/price-bands">Price Band Optimizer</a> finds these steps for your own products.`]]:[]),
+        ["Does the Amazon selling price include GST?",`Yes. If you are GST-registered you pay that GST to the government, minus the ${GST*100}% GST Amazon charged on its fees (input tax credit). Keep “GST Registered” on Yes and the calculator takes it off your profit.`],
+        ["What price do I need for a good margin?",`Use the <a href="/target-price">Selling Price Calculator</a>: enter your costs and the margin or profit you want, and it finds the lowest price that gets there.`],
+        ["How do I check my real profit, not an estimate?",`Download your settlement report (Payments → All Statements → Flat File V2) and drop it into the <a href="/sku-report">SKU Profitability Report</a> — it shows what each product actually earned.`],
+      ])}`;
+  },
+  "fba-storage":()=>{
+    const cuft=30*20*10/CM3_CUFT;
+    return `<h2>Amazon FBA storage fees in India</h2>
+      <p>Amazon charges FBA storage for the space your stock takes up in its warehouse, measured in cubic feet, once a month. It is billed to your account — not taken from each order — so it is easy to miss until it adds up.</p>
+      ${gTable(["Stock","Rate per cubic foot, per month"],[
+        ["January – September",rs(STORAGE_CUFT.std)],
+        ["October – December (peak)",rs(STORAGE_CUFT.peak)],
+        ["Stock older than 365 days","+ "+rs(STORAGE_CUFT.aged)+" aged-stock surcharge"],
+      ])}
+      <h3>Storage cost per unit</h3>
+      <p>Volume in cubic feet = length × width × height in cm ÷ 28,317. A 30 × 20 × 10 cm unit is ${cuft.toFixed(2)} cubic feet, so it costs about <b>${inr(cuft*STORAGE_CUFT.std)}</b> a month to store, or ${inr(cuft*STORAGE_CUFT.peak)} in October–December. Multiply by the months it sits before it sells.</p>
+      ${gFaq([
+        ["How do I cut my storage fees?",`Send smaller batches more often (the <a href="/restock-planner">Restock Planner</a> tells you when to reorder), remove stock that is not selling before it turns 365 days old, and check which products pay rent without selling with the <a href="/storage">Storage Fee Analyzer</a>.`],
+        ["Is storage included in the FBA fee per order?",`No. The <a href="/fba-fee">FBA Fee Calculator</a> shows it per unit for reference, but Amazon bills it monthly for all the stock you hold.`],
+      ])}`;
+  },
+  "label-cropper":()=>`<h2>Free label cropper for Amazon, Flipkart and Meesho</h2>
+      <p>Marketplaces give you shipping labels on full A4 pages, often with the tax invoice on the same page. A 4×6 inch (100 × 150 mm) thermal printer needs just the label. This tool cuts each label out of the PDF and puts it on its own 4×6 page — or 1 or 4 to an A4 sheet if you print on plain paper.</p>
+      <h3>Amazon labels</h3>
+      <p>Use the PDF from <b>Print label &amp; invoice</b> on Manage Orders. Choose where the label sits on the page (full page, top-left quarter, top or left half, or your own %), and keep the invoice on the next page or leave it out.</p>
+      <h3>Flipkart and Shopsy labels</h3>
+      <p>Flipkart prints the label and the invoice on one A4 page. The cropper finds the dashed line between them and cuts the label out. Keep the invoice on the same page, on a new page, or drop it.</p>
+      <h3>Meesho labels</h3>
+      <p>Drop Meesho's <b>Sub_Order_Labels</b> PDF. Each label is cut along its border, and the SKU and quantity from the Product Details table are printed under it, so the packer knows what goes in each parcel.</p>
+      ${gFaq([
+        ["Is it free?","Yes. No account or login is needed."],
+        ["Are my customers' names and addresses uploaded?","No. The PDF is read and cropped inside your own browser and is never sent to a server. Only the number of labels cropped is counted, for the counter on this page."],
+        ["Can I crop labels from different marketplaces together?","Yes. On the <b>All platforms</b> tab, drop Amazon, Flipkart and Meesho files together — each page is detected on its own. You can group the output by marketplace or courier."],
+        ["How are the labels sorted?","By default each courier's labels come out together, SKU-wise inside each courier, so you can pack product by product and hand each courier one stack. A summary page lists every SKU and courier. Change the order in Print Settings."],
+        ["Which printer do I need?","Any thermal label printer that prints 4×6 inch labels, or a normal printer with A4 paper."],
+      ])}`,
+};
+function guideHtml(id){
+  const g=GUIDES[id];
+  return g?`<section class="guide" aria-label="Guide">${g()}</section>`:"";
 }
 
 /* ============================================================
@@ -4198,9 +4384,7 @@ function fieldHtml(f,val){
 function renderCalc(id){
   const c=CALCMAP[id];
   if(!c){location.hash="#/";return;}
-  document.title=c.name+" — Seller Tools India";
-  const md=document.querySelector('meta[name="description"]');
-  if(md) md.setAttribute("content",c.desc);
+  setPageMeta(id,c.name+" — Seller Tools India",c.desc);
   backBtn.hidden=false;
 
   if(state.id!==id){
@@ -4221,6 +4405,7 @@ function renderCalc(id){
         </div>
         <div id="out"></div>
       </div>
+      ${guideHtml(c.id)}
     </div>`;
 
   // wire inputs
@@ -8437,9 +8622,8 @@ async function lcFindBoxes(pageObj,posItems){
 
 function renderLabelCropper(){ lcBody(); }
 function lcBody(){
-  document.title="Label Cropper for Amazon, Flipkart & Meesho — Seller Tools India";
-  const md=document.querySelector('meta[name="description"]');
-  if(md) md.setAttribute("content","Crop Amazon, Flipkart and Meesho shipping label PDFs to clean 4×6 thermal labels — marketplace detected automatically, sorted by SKU or courier, free and fully in your browser.");
+  setPageMeta("label-cropper","Label Cropper for Amazon, Flipkart & Meesho — Seller Tools India",
+    "Crop Amazon, Flipkart and Meesho shipping label PDFs to clean 4×6 thermal labels — marketplace detected automatically, sorted by SKU or courier, free and fully in your browser.");
   backBtn.hidden=false;
   let saved={};
   try{saved=JSON.parse(localStorage.getItem("lc_crop")||"{}");}catch(e){}
@@ -8581,6 +8765,7 @@ function lcBody(){
       </div>
       <div id="lc-skus"></div>
       <div id="lc-prev"></div>
+      ${guideHtml("label-cropper")}
     </div>`;
   const drop=document.getElementById("lc-drop"),file=document.getElementById("lc-file");
   /* Flip-tile counter beside the title, always visible once the first

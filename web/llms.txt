@@ -11,22 +11,22 @@ Pricing: free tools need no account. Starter ₹199/month (or ₹999/year), Pro 
 
 ## Free calculators
 
-- [Amazon Profit Calculator](https://sellertoolsindia.com/profit): Estimate contribution and profit per unit after Amazon fees, product cost and the costs you enter below.
-- [Amazon FBA Fee Calculator](https://sellertoolsindia.com/fba-fee): Estimate FBA fees, fulfilment costs, and net settlement before scaling SKUs.
-- [Amazon FBA Storage Fee Calculator](https://sellertoolsindia.com/fba-storage): Model FBA storage exposure, months of cover, and aged inventory risk.
-- [Amazon ACOS Calculator](https://sellertoolsindia.com/acos): Calculate ACOS, TACoS, and ad efficiency benchmarks for Amazon PPC.
+- [Amazon Profit Calculator India (Kitna Milega)](https://sellertoolsindia.com/profit): Kitna milega? Free Amazon India profit calculator: enter price and cost, see your payout after Amazon fees, shipping, ads and GST — with margin, ROI and break-even ACOS.
+- [Amazon FBA Fee Calculator India 2026](https://sellertoolsindia.com/fba-fee): Free Amazon.in FBA fee calculator: referral, closing, weight handling, pick & pack and 18% GST on fees for your price, category and size. Updated for the 7 Sep 2026 fee change.
+- [Amazon FBA Storage Fee Calculator India](https://sellertoolsindia.com/fba-storage): Amazon India FBA storage fees: ₹45 per cubic foot a month (₹48 in Oct–Dec). See the cost per unit, months of cover and the aged-stock surcharge.
+- [Amazon ACOS Calculator India (ACOS & TACoS)](https://sellertoolsindia.com/acos): Free ACOS calculator for Amazon India PPC: enter ad spend, ad sales and total sales to get ACOS, TACoS and how efficient your ads are.
 - [Amazon Break-Even ACOS Calculator](https://sellertoolsindia.com/break-even-acos): Find break-even ACOS, target ACOS, and max CPC from margin and conversion.
-- [Amazon Advertising ROAS Calculator](https://sellertoolsindia.com/advertising-roi): Project clicks, orders, ad-attributed sales, ACOS and ROAS from your PPC budget, CPC and conversion assumptions.
+- [Amazon ROAS Calculator India (PPC & ACOS)](https://sellertoolsindia.com/advertising-roi): Amazon India PPC planner: project clicks, orders, ad sales, ACOS and ROAS from your ad budget, CPC and conversion rate.
 - [Amazon Marketing Budget Planner](https://sellertoolsindia.com/marketing-budget): Turn a revenue target and a TACoS you choose into a monthly, weekly and daily ad budget.
 - [Amazon Product Launch Budget Calculator](https://sellertoolsindia.com/launch-budget): Plan PPC, coupons, creative, and launch investment for Amazon SKU launches.
 - [Amazon Coupon ROI Calculator](https://sellertoolsindia.com/coupon-roi): Estimate coupon-funded discount cost, incremental orders, and net contribution.
 - [Amazon Price Band Optimizer](https://sellertoolsindia.com/price-bands): Amazon India fees can change sharply at specific selling-price bands. Many categories currently have lower or zero referral fees up to ₹1,000, while the exact threshold and rate depend on category. Compare nearby prices to see which gives the highest estimated contribution per unit.
-- [Amazon Target Price Calculator](https://sellertoolsindia.com/target-price): Estimate the lowest selling price that reaches your target profit or margin using the costs and assumptions you enter.
+- [Amazon Selling Price Calculator India](https://sellertoolsindia.com/target-price): Find the lowest Amazon India selling price that reaches your target margin or profit after Amazon's fees — every price band checked, rupee by rupee.
 - [Amazon Restock Planner](https://sellertoolsindia.com/restock-planner): Estimate when to reorder and how much, from your current stock, sales rate, supplier lead time and safety buffer.
 
 ## Free tools (no login, files never leave the browser)
 
-- [Label Cropper for Amazon, Flipkart & Meesho](https://sellertoolsindia.com/label-cropper): Crop Amazon, Flipkart and Meesho shipping label PDFs to clean 4×6 thermal labels — marketplace detected automatically, sorted by SKU or courier, free and fully in your browser.
+- [Amazon, Flipkart & Meesho Label Cropper (4×6)](https://sellertoolsindia.com/label-cropper): Free label cropper (label cutter) for Amazon, Flipkart and Meesho: crop shipping label PDFs to 4×6 thermal labels, sorted by courier and SKU. Files never leave your browser.
 - [Amazon Order Printer — Picklist & Packing Slips](https://sellertoolsindia.com/order-printer): Turn your Amazon unshipped-orders report into a printable picklist and packing slips — free, fully in your browser.
 - [FBA Barcode Sticker Generator](https://sellertoolsindia.com/fnsku-labels): Free FBA barcode sticker generator for Amazon — FNSKU Code 128 labels with MRP on A4 65/40/24-up sheets or 4×6 thermal, generated fully in your browser.
 - [GST Invoice Generator — Self-Ship Invoices](https://sellertoolsindia.com/gst-invoice): Generate GST-compliant tax invoices for your Amazon.in self-ship orders from the unshipped-orders report — free, fully in your browser.
